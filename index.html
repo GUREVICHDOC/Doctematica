@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Doctematica — תרגול מתמטיקה</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&family=Frank+Ruhl+Libre:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/math.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <p class="eyebrow">למורה ולתלמיד</p>
+        <h1>Doctematica</h1>
+        <p class="lede" id="lede">
+          כותבים את הצעד הבא במשוואה (יש כמה דרכים חוקיות). בהמשך יתווספו נושאים לפי כיתות.
+        </p>
+      </header>
+
+      <section class="panel" aria-label="בחירת נושא">
+        <h2>נושא</h2>
+        <div class="topics" id="topics"></div>
+        <div id="sources-wrap">
+          <h2 class="sub">דף תרגול</h2>
+          <div class="topics" id="sources"></div>
+        </div>
+        <div class="row" id="random-wrap">
+          <label>
+            רמה
+            <select id="level">
+              <option value="easy">קל</option>
+              <option value="medium" selected>בינוני</option>
+              <option value="hard">מאתגר</option>
+            </select>
+          </label>
+          <button type="button" class="ghost" id="new-problem">שאלה חדשה</button>
+        </div>
+        <div id="worksheet-nav" class="hidden">
+          <p class="instruction" id="instruction"></p>
+          <div class="topics" id="exercise-nums"></div>
+          <div class="row">
+            <button type="button" class="ghost" id="prev-ex">הקודם</button>
+            <button type="button" class="ghost" id="next-ex">הבא</button>
+          </div>
+        </div>
+        <div id="kinds-wrap">
+          <h2 class="sub">סוג משוואה</h2>
+          <div class="topics" id="kinds"></div>
+          <p class="bank-count" id="bank-count"></p>
+        </div>
+      </section>
+
+      <section class="card" aria-live="polite">
+        <div class="meta">
+          <span id="topic-label">משוואות</span>
+          <span id="score">0 נכונות ברצף</span>
+        </div>
+        <p class="prompt" id="prompt">טוען שאלה…</p>
+        <ol class="steps hidden" id="steps" aria-label="צעדי המשוואה"></ol>
+        <form id="answer-form">
+          <label id="answer-label">התשובה שלך</label>
+          <div class="answer-row" id="math-wrap">
+            <div class="math-line" id="math-field"></div>
+            <button type="submit" id="check">בדיקה</button>
+          </div>
+          <div class="math-actions" id="math-keys"></div>
+          <input id="answer" class="sr-only" name="answer" type="text" autocomplete="off" tabindex="-1" />
+          <p class="hint" id="hint">אפשר לכתוב מספר שלם, שבר כמו 3/4, או עשרוני כמו 0.75</p>
+        </form>
+        <div class="actions" id="eq-actions">
+          <button type="button" class="ghost" id="show-solution">פתרון מלא</button>
+          <button type="button" class="hidden" id="next-after-solve">לתרגיל הבא</button>
+        </div>
+        <div class="feedback hidden" id="feedback"></div>
+        <div class="model hidden" id="model"></div>
+      </section>
+
+      <section class="stats">
+        <div>
+          <strong id="total-ok">0</strong>
+          <span>תשובות נכונות</span>
+        </div>
+        <div>
+          <strong id="total-try">0</strong>
+          <span>ניסיונות</span>
+        </div>
+        <div>
+          <strong id="best-streak">0</strong>
+          <span>רצף שיא</span>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          מאגר דפי העבודה נמצא ב־<code>data/curriculum.json</code> (ועותק לטעינה מקומית ב־
+          <code>data/curriculum.js</code>). כשהאתר יהיה ציבורי אפשר להגיש את אותו JSON מהשרת בלי לשנות את מבנה התרגילים.
+        </p>
+      </footer>
+    </div>
+    <script src="js/algebra.js"></script>
+    <script src="js/errors.js"></script>
+    <script src="js/math-render.js"></script>
+    <script src="js/math-field.js"></script>
+    <script src="js/bank.js"></script>
+    <script src="data/curriculum.js"></script>
+    <script src="data/checks.js"></script>
+    <script src="js/content.js"></script>
+    <script src="js/problems.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
