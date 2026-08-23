@@ -383,21 +383,23 @@
   }
 
   function solutionForEquation(start) {
-    var eq = DoctematicaAlgebra.parseEquation(start);
-    var pack = isolateSteps(
-      ratFromFloat(eq.left.a),
-      ratFromFloat(eq.left.b),
-      ratFromFloat(eq.right.a),
-      ratFromFloat(eq.right.b)
-    );
-    var steps = pack.steps.slice();
-    if (steps[0] !== start) {
-      steps = [start].concat(steps.filter(function (s) { return s !== start; }));
-    }
+    var path = global.DoctematicaTeach.fullPath(start);
+    var steps = path.steps.map(function (s) {
+      return s.eq;
+    });
+    var value = 0;
+    try {
+      var eq = DoctematicaAlgebra.parseEquation(start);
+      var d = eq.left.a - eq.right.a;
+      if (d) value = (eq.right.b - eq.left.b) / d;
+    } catch (e) {}
     return {
       steps: steps,
-      answer: fmt(pack.x),
-      value: pack.x.n / pack.x.d,
+      notes: path.steps.map(function (s) {
+        return s.explain;
+      }),
+      answer: path.answer,
+      value: value,
     };
   }
 

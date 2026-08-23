@@ -5,12 +5,23 @@
     return Math.abs(a - b) < EPS;
   }
 
+  function sidePack(side) {
+    if (side && typeof side.x === "number") {
+      return { x: side.x, y: side.y, k: side.k };
+    }
+    return { x: side.a, y: 0, k: side.b };
+  }
+
   function pack(eq) {
+    var L = sidePack(eq.left);
+    var R = sidePack(eq.right);
     return {
-      lx: eq.left.a,
-      lc: eq.left.b,
-      rx: eq.right.a,
-      rc: eq.right.b,
+      lx: L.x,
+      ly: L.y,
+      lc: L.k,
+      rx: R.x,
+      ry: R.y,
+      rc: R.k,
     };
   }
 
@@ -37,12 +48,10 @@
   }
 
   function inconsistentScale(a, b) {
-    var parts = [
-      coeffScale(a.lx, b.lx),
-      coeffScale(a.lc, b.lc),
-      coeffScale(a.rx, b.rx),
-      coeffScale(a.rc, b.rc),
-    ];
+    var keys = ["lx", "ly", "lc", "rx", "ry", "rc"];
+    var parts = keys.map(function (k) {
+      return coeffScale(a[k], b[k]);
+    });
     var i;
     for (i = 0; i < parts.length; i++) {
       if (parts[i].kind === "break") return false;
@@ -59,70 +68,83 @@
     return false;
   }
 
+  function fmtN(n) {
+    var s = String(global.DoctematicaAlgebra.formatNumber(n)).split(" או ")[0];
+    return s.replace(/-/g, "−");
+  }
+
+  function termStr(coeff, letter, plusIfPos) {
+    var neg = coeff < 0;
+    var abs = Math.abs(coeff);
+    var sign = neg ? "−" : plusIfPos ? "+" : "";
+    if (letter === "c") return sign + fmtN(abs);
+    var body = near(abs, 1) ? letter : fmtN(abs) + letter;
+    return sign + body;
+  }
+
+  function signFlipMsg(taken, letter) {
+    var shown = termStr(taken, letter, false);
+    var flipped = termStr(-taken, letter, true);
+    return {
+      id: letter === "c" ? "move_without_sign_flip" : "move_" + letter + "_without_sign_flip",
+      message:
+        "נראה שהעברתם את " +
+        shown +
+        " לאגף השני בלי להחליף סימן. " +
+        shown +
+        " שעובר אגף הופך ל־" +
+        flipped +
+        ".",
+    };
+  }
+
+  function moveWithoutFlip(fromOld, fromNew, toOld, toNew) {
+    var taken = fromOld - fromNew;
+    return Math.abs(taken) > EPS && near(toNew, toOld + taken) && !near(toNew, toOld - taken);
+  }
+
+  function classifyVarMove(a, b, fromKey, toKey, letter) {
+    var lk = "l" + fromKey;
+    var rk = "r" + fromKey;
+    var leftFlip = moveWithoutFlip(a[lk], b[lk], a["r" + toKey], b["r" + toKey]);
+    var rightFlip = moveWithoutFlip(a[rk], b[rk], a["l" + toKey], b["l" + toKey]);
+    if (leftFlip && rightFlip) {
+      if (near(b[rk], 0) && !near(a[rk], 0)) {
+        return signFlipMsg(a[rk] - b[rk], letter);
+      }
+      if (near(b[lk], 0) && !near(a[lk], 0)) {
+        return signFlipMsg(a[lk] - b[lk], letter);
+      }
+    }
+    if (leftFlip) return signFlipMsg(a[lk] - b[lk], letter);
+    if (rightFlip) return signFlipMsg(a[rk] - b[rk], letter);
+    var tFromLeft = a["l" + fromKey] - b["l" + fromKey];
+    var tFromRight = a["r" + fromKey] - b["r" + fromKey];
+    if (Math.abs(tFromLeft) > EPS && Math.abs(tFromRight) > EPS) {
+      return arithMoveMsg();
+    }
+    return null;
+  }
+
   function classify(prevEq, nextEq) {
     var a = pack(prevEq);
     var b = pack(nextEq);
-    var leftSame = near(a.lx, b.lx) && near(a.lc, b.lc);
-    var rightSame = near(a.rx, b.rx) && near(a.rc, b.rc);
+    var leftSame = near(a.lx, b.lx) && near(a.ly, b.ly) && near(a.lc, b.lc);
+    var rightSame = near(a.rx, b.rx) && near(a.ry, b.ry) && near(a.rc, b.rc);
 
-    if (near(a.lx, b.lx) && near(a.rx, b.rx)) {
-      var tFromLeft = a.lc - b.lc;
-      if (
-        Math.abs(tFromLeft) > EPS &&
-        near(b.rc, a.rc + tFromLeft) &&
-        !near(b.rc, a.rc - tFromLeft)
-      ) {
-        return {
-          id: "move_without_sign_flip",
-          message:
-            "נראה שהעברתם איבר (מספר) לאגף השני בלי להחליף סימן. כשמעבירים איבר, פלוס הופך למינוס ומינוס לפלוס.",
-        };
-      }
-      var tFromRight = a.rc - b.rc;
-      if (
-        Math.abs(tFromRight) > EPS &&
-        near(b.lc, a.lc + tFromRight) &&
-        !near(b.lc, a.lc - tFromRight)
-      ) {
-        return {
-          id: "move_without_sign_flip",
-          message:
-            "נראה שהעברתם איבר (מספר) לאגף השני בלי להחליף סימן. כשמעבירים איבר, פלוס הופך למינוס ומינוס לפלוס.",
-        };
-      }
-      if (Math.abs(tFromLeft) > EPS && Math.abs(tFromRight) > EPS) {
-        return arithMoveMsg();
-      }
+    if (near(a.lx, b.lx) && near(a.ly, b.ly) && near(a.rx, b.rx) && near(a.ry, b.ry)) {
+      var constMove = classifyVarMove(a, b, "c", "c", "c");
+      if (constMove) return constMove;
     }
 
-    if (near(a.lc, b.lc) && near(a.rc, b.rc)) {
-      var xFromLeft = a.lx - b.lx;
-      if (
-        Math.abs(xFromLeft) > EPS &&
-        near(b.rx, a.rx + xFromLeft) &&
-        !near(b.rx, a.rx - xFromLeft)
-      ) {
-        return {
-          id: "move_x_without_sign_flip",
-          message:
-            "נראה שהעברתם איבר עם x לאגף השני בלי להחליף סימן. 4x שעובר שמאלה הופך ל־−4x.",
-        };
-      }
-      var xFromRight = a.rx - b.rx;
-      if (
-        Math.abs(xFromRight) > EPS &&
-        near(b.lx, a.lx + xFromRight) &&
-        !near(b.lx, a.lx - xFromRight)
-      ) {
-        return {
-          id: "move_x_without_sign_flip",
-          message:
-            "נראה שהעברתם איבר עם x לאגף השני בלי להחליף סימן. 4x שעובר שמאלה הופך ל־−4x.",
-        };
-      }
-      if (Math.abs(xFromLeft) > EPS && Math.abs(xFromRight) > EPS) {
-        return arithMoveMsg();
-      }
+    if (near(a.ly, b.ly) && near(a.lc, b.lc) && near(a.ry, b.ry) && near(a.rc, b.rc)) {
+      var xMove = classifyVarMove(a, b, "x", "x", "x");
+      if (xMove) return xMove;
+    }
+
+    if (near(a.lx, b.lx) && near(a.lc, b.lc) && near(a.rx, b.rx) && near(a.rc, b.rc)) {
+      var yMove = classifyVarMove(a, b, "y", "y", "y");
+      if (yMove) return yMove;
     }
 
     if (leftSame !== rightSame) {

@@ -60,8 +60,11 @@
   }
 
   function hideTimesSign(left, right) {
-    if (right === "x" || right === "X" || right === "(") return true;
-    if (left === ")" && (right === "x" || right === "X" || right === "(" || isNumChar(right))) {
+    if (right === "x" || right === "X" || right === "y" || right === "Y" || right === "(") return true;
+    if (
+      left === ")" &&
+      (right === "x" || right === "X" || right === "y" || right === "Y" || right === "(" || isNumChar(right))
+    ) {
       return true;
     }
     return false;
@@ -78,10 +81,32 @@
         i += mixed[0].length;
         continue;
       }
-      var algFrac = s.slice(i).match(/^(\([^()]+\)|\d*x|\d+)\s*\/\s*(\([^()]+\)|-?\d*x|-?\d+)/i);
+      var sqrtm = s.slice(i).match(/^√\(([^()]*)\)/) || s.slice(i).match(/^√(\d+(?:\.\d+)?)/);
+      if (sqrtm) {
+        out +=
+          '<span class="m-sqrt"><span class="m-rad-sign">√</span><span class="m-rad">' +
+          sideToHTML(sqrtm[1]) +
+          "</span></span>";
+        i += sqrtm[0].length;
+        continue;
+      }
+      var algFrac = s.slice(i).match(/^([−-]?(\d+\([^()]+\)|\([^()]+\)|\d*[xy]|\d+))\s*\/\s*(\([^()]+\)|[−-]?\d+)(?![.\dxy])/i);
       if (algFrac && algFrac[0].indexOf("/") !== -1) {
-        out += fracWrap(sideToHTML(unwrapParens(algFrac[1])), sideToHTML(unwrapParens(algFrac[2])));
+        out += fracWrap(sideToHTML(unwrapParens(algFrac[1])), sideToHTML(unwrapParens(algFrac[3])));
         i += algFrac[0].length;
+        continue;
+      }
+      var pow = s.slice(i).match(/^((?:\(-?\d+\))|(?:-?\d+)|[xy])(\^2|²)/i);
+      if (pow) {
+        var base = pow[1];
+        var baseHtml;
+        if (/^[xy]$/i.test(base)) {
+          baseHtml = '<span class="m-x">' + escapeHtml(base) + "</span>";
+        } else {
+          baseHtml = sideToHTML(base);
+        }
+        out += '<span class="m-pow">' + baseHtml + '<sup class="m-sup">2</sup></span>';
+        i += pow[0].length;
         continue;
       }
       var wrappedFrac = s.slice(i).match(/^\((-?\d+)\)\s*\/\s*\((-?\d+)\)/);
@@ -131,8 +156,18 @@
         i += 1;
         continue;
       }
+      if (ch === "^" && s.charAt(i + 1) === "2") {
+        out += '<sup class="m-sup">2</sup>';
+        i += 2;
+        continue;
+      }
       if (ch === "x" || ch === "X") {
         out += '<span class="m-x">x</span>';
+        i += 1;
+        continue;
+      }
+      if (ch === "y" || ch === "Y") {
+        out += '<span class="m-x">y</span>';
         i += 1;
         continue;
       }
@@ -158,8 +193,20 @@
     );
   }
 
+  function systemHTML(eq1, eq2) {
+    return (
+      '<span class="sys" dir="ltr">' +
+      '<span class="sys-brace">{</span>' +
+      '<span class="sys-eqs">' +
+      toHTML(eq1) +
+      toHTML(eq2) +
+      "</span></span>"
+    );
+  }
+
   global.DoctematicaMath = {
     toHTML: toHTML,
+    systemHTML: systemHTML,
     fracHTML: fracHTML,
   };
 })(window);

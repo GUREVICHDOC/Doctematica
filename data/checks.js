@@ -1,6 +1,6 @@
 window.DoctematicaChecks = {
   updated: "2026-08-23",
-  levelsCovered: ["רמה 1", "רמה 2", "רמה 3", "רמה 4", "רמה 5", "משוואות עם מכנה שלב 1–2"],
+  levelsCovered: ["משוואות בסיס רמה 1–5", "משוואות עם מכנה רמה 1–2", "משוואות ריבועיות — נוסחת שורשים"],
   active: [
     {
       id: "equivalent",
@@ -23,9 +23,9 @@ window.DoctematicaChecks = {
       what: "למשל 2x-4=5 הופך ל־2x=5-4 במקום 2x=5+4.",
     },
     {
-      id: "move_x_without_sign_flip",
-      title: "העברת איבר עם x בלי החלפת סימן",
-      what: "למשל 7x=4x+12 הופך ל־7x+4x=12 במקום 7x-4x=12.",
+      id: "move_y_without_sign_flip",
+      title: "העברת איבר עם y בלי החלפת סימן",
+      what: "כמו עם x, במערכת משוואות: 5x+3y=36 הופך ל־5x=36+3y במקום 5x=36-3y.",
     },
     {
       id: "move_compute_wrong",

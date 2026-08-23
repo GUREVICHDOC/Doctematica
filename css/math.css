@@ -1,12 +1,11 @@
 .m-expr {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.06em;
+  display: inline-block;
   font-family: "Times New Roman", "Frank Ruhl Libre", serif;
   font-weight: 600;
   font-size: 1.15em;
   direction: ltr;
   unicode-bidi: isolate;
+  line-height: 1.35;
 }
 
 .m-frac {
@@ -28,10 +27,57 @@
 
 .m-num {
   border-bottom: 2px solid currentColor;
+  padding-bottom: 0.14em;
+  line-height: 1.15;
+}
+
+.m-den {
+  padding-top: 0.1em;
+  line-height: 1.15;
+}
+
+.m-num > .m-frac,
+.m-den > .m-frac {
+  font-size: 0.82em;
+  margin: 0.08em 0;
 }
 
 .m-x {
   font-style: italic;
+}
+
+.m-pow {
+  display: inline;
+  white-space: nowrap;
+}
+
+.m-sqrt {
+  display: inline-flex;
+  align-items: stretch;
+  vertical-align: middle;
+  margin: 0 1px;
+}
+
+.m-rad-sign {
+  font-size: 1.35em;
+  line-height: 0.85;
+  align-self: center;
+}
+
+.m-rad {
+  border-top: 2px solid currentColor;
+  padding: 0.05em 0.2em 0.08em;
+  margin-top: 0.18em;
+  min-width: 0.7em;
+}
+
+.m-sup {
+  font-size: 0.58em;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 0;
+  vertical-align: super;
+  margin-inline-start: 0.03em;
 }
 
 .m-op,
@@ -52,15 +98,33 @@
 .math-line {
   flex: 1;
   display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
   align-items: center;
   gap: 0;
   min-height: 56px;
+  min-width: 0;
   padding: 4px 14px;
   border-radius: 16px;
   border: 1px solid var(--line);
   background: #fff;
   box-shadow: inset 0 1px 2px rgba(18, 21, 28, 0.04);
   direction: ltr;
+  overflow-x: auto;
+}
+
+.math-run {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.math-run.is-grow {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
 }
 
 .math-line.is-locked {
@@ -73,8 +137,8 @@
 }
 
 .math-line:focus-within {
-  border-color: rgba(196, 92, 42, 0.45);
-  box-shadow: 0 0 0 4px rgba(196, 92, 42, 0.12);
+  border-color: rgba(47, 107, 69, 0.45);
+  box-shadow: 0 0 0 4px rgba(47, 107, 69, 0.12);
 }
 
 .ml-text {
@@ -90,8 +154,8 @@
 
 .ml-text.is-grow {
   flex: 1 1 auto;
-  min-width: 1.2em;
-  width: auto;
+  min-width: 0;
+  width: 100%;
 }
 
 .ml-whole {
@@ -130,16 +194,95 @@
   border-radius: 0 0 3px 3px;
 }
 
-.ml-text:focus,
+.ml-text:focus {
+  outline: none;
+  background: transparent;
+}
+
 .ml-whole:focus,
 .ml-slot:focus {
   outline: none;
-  background: #fff4ea;
+  background: #eef6ef;
 }
 
 .ml-frac {
   flex: 0 0 auto;
   margin: 0 1px;
+}
+
+.ml-sqrt {
+  display: inline-flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  margin: 0 2px;
+}
+
+.ml-rad-sign {
+  font-size: 1.45em;
+  line-height: 0.8;
+  align-self: center;
+  font-family: "Times New Roman", serif;
+}
+
+.ml-rad {
+  display: inline-flex;
+  align-items: center;
+  border-top: 2px solid currentColor;
+  padding: 0.05em 0.25em 0.08em;
+  margin-top: 0.2em;
+  min-width: 1.4em;
+}
+
+.ml-rad .ml-slot {
+  min-width: 1.2em;
+}
+
+.ml-pow {
+  display: inline-flex;
+  align-items: flex-start;
+  flex: 0 0 auto;
+  margin: 0 1px;
+}
+
+.ml-base {
+  width: 1.4em;
+  min-width: 0.9em;
+  border: 0;
+  border-bottom: 1px dashed #c8bba8;
+  padding: 2px 1px 0;
+  text-align: center;
+  font: inherit;
+  background: transparent;
+}
+
+.ml-exp {
+  width: 1.15em;
+  min-width: 0.8em;
+  margin-top: -0.15em;
+  border: 0;
+  border-bottom: 1px dashed #c8bba8;
+  padding: 0;
+  font-size: 0.62em;
+  font-weight: 700;
+  text-align: center;
+  background: transparent;
+}
+
+.pm-icon,
+.pow-icon {
+  font-family: "Times New Roman", serif;
+  font-size: 1.15em;
+  line-height: 1;
+}
+
+.pow-icon sup {
+  font-size: 0.65em;
+}
+
+.sqrt-icon {
+  font-family: "Times New Roman", serif;
+  font-size: 1.2em;
+  line-height: 1;
 }
 
 .math-actions {
@@ -202,10 +345,281 @@
 
 .prompt .m-expr,
 .steps .m-expr,
-.model .m-expr {
+.model .m-expr,
+.sys .m-expr {
   font-size: 1.25em;
+}
+
+.solve-wrap.is-system {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.solve-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.sys-known {
+  flex: 0 0 7.2rem;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(47, 107, 69, 0.1);
+  direction: ltr;
+  text-align: left;
+}
+
+.sys-known .k-title {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  direction: rtl;
+  text-align: right;
+}
+
+.sys-known .k-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.28em;
+  font-family: "Times New Roman", "Frank Ruhl Libre", serif;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.sys-known .k-row.is-set {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.sys-known .k-var {
+  font-style: italic;
+  min-width: 0.85em;
+}
+
+.sys-known .k-val {
+  font-style: normal;
+}
+
+@media (max-width: 640px) {
+  .solve-wrap.is-system {
+    flex-direction: column;
+  }
+
+  .sys-known {
+    flex: none;
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+  }
+
+  .sys-known .k-title {
+    width: 100%;
+    margin: 0;
+  }
+}
+
+.sys {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12em;
+  direction: ltr;
+}
+
+.sys-brace {
+  font-size: 2.4em;
+  font-weight: 400;
+  line-height: 0.9;
+  padding-left: 0.08em;
+}
+
+.sys-eqs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+}
+
+.sys-guide {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(47, 107, 69, 0.08);
+}
+
+.sys-guide p {
+  margin: 0 0 10px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.sys-guide .sys-continue-row {
+  margin-top: 10px;
+}
+
+.quad-guide {
+  margin: 0 0 12px;
+}
+
+.quad-guide.hidden {
+  display: none !important;
+}
+
+.q-abc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  direction: ltr;
+  justify-content: flex-start;
+}
+
+.q-abc label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-family: "Times New Roman", "Frank Ruhl Libre", serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.q-abc input.is-ok {
+  background: rgba(47, 107, 69, 0.12);
+  border-color: #2f6b45;
+}
+
+.q-abc input:disabled {
+  opacity: 0.4;
+}
+
+.q-abc input,
+.q-slot {
+  width: 3.4rem;
+  min-height: 42px;
+  text-align: center;
+  font-family: "Times New Roman", "Frank Ruhl Libre", serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  direction: ltr;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+
+.q-slot.is-wide {
+  width: 8.4rem;
+}
+
+.q-done {
+  font-weight: 700;
+  padding: 0 0.1em;
+}
+
+.q-formula {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  direction: ltr;
+  font-family: "Times New Roman", "Frank Ruhl Libre", serif;
+  font-size: 1.35rem;
+  font-weight: 600;
+  flex-wrap: wrap;
+  line-height: 1.35;
+}
+
+.q-frac {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.q-num,
+.q-den {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.15em;
+  padding: 0.12em 0.25em;
+}
+
+.q-num {
+  border-bottom: 2px solid currentColor;
+  padding-bottom: 0.2em;
+}
+
+.q-sqrt {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.q-sqrt::before {
+  content: "√";
+  font-size: 1.45em;
+  line-height: 0.8;
+  align-self: center;
+}
+
+.q-rad {
+  border-top: 2px solid currentColor;
+  padding: 0.05em 0.2em 0.12em;
+  margin-top: 0.12em;
+}
+
+.q-count {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.q-count .is-continue {
+  font-weight: 700;
+}
+
+.q-root-chain {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.q-root-row {
+  flex-wrap: nowrap;
+}
+
+.q-roots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  direction: ltr;
+  justify-content: flex-start;
+}
+
+.q-roots label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-family: "Times New Roman", "Frank Ruhl Libre", serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.q-note {
+  margin: 0 0 10px;
+  font-weight: 600;
+  line-height: 1.45;
 }
 
 .steps li {
   align-items: center;
+}
+
+.steps .q-formula {
+  font-size: 1.05rem;
 }

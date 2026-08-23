@@ -23,8 +23,16 @@
 
   var topics = [
     { id: "equations", label: "משוואות" },
-    { id: "equations-denom", label: "משוואות עם מכנה" },
+    { id: "systems-sub", label: "מערכת משוואות" },
   ];
+
+  var subtopics = {
+    equations: [
+      { id: "basic", label: "משוואות בסיס" },
+      { id: "denom", label: "משוואות עם מכנה" },
+      { id: "quadratic", label: "משוואות ריבועיות" },
+    ],
+  };
 
   function generate(topicId, level, kind) {
     return DoctematicaBank.pick(level, kind || "all");
@@ -32,6 +40,7 @@
 
   global.DoctematicaProblems = {
     topics: topics,
+    subtopics: subtopics,
     generate: generate,
     simplify: simplify,
     gcd: gcd,

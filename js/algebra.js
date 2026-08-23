@@ -48,6 +48,7 @@
       .replace(/¾/g, "(3/4)")
       .replace(/⅓/g, "(1/3)")
       .replace(/⅔/g, "(2/3)")
+      .replace(/²/g, "^2")
       .replace(/[−–—]/g, "-")
       .replace(/[×·]/g, "*")
       .replace(/:/g, "/");
@@ -83,6 +84,11 @@
         continue;
       }
       if (c === "x" || c === "X") {
+        if (s.slice(i + 1, i + 3) === "^2") {
+          tokens.push({ t: "x2" });
+          i += 3;
+          continue;
+        }
         tokens.push({ t: "x" });
         i += 1;
         continue;
@@ -94,7 +100,7 @@
         i += m[0].length;
         continue;
       }
-      throw new Error("תו לא מוכר: «" + c + "». השתמשו ב־x, מספרים, + − × / ( ) ו־=.");
+      throw new Error("תו לא מוכר: «" + c + "». השתמשו ב־x, x², מספרים, + − × / ( ) ו־=.");
     }
     return insertImplicitMul(tokens);
   }
@@ -102,10 +108,10 @@
   function insertImplicitMul(tokens) {
     var out = [];
     function endsValue(tok) {
-      return tok && (tok.t === "num" || tok.t === "x" || tok.t === ")");
+      return tok && (tok.t === "num" || tok.t === "x" || tok.t === "x2" || tok.t === ")");
     }
     function startsValue(tok) {
-      return tok && (tok.t === "num" || tok.t === "x" || tok.t === "(");
+      return tok && (tok.t === "num" || tok.t === "x" || tok.t === "x2" || tok.t === "(");
     }
     for (var i = 0; i < tokens.length; i++) {
       var prev = out[out.length - 1];
@@ -116,7 +122,8 @@
     return out;
   }
 
-  function parseLinear(tokens) {
+  function parseLinear(tokens, unknown) {
+    unknown = unknown || "x";
     var i = 0;
 
     function peek() {
@@ -169,7 +176,17 @@
         eat();
         return lin(0, tok.v);
       }
+      if (tok.t === "x2") {
+        if (unknown === "x") {
+          throw new Error("במשוואות ממעלה ראשונה אין x².");
+        }
+        eat();
+        return lin(1, 0);
+      }
       if (tok.t === "x") {
+        if (unknown === "x2") {
+          throw new Error("בשלב הזה מבודדים את x², לא את x. אחרי x² = מספר הוציאו שורש משני האגפים.");
+        }
         eat();
         return lin(1, 0);
       }
@@ -186,8 +203,24 @@
     return { value: value, rest: i };
   }
 
-  function parseEquation(text) {
+  function detectUnknown(tokens) {
+    var sawX2 = false;
+    var sawX = false;
+    var i;
+    for (i = 0; i < tokens.length; i++) {
+      if (tokens[i].t === "x2") sawX2 = true;
+      if (tokens[i].t === "x") sawX = true;
+    }
+    if (sawX2 && sawX) {
+      throw new Error("בשלב הבידוד עובדים עם x². את x כותבים רק אחרי שמוציאים שורש.");
+    }
+    return sawX2 ? "x2" : "x";
+  }
+
+  function parseEquation(text, opts) {
+    opts = opts || {};
     var tokens = tokenize(text);
+    var unknown = opts.unknown || detectUnknown(tokens);
     var eqIndex = -1;
     for (var i = 0; i < tokens.length; i++) {
       if (tokens[i].t === "=") {
@@ -199,8 +232,8 @@
     var leftToks = tokens.slice(0, eqIndex);
     var rightToks = tokens.slice(eqIndex + 1);
     if (!leftToks.length || !rightToks.length) throw new Error("חסר אגף במשוואה.");
-    var left = parseLinear(leftToks);
-    var right = parseLinear(rightToks);
+    var left = parseLinear(leftToks, unknown);
+    var right = parseLinear(rightToks, unknown);
     if (left.rest !== leftToks.length || right.rest !== rightToks.length) {
       throw new Error("לא הצלחתי לקרוא את כל המשוואה.");
     }
@@ -235,7 +268,14 @@
   }
 
   function isBareX(side) {
-    return /^[+\s]*x$/i.test(String(side).trim());
+    return isBareLetter(side, "x");
+  }
+
+  function isBareLetter(side, v) {
+    if (v === "x2" || v === "x^2") {
+      return /^[+\s]*(x\^2|x²)$/i.test(String(side).trim());
+    }
+    return new RegExp("^[+\\s]*" + v + "$", "i").test(String(side).trim());
   }
 
   function fracParts(side) {
@@ -269,13 +309,20 @@
     if (raw.indexOf("=") === -1 && !/x/i.test(raw)) {
       return isSimpleNumber(raw);
     }
-    var eq = rewriteFractions(asEquation(raw));
+    return isolatedRhsKind(raw, "x") === "value";
+  }
+
+  function isolatedRhsKind(text, v) {
+    var eq = rewriteFractions(asEquation(String(text).trim()));
     var parts = eq.split("=");
-    if (parts.length !== 2) return false;
-    return (
-      (isBareX(parts[0]) && isSimpleNumber(parts[1])) ||
-      (isBareX(parts[1]) && isSimpleNumber(parts[0]))
-    );
+    if (parts.length !== 2) return null;
+    var other = null;
+    if (isBareLetter(parts[0], v)) other = parts[1];
+    else if (isBareLetter(parts[1], v)) other = parts[0];
+    else return null;
+    if (isSimpleNumber(other)) return "value";
+    if (isUnreducedFraction(other)) return "unreduced";
+    return "expr";
   }
 
   function isSolved(eq) {
@@ -320,7 +367,10 @@
     return String(Math.round(n * 1000) / 1000);
   }
 
-  function checkStep(previousText, nextText) {
+  function checkStep(previousText, nextText, opts) {
+    opts = opts || {};
+    var unknown = opts.unknown || (/x\^2|x²/i.test(String(previousText)) ? "x2" : "x");
+    var parseOpts = { unknown: unknown };
     if (normalizeKey(previousText) === normalizeKey(nextText)) {
       return {
         ok: false,
@@ -331,12 +381,12 @@
     var prev;
     var next;
     try {
-      prev = parseEquation(previousText);
+      prev = parseEquation(previousText, parseOpts);
     } catch (err) {
       return { ok: false, message: "המשוואה הקודמת לא ניתנת לקריאה: " + err.message };
     }
     try {
-      next = parseEquation(nextText);
+      next = parseEquation(nextText, parseOpts);
     } catch (err) {
       return { ok: false, message: err.message };
     }
@@ -346,6 +396,34 @@
         ok: false,
         errorId: classified.id,
         message: classified.message,
+      };
+    }
+    if (unknown === "x2") {
+      var k2 = isolatedRhsKind(nextText, "x2");
+      var x2Isolated =
+        k2 === "expr" ||
+        k2 === "unreduced" ||
+        k2 === "value";
+      if (k2 === "value") {
+        return {
+          ok: true,
+          isolated: true,
+          solved: false,
+          equation: next,
+          message: "x² מבודד. עכשיו הוציאו שורש משני האגפים. אם האגף השני שלילי — אין פתרון ממשי.",
+        };
+      }
+      return {
+        ok: true,
+        solved: false,
+        isolated: false,
+        equation: next,
+        message:
+          k2 === "unreduced"
+            ? "צעד חוקי: חלקו. עכשיו חשבו את השבר עד שמתקבל x² = מספר."
+            : x2Isolated
+              ? "צעד חוקי. פשטו את האגף עד שמתקבל x² = מספר."
+              : "צעד חוקי. המשיכו לבודד את x² כמו במשוואה רגילה: העברת איבר, ואז חילוק במקדם.",
       };
     }
     if (isSolved(next) || isSolvedText(nextText)) {
@@ -386,5 +464,6 @@
     equivalent: equivalent,
     formatNumber: formatNumber,
     asEquation: asEquation,
+    isolatedRhsKind: isolatedRhsKind,
   };
 })(window);
