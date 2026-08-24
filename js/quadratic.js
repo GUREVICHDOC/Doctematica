@@ -1,6 +1,10 @@
 (function (global) {
   var EPS = 1e-9;
 
+  function near0(n) {
+    return Math.abs(n) < EPS;
+  }
+
   function gcd(a, b) {
     a = Math.abs(a);
     b = Math.abs(b);
@@ -672,6 +676,13 @@
     return /x\s*\^\s*2|x²/i.test(String(text || ""));
   }
 
+  function hasVisibleLinearX(text) {
+    var p = parseABC(text);
+    if (p && !near0(p.b)) return true;
+    var s = normFactorText(text);
+    return /x(?!\^2)/i.test(s);
+  }
+
   function isRootAnswerText(text) {
     var t = String(text || "").replace(/\s+/g, "");
     if (isNoRealText(t)) return true;
@@ -1182,6 +1193,21 @@
     return null;
   }
 
+  function hasDepth0PlusMinus(side) {
+    var s = unwrapParens(normFactorText(side));
+    if (!s) return false;
+    var depth = 0;
+    var i = 0;
+    if (s.charAt(0) === "+" || s.charAt(0) === "-") i = 1;
+    for (; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (ch === "(") depth += 1;
+      else if (ch === ")") depth -= 1;
+      else if (depth === 0 && (ch === "+" || ch === "-")) return true;
+    }
+    return false;
+  }
+
   function parseProductEq(text) {
     var s = normFactorText(text);
     var parts = s.split("=");
@@ -1193,6 +1219,7 @@
     } else if (left === "0" || left === "+0" || left === "-0") {
       left = right;
     } else return null;
+    if (hasDepth0PlusMinus(left)) return null;
     var bits = splitProductLeft(left);
     if (!bits) return null;
     var f1 = parseLinearFactor(bits[0]);
@@ -1331,6 +1358,41 @@
     };
   }
 
+  function matchBranchStep(st, typed) {
+    var tryEqs = st && st.eqs;
+    if (!tryEqs || !tryEqs.length) return null;
+    var t = String(typed || "").trim();
+    var lastFail = null;
+    var j;
+    for (j = 0; j < tryEqs.length; j++) {
+      if (st.solved && st.solved[j]) continue;
+      var result;
+      try {
+        result = global.DoctematicaAlgebra.checkStep(tryEqs[j], t);
+      } catch (err) {
+        continue;
+      }
+      if (!result.ok) {
+        if (!lastFail) lastFail = result;
+        continue;
+      }
+      var eqs = tryEqs.slice();
+      eqs[j] = t;
+      var solvedFlags = (st.solved || [false, false]).slice();
+      if (result.solved || linearSolved(t)) solvedFlags[j] = true;
+      return {
+        ok: true,
+        which: j,
+        result: result,
+        eqs: eqs,
+        solvedFlags: solvedFlags,
+        solvedAll: !!(solvedFlags[0] && solvedFlags[1]),
+      };
+    }
+    if (lastFail) return { ok: false, result: lastFail };
+    return null;
+  }
+
   function checkFactorTyped(prev, typed, pack, st) {
     st = st || { split: false, eqs: [], solved: [false, false], progress: { z: false, o: false } };
     var t = String(typed || "").trim();
@@ -1363,38 +1425,28 @@
     }
 
     if (tryEqs.length) {
-      var j;
-      for (j = 0; j < tryEqs.length; j++) {
-        if (st.solved && st.solved[j]) continue;
-        var result;
-        try {
-          result = global.DoctematicaAlgebra.checkStep(tryEqs[j], t);
-        } catch (err) {
-          continue;
-        }
-        if (!result.ok) continue;
-        var eqs = tryEqs.slice();
-        eqs[j] = t;
-        var solvedFlags = (st.solved || [false, false]).slice();
-        if (result.solved || linearSolved(t)) solvedFlags[j] = true;
-        var both = solvedFlags[0] && solvedFlags[1];
+      var hit = matchBranchStep({ eqs: tryEqs, solved: st.solved }, t);
+      if (hit && hit.ok) {
         return {
           ok: true,
           split: true,
-          eqs: eqs,
-          solvedFlags: solvedFlags,
-          which: j,
-          solvedOne: result.solved,
-          solvedAll: both,
-          message: both
+          eqs: hit.eqs,
+          solvedFlags: hit.solvedFlags,
+          which: hit.which,
+          solvedOne: hit.result.solved,
+          solvedAll: hit.solvedAll,
+          message: hit.solvedAll
             ? "שני הפתרונות: x = 0, x = " + fmtDisp(pack.otherF) + "."
-            : result.solved
-              ? "נכון. זו משוואה אחת. פתרו גם את המשוואה השנייה."
-              : "צעד חוקי במשוואה " + (j + 1) + ". " + result.message,
+            : hit.result.solved
+              ? hit.result.message + " יש עוד משוואה מהפיצול — פתרו גם אותה."
+              : hit.result.message,
         };
       }
       if (roots && (st.split || isProductEq(prev) || st.progress.z || st.progress.o)) {
         return roots;
+      }
+      if (hit && !hit.ok) {
+        return { ok: false, message: hit.result.message };
       }
       return {
         ok: false,
@@ -1408,6 +1460,1059 @@
     return {
       ok: false,
       message: "הוציאו גורם משותף x (ואפשר גם מספר), למשל x(x−5)=0.",
+    };
+  }
+
+  function polyAdd(p, q) {
+    return { a: p.a + q.a, b: p.b + q.b, c: p.c + q.c };
+  }
+
+  function polySub(p, q) {
+    return { a: p.a - q.a, b: p.b - q.b, c: p.c - q.c };
+  }
+
+  function polyMul(p, q) {
+    if ((!near0(p.a) && !near0(q.a)) || (!near0(p.a) && !near0(q.b)) || (!near0(q.a) && !near0(p.b))) {
+      return null;
+    }
+    return {
+      a: p.a * q.c + p.b * q.b + p.c * q.a,
+      b: p.b * q.c + p.c * q.b,
+      c: p.c * q.c,
+    };
+  }
+
+  function polyNeg(p) {
+    return { a: -p.a, b: -p.b, c: -p.c };
+  }
+
+  function insertQuadImplicit(tokens) {
+    var out = [];
+    function endsValue(tok) {
+      return tok && (tok.t === "num" || tok.t === "x" || tok.t === "x2" || tok.t === ")");
+    }
+    function startsValue(tok) {
+      return tok && (tok.t === "num" || tok.t === "x" || tok.t === "x2" || tok.t === "(");
+    }
+    var i;
+    for (i = 0; i < tokens.length; i++) {
+      var prev = out[out.length - 1];
+      var cur = tokens[i];
+      if (endsValue(prev) && startsValue(cur)) out.push({ t: "*" });
+      out.push(cur);
+    }
+    return out;
+  }
+
+  function tokenizeQuad(side) {
+    var s = normFactorText(side);
+    if (!s) return [];
+    var tokens = [];
+    var i = 0;
+    while (i < s.length) {
+      var c = s.charAt(i);
+      if ("()+*/-".indexOf(c) !== -1) {
+        tokens.push({ t: c });
+        i += 1;
+        continue;
+      }
+      if (c === "x" || c === "X") {
+        if (s.slice(i + 1, i + 3) === "^2") {
+          tokens.push({ t: "x2" });
+          i += 3;
+          continue;
+        }
+        tokens.push({ t: "x" });
+        i += 1;
+        continue;
+      }
+      if ((c >= "0" && c <= "9") || c === ".") {
+        var m = s.slice(i).match(/^\d+(?:\.\d+)?/);
+        if (!m) return null;
+        tokens.push({ t: "num", v: parseFloat(m[0], 10) });
+        i += m[0].length;
+        continue;
+      }
+      return null;
+    }
+    return insertQuadImplicit(tokens);
+  }
+
+  function parseQuadTokens(tokens) {
+    var i = 0;
+    function peek() {
+      return tokens[i];
+    }
+    function eat(t) {
+      var tok = tokens[i];
+      if (!tok || (t && tok.t !== t)) return null;
+      i += 1;
+      return tok;
+    }
+    function parseExpr() {
+      var left = parseTerm();
+      if (!left) return null;
+      while (peek() && (peek().t === "+" || peek().t === "-")) {
+        var op = eat().t;
+        var right = parseTerm();
+        if (!right) return null;
+        left = op === "+" ? polyAdd(left, right) : polySub(left, right);
+      }
+      return left;
+    }
+    function parseTerm() {
+      var left = parseUnary();
+      if (!left) return null;
+      while (peek() && (peek().t === "*" || peek().t === "/")) {
+        var op = eat().t;
+        var right = parseUnary();
+        if (!right) return null;
+        if (op === "/") {
+          if (!near0(right.a) || !near0(right.b) || near0(right.c)) return null;
+          left = { a: left.a / right.c, b: left.b / right.c, c: left.c / right.c };
+        } else {
+          left = polyMul(left, right);
+          if (!left) return null;
+        }
+      }
+      return left;
+    }
+    function parseUnary() {
+      if (peek() && peek().t === "+") {
+        eat();
+        return parseUnary();
+      }
+      if (peek() && peek().t === "-") {
+        eat();
+        var v = parseUnary();
+        return v ? polyNeg(v) : null;
+      }
+      return parsePrimary();
+    }
+    function parsePrimary() {
+      var tok = peek();
+      if (!tok) return null;
+      if (tok.t === "num") {
+        eat();
+        return { a: 0, b: 0, c: tok.v };
+      }
+      if (tok.t === "x2") {
+        eat();
+        return { a: 1, b: 0, c: 0 };
+      }
+      if (tok.t === "x") {
+        eat();
+        return { a: 0, b: 1, c: 0 };
+      }
+      if (tok.t === "(") {
+        eat();
+        var inner = parseExpr();
+        if (!inner || !eat(")")) return null;
+        return inner;
+      }
+      return null;
+    }
+    var value = parseExpr();
+    if (!value || i !== tokens.length) return null;
+    return value;
+  }
+
+  function parseQuadSide(side) {
+    var t = normFactorText(side);
+    if (!t || t === "0") return { a: 0, b: 0, c: 0 };
+    var plain = polySide(t);
+    if (plain && t.indexOf("(") < 0) return plain;
+    var tokens = tokenizeQuad(t);
+    if (!tokens) return null;
+    return parseQuadTokens(tokens);
+  }
+
+  function hasExpandableParens(text) {
+    var s = normFactorText(text);
+    return /\([^()]*[+\-][^()]*\)/.test(s);
+  }
+
+  function rewriteTermXBeforeParens(term) {
+    var t = normFactorText(term);
+    if (/x\^2$/i.test(t)) return term;
+    var m = t.match(/^([+-]?)(\d*)(\([^()]+\))(\d*)x$/i);
+    if (!m) return term;
+    var sign = m[1] || "";
+    var leftK = m[2] || "";
+    var parens = m[3];
+    var rightK = m[4] || "";
+    var k = leftK + rightK;
+    if (!k || k === "1") return sign + "x" + parens;
+    return sign + k + "x" + parens;
+  }
+
+  function joinSignedTermParts(parts) {
+    var s = parts[0] || "0";
+    var i;
+    for (i = 1; i < parts.length; i++) {
+      var piece = parts[i];
+      if (!piece || piece === "0") continue;
+      if (piece.charAt(0) === "-") s += piece;
+      else s += "+" + piece;
+    }
+    return s;
+  }
+
+  function rewriteSideXBeforeParens(side) {
+    var terms = splitSignedTerms(side);
+    if (!terms.length) return side;
+    var parts = terms.map(function (term) {
+      var next = rewriteTermXBeforeParens(term);
+      var t = normFactorText(next);
+      return t.charAt(0) === "+" ? t.slice(1) : t;
+    });
+    return joinSignedTermParts(parts);
+  }
+
+  function moveXBeforeParensEq(text) {
+    var s = normFactorText(text);
+    var parts = s.split("=");
+    if (parts.length !== 2) return text;
+    return rewriteSideXBeforeParens(parts[0]) + "=" + rewriteSideXBeforeParens(parts[1]);
+  }
+
+  function hasXAfterParens(text) {
+    var s = normFactorText(text);
+    if (!s) return false;
+    return normFactorText(moveXBeforeParensEq(s)) !== s;
+  }
+
+  function splitSignedTerms(side) {
+    var t = normFactorText(side);
+    if (!t || t === "0") return [];
+    var out = [];
+    var depth = 0;
+    var buf = "";
+    var i;
+    for (i = 0; i < t.length; i++) {
+      var ch = t.charAt(i);
+      if (ch === "(") depth += 1;
+      if (ch === ")") depth -= 1;
+      if (depth === 0 && (ch === "+" || ch === "-") && buf) {
+        out.push(buf);
+        buf = ch === "-" ? "-" : "";
+        continue;
+      }
+      buf += ch;
+    }
+    if (buf) out.push(buf);
+    return out;
+  }
+
+  function expandSideTerms(side) {
+    var terms = splitSignedTerms(side);
+    if (!terms.length) return "0";
+    var parts = [];
+    var i;
+    for (i = 0; i < terms.length; i++) {
+      var term = terms[i];
+      if (!hasExpandableParens(term)) {
+        parts.push(term.charAt(0) === "+" ? term.slice(1) : term);
+        continue;
+      }
+      var p = parseQuadSide(term);
+      if (!p) return side;
+      parts.push(formatSide(p.a, p.b, p.c));
+    }
+    var s = parts[0] || "0";
+    for (i = 1; i < parts.length; i++) {
+      var piece = parts[i];
+      if (!piece || piece === "0") continue;
+      if (piece.charAt(0) === "-") s += piece;
+      else s += "+" + piece;
+    }
+    return s;
+  }
+
+  function expandParensEq(text) {
+    var s = normFactorText(text);
+    var parts = s.split("=");
+    if (parts.length !== 2) return text;
+    return expandSideTerms(parts[0]) + "=" + expandSideTerms(parts[1]);
+  }
+
+  function parseABC(text) {
+    var s = normFactorText(text);
+    var parts = s.split("=");
+    if (parts.length !== 2) return null;
+    var L = parseQuadSide(parts[0]);
+    var R = parseQuadSide(parts[1]);
+    if (!L || !R) return null;
+    return { a: L.a - R.a, b: L.b - R.b, c: L.c - R.c, L: L, R: R };
+  }
+
+  function sideZero(p) {
+    return p && near0(p.a) && near0(p.b) && near0(p.c);
+  }
+
+  function countSideTerms(side) {
+    var t = normFactorText(side);
+    if (!t || t === "0") return { x2: 0, x: 0, n: 0 };
+    if (t.charAt(0) !== "+" && t.charAt(0) !== "-") t = "+" + t;
+    var x2 = 0;
+    var x = 0;
+    var n = 0;
+    var i = 0;
+    while (i < t.length) {
+      if (t.charAt(i) === "+" || t.charAt(i) === "-") i += 1;
+      var num = readPolyNum(t, i);
+      if (!num) return null;
+      i = num.i;
+      if (t.slice(i, i + 3) === "x^2") {
+        x2 += 1;
+        i += 3;
+      } else if (t.charAt(i) === "x" || t.charAt(i) === "X") {
+        x += 1;
+        i += 1;
+      } else {
+        if (!num.had) return null;
+        n += 1;
+      }
+    }
+    return { x2: x2, x: x, n: n };
+  }
+
+  function hasUncombined(text) {
+    var s = normFactorText(text);
+    var parts = s.split("=");
+    if (parts.length !== 2) return false;
+    var i;
+    for (i = 0; i < 2; i++) {
+      var c = countSideTerms(parts[i]);
+      if (c && (c.x2 > 1 || c.x > 1 || c.n > 1)) return true;
+    }
+    return false;
+  }
+
+  function isStandardZero(text) {
+    var p = parseABC(text);
+    if (!p) return false;
+    if (hasUncombined(text)) return false;
+    return sideZero(p.L) || sideZero(p.R);
+  }
+
+  function termKindSequence(side) {
+    var t = normFactorText(side);
+    if (!t || t === "0") return [];
+    if (t.charAt(0) !== "+" && t.charAt(0) !== "-") t = "+" + t;
+    var kinds = [];
+    var i = 0;
+    while (i < t.length) {
+      if (t.charAt(i) === "+" || t.charAt(i) === "-") i += 1;
+      var num = readPolyNum(t, i);
+      if (!num) return kinds;
+      i = num.i;
+      if (t.slice(i, i + 3) === "x^2") {
+        kinds.push("x2");
+        i += 3;
+      } else if (t.charAt(i) === "x" || t.charAt(i) === "X") {
+        kinds.push("x");
+        i += 1;
+      } else {
+        if (!num.had) return kinds;
+        kinds.push("n");
+      }
+    }
+    return kinds;
+  }
+
+  function isAbcOrder(text) {
+    if (!isStandardZero(text)) return false;
+    var p = parseABC(text);
+    var s = normFactorText(text);
+    var parts = s.split("=");
+    var live = sideZero(p.R) ? parts[0] : parts[1];
+    var kinds = termKindSequence(live);
+    var rank = { x2: 0, x: 1, n: 2 };
+    var i;
+    for (i = 1; i < kinds.length; i++) {
+      if (rank[kinds[i]] < rank[kinds[i - 1]]) return false;
+    }
+    return true;
+  }
+
+  function abcEquivalent(p, q) {
+    if (!p || !q) return false;
+    var pZ = near0(p.a) && near0(p.b) && near0(p.c);
+    var qZ = near0(q.a) && near0(q.b) && near0(q.c);
+    if (pZ) return qZ;
+    if (qZ) return false;
+    var k = null;
+    if (!near0(p.a) && !near0(q.a)) k = q.a / p.a;
+    else if (!near0(p.b) && !near0(q.b)) k = q.b / p.b;
+    else if (!near0(p.c) && !near0(q.c)) k = q.c / p.c;
+    else return false;
+    if (k == null || Math.abs(k) < EPS) return false;
+    return nearNum(q.a, k * p.a) && nearNum(q.b, k * p.b) && nearNum(q.c, k * p.c);
+  }
+
+  function canonicalABC(a, b, c) {
+    var i;
+    var A = a;
+    var B = b;
+    var C = c;
+    for (i = 1; i <= 64; i++) {
+      if (isIntNum(a * i) && isIntNum(b * i) && isIntNum(c * i)) {
+        A = Math.round(a * i);
+        B = Math.round(b * i);
+        C = Math.round(c * i);
+        break;
+      }
+    }
+    var g = gcd(gcd(Math.abs(A) || 0, Math.abs(B) || 0), Math.abs(C) || 0);
+    if (!g) g = 1;
+    A /= g;
+    B /= g;
+    C /= g;
+    if (A < 0 || (near0(A) && B < 0) || (near0(A) && near0(B) && C < 0)) {
+      A = -A;
+      B = -B;
+      C = -C;
+    }
+    return { a: A, b: B, c: C };
+  }
+
+  function formatSide(a, b, c) {
+    var parts = [];
+    function add(coef, body) {
+      if (near0(coef)) return;
+      var neg = coef < 0;
+      var abs = Math.abs(coef);
+      var core;
+      if (!body) core = fmtLinNum(abs);
+      else if (nearNum(abs, 1)) core = body;
+      else core = fmtLinNum(abs) + body;
+      if (!parts.length) parts.push(neg ? "-" + core : core);
+      else parts.push((neg ? "-" : "+") + core);
+    }
+    add(a, "x^2");
+    add(b, "x");
+    add(c, "");
+    if (!parts.length) return "0";
+    return parts.join("");
+  }
+
+  function formatPolyEq(a, b, c) {
+    return formatSide(a, b, c) + "=0";
+  }
+
+  function splitPolyTerms(side) {
+    var t = normFactorText(side);
+    if (!t || t === "0") return [];
+    if (t.charAt(0) !== "+" && t.charAt(0) !== "-") t = "+" + t;
+    var out = [];
+    var i = 0;
+    while (i < t.length) {
+      var sign = t.charAt(i) === "-" ? -1 : 1;
+      if (t.charAt(i) === "+" || t.charAt(i) === "-") i += 1;
+      var num = readPolyNum(t, i);
+      if (!num) return out;
+      i = num.i;
+      if (t.slice(i, i + 3) === "x^2") {
+        out.push({ kind: "x2", coef: sign * (num.had ? num.v : 1) });
+        i += 3;
+      } else if (t.charAt(i) === "x" || t.charAt(i) === "X") {
+        out.push({ kind: "x", coef: sign * (num.had ? num.v : 1) });
+        i += 1;
+      } else {
+        if (!num.had) return out;
+        out.push({ kind: "n", coef: sign * num.v });
+      }
+    }
+    return out;
+  }
+
+  function formatTermList(terms) {
+    if (!terms || !terms.length) return "0";
+    var s = "";
+    var i;
+    for (i = 0; i < terms.length; i++) {
+      var c = terms[i].coef;
+      var abs = Math.abs(c);
+      var body;
+      if (terms[i].kind === "x2") body = nearNum(abs, 1) ? "x^2" : fmtLinNum(abs) + "x^2";
+      else if (terms[i].kind === "x") body = nearNum(abs, 1) ? "x" : fmtLinNum(abs) + "x";
+      else body = fmtLinNum(abs);
+      var neg = c < 0;
+      if (i === 0) s += neg ? "-" + body : body;
+      else s += (neg ? "-" : "+") + body;
+    }
+    return s;
+  }
+
+  function moveAllToLeft(text) {
+    var s = normFactorText(text);
+    var parts = s.split("=");
+    if (parts.length !== 2) return text;
+    var left = splitPolyTerms(parts[0]);
+    var right = splitPolyTerms(parts[1]);
+    var flipped = right.map(function (term) {
+      return { kind: term.kind, coef: -term.coef };
+    });
+    var all = left.concat(flipped);
+    return formatTermList(groupTermsByKind(all)) + "=0";
+  }
+
+  function groupTermsByKind(terms) {
+    var grouped = [];
+    ["x2", "x", "n"].forEach(function (kind) {
+      terms.forEach(function (term) {
+        if (term.kind === kind) grouped.push(term);
+      });
+    });
+    return grouped;
+  }
+
+  function termsOfKind(terms, kind) {
+    return terms.filter(function (term) {
+      return term.kind === kind;
+    });
+  }
+
+  function flipTerms(terms) {
+    return terms.map(function (term) {
+      return { kind: term.kind, coef: -term.coef };
+    });
+  }
+
+  function isSqrtSplit(pack) {
+    return !!(
+      pack &&
+      pack.classify &&
+      pack.classify.methods &&
+      pack.classify.methods.sqrt &&
+      !pack.classify.methods.factor
+    );
+  }
+
+  function isX2LeftConstRight(text) {
+    var s = normFactorText(text);
+    var parts = s.split("=");
+    if (parts.length !== 2) return false;
+    var L = splitPolyTerms(parts[0]);
+    var R = splitPolyTerms(parts[1]);
+    if (!L.length) return false;
+    var hasX2term = false;
+    var i;
+    for (i = 0; i < L.length; i++) {
+      if (L[i].kind === "n") return false;
+      if (L[i].kind === "x2") hasX2term = true;
+    }
+    for (i = 0; i < R.length; i++) {
+      if (R[i].kind !== "n") return false;
+    }
+    return hasX2term;
+  }
+
+  function moveX2LeftConstsRight(text) {
+    var s = normFactorText(text);
+    var parts = s.split("=");
+    if (parts.length !== 2) return text;
+    var L = splitPolyTerms(parts[0]);
+    var R = splitPolyTerms(parts[1]);
+    var left = termsOfKind(L, "x2")
+      .concat(flipTerms(termsOfKind(R, "x2")))
+      .concat(termsOfKind(L, "x"))
+      .concat(flipTerms(termsOfKind(R, "x")));
+    var right = termsOfKind(R, "n").concat(flipTerms(termsOfKind(L, "n")));
+    return formatTermList(groupTermsByKind(left)) + "=" + formatTermList(groupTermsByKind(right));
+  }
+
+  function combineBothSides(text) {
+    var s = normFactorText(text);
+    var parts = s.split("=");
+    if (parts.length !== 2) return text;
+    var L = polySide(parts[0]);
+    var R = polySide(parts[1]);
+    if (!L || !R) return text;
+    if (L.a < 0) {
+      L = { a: -L.a, b: -L.b, c: -L.c };
+      R = { a: -R.a, b: -R.b, c: -R.c };
+    }
+    return formatSide(L.a, L.b, L.c) + "=" + formatSide(R.a, R.b, R.c);
+  }
+
+  function bothSidesLive(text) {
+    var p = parseABC(text);
+    return !!(p && !sideZero(p.L) && !sideZero(p.R));
+  }
+
+  function classifyABC(p) {
+    var a0 = near0(p.a);
+    var b0 = near0(p.b);
+    var c0 = near0(p.c);
+    if (a0 && b0 && c0) {
+      return {
+        kind: "identity",
+        methods: { sqrt: false, factor: false, formula: false, linear: false },
+      };
+    }
+    if (a0 && b0) {
+      return {
+        kind: "none",
+        methods: { sqrt: false, factor: false, formula: false, linear: false },
+      };
+    }
+    if (a0) {
+      return {
+        kind: "linear",
+        methods: { sqrt: false, factor: false, formula: false, linear: true },
+      };
+    }
+    return {
+      kind: "quadratic",
+      methods: { sqrt: b0, factor: c0, formula: true, linear: false },
+    };
+  }
+
+  function naturalMethod(cls) {
+    if (cls.kind === "identity" || cls.kind === "none" || cls.kind === "linear") return cls.kind;
+    if (cls.methods.sqrt) return "sqrt";
+    if (cls.methods.factor) return "factor";
+    return "formula";
+  }
+
+  function mixedError(pack, nextP) {
+    if (!nextP) return "לא הצלחתי לקרוא את המשוואה. כתבו משוואה מלאה עם =.";
+    if (!near0(pack.b) && near0(nextP.b) && !near0(nextP.a)) {
+      return "נראה שהשמטתם את איבר ה־x. אחרי איסוף עדיין יש מקדם ל־x, אז אי אפשר לבודד רק x².";
+    }
+    if (!near0(pack.c) && near0(nextP.c) && !near0(nextP.a) && !near0(nextP.b)) {
+      return "נראה שהשמטתם את המספר החופשי. אם הוא לא אפס, אי אפשר רק להוציא x כגורם משותף.";
+    }
+    if (!near0(pack.a) && near0(nextP.a) && (!near0(nextP.b) || !near0(nextP.c))) {
+      return "נראה שהשמטתם את x². אם אחרי איסוף המקדם של x² באמת 0 — זו משוואה ממעלה ראשונה.";
+    }
+    return "המשוואה לא שקולה. בדקו סימנים כשמעבירים אגף, ואיסוף איברים דומים (x² עם x², x עם x, מספרים עם מספרים).";
+  }
+
+  function isolatedX2(text) {
+    var iso = isolatedK(text);
+    if (!iso || (iso.kind !== "value" && iso.kind !== "unreduced" && iso.kind !== "expr")) return false;
+    if (hasVisibleLinearX(text)) return false;
+    var p = parseABC(text);
+    if (p && !near0(p.b)) return false;
+    return true;
+  }
+
+  function looksLikeProduct(text) {
+    return !!parseProductEq(text);
+  }
+
+  function analyzeMixedStart(start) {
+    var raw = parseABC(start);
+    if (!raw) throw new Error("לא הצלחתי לקרוא את המשוואה הריבועית.");
+    var xMoved = hasXAfterParens(start) ? moveXBeforeParensEq(start) : start;
+    var expandFrom = xMoved;
+    var expanded = hasExpandableParens(expandFrom) ? expandParensEq(expandFrom) : expandFrom;
+    var body = expanded;
+    var canon = canonicalABC(raw.a, raw.b, raw.c);
+    var cls = classifyABC(canon);
+    var standard = formatPolyEq(canon.a, canon.b, canon.c);
+    var sqrtSplit = cls.methods.sqrt && !cls.methods.factor;
+    var gathered = null;
+    var combinedSides = null;
+    var moved = body;
+    var steps = [start];
+    if (normFactorText(xMoved) !== normFactorText(start)) steps.push(xMoved);
+    if (normFactorText(expanded) !== normFactorText(xMoved)) steps.push(expanded);
+    var sqrtSeed = standard;
+    if (sqrtSplit) {
+      if (bothSidesLive(body) && !isX2LeftConstRight(body)) {
+        gathered = moveX2LeftConstsRight(body);
+        if (normFactorText(gathered) !== normFactorText(body)) steps.push(gathered);
+      } else {
+        gathered = body;
+      }
+      if (isX2LeftConstRight(gathered)) {
+        combinedSides = combineBothSides(gathered);
+        if (hasUncombined(gathered) && normFactorText(combinedSides) !== normFactorText(gathered)) {
+          steps.push(combinedSides);
+        }
+      }
+      sqrtSeed = combinedSides || gathered || body;
+    } else {
+      moved = bothSidesLive(body) ? moveAllToLeft(body) : body;
+      if (normFactorText(moved) !== normFactorText(body)) steps.push(moved);
+      var shown = formatPolyEq(raw.a, raw.b, raw.c);
+      if (
+        normFactorText(shown) !== normFactorText(moved) &&
+        normFactorText(shown) !== normFactorText(start) &&
+        normFactorText(shown) !== normFactorText(body)
+      ) {
+        steps.push(shown);
+      }
+    }
+    var sqrt = null;
+    var factor = null;
+    var quad = null;
+    var answer = "";
+    var nat = naturalMethod(cls);
+    if (cls.kind === "identity") {
+      steps.push("כל x");
+      answer = "כל x (זהות)";
+    } else if (cls.kind === "none") {
+      steps.push("אין פתרון");
+      answer = "אין פתרון";
+    } else if (cls.kind === "linear") {
+      var linSeed = formatPolyEq(raw.a, raw.b, raw.c);
+      var linPath = global.DoctematicaTeach.fullPath(linSeed);
+      (linPath.steps || []).forEach(function (s) {
+        if (s.eq && steps.indexOf(s.eq) === -1) steps.push(s.eq);
+      });
+      answer = "x = " + (linPath.answer != null ? linPath.answer : "");
+    } else {
+      if (cls.methods.sqrt) {
+        try {
+          sqrt = analyzeSqrtStart(sqrtSeed);
+        } catch (err1) {
+          sqrt = null;
+        }
+      }
+      if (cls.methods.factor) {
+        try {
+          factor = analyzeFactorStart(formatPolyEq(raw.a, raw.b, raw.c));
+        } catch (err2) {
+          try {
+            factor = analyzeFactorStart(standard);
+          } catch (err2b) {
+            factor = null;
+          }
+        }
+      }
+      quad = analyze(canon.a, canon.b, canon.c, standard);
+      if (nat === "sqrt" && sqrt) {
+        sqrt.steps.forEach(function (s) {
+          if (steps.indexOf(s) === -1) steps.push(s);
+        });
+        answer = sqrt.answer;
+      } else if (nat === "factor" && factor) {
+        factor.steps.forEach(function (s) {
+          if (steps.indexOf(s) === -1) steps.push(s);
+        });
+        answer = factor.answer;
+      } else {
+        quad.steps.forEach(function (s) {
+          if (steps.indexOf(s) === -1) steps.push(s);
+        });
+        answer = quad.answer;
+      }
+    }
+    return {
+      a: canon.a,
+      b: canon.b,
+      c: canon.c,
+      start: start,
+      xMoved: xMoved,
+      expanded: expanded,
+      moved: moved,
+      gathered: gathered,
+      combinedSides: combinedSides,
+      standard: standard,
+      unreduced: formatPolyEq(raw.a, raw.b, raw.c),
+      classify: cls,
+      natural: nat,
+      sqrt: sqrt,
+      factor: factor,
+      quad: quad,
+      steps: steps,
+      answer: answer,
+    };
+  }
+
+  function mixedHintFor(pack, eqText) {
+    var cls = pack.classify;
+    if (hasXAfterParens(eqText)) {
+      return "אם ה־x מימין לסוגריים, עדיף להעביר אותו לשמאל, למשל (x−5)x → x(x−5). אחר כך פותחים סוגריים.";
+    }
+    if (hasExpandableParens(eqText)) {
+      return "פתחו את הסוגריים: כופלים את מה שמחוץ לסוגריים בכל איבר שבפנים. עדיין בלי לאחד איברים דומים.";
+    }
+    if (isSqrtSplit(pack)) {
+      if (bothSidesLive(eqText) && !isX2LeftConstRight(eqText)) {
+        return "אין איבר x (b = 0). העבירו את איברי x² לאגף שמאל ואת המספרים החופשיים לאגף ימין. כשמעבירים — מחליפים סימן, עדיין בלי לאחד.";
+      }
+      if (isX2LeftConstRight(eqText) && hasUncombined(eqText)) {
+        return "אספו איברים דומים בכל אגף: x² עם x², ומספרים עם מספרים.";
+      }
+      if (isolatedX2(eqText) || (isX2LeftConstRight(eqText) && !hasUncombined(eqText))) {
+        return "בודדו x² אם צריך, והוציאו שורש. אם האגף השני שלילי — אין פתרון ממשי.";
+      }
+    }
+    if (!isStandardZero(eqText) || hasUncombined(eqText)) {
+      if (hasUncombined(eqText)) {
+        return "אספו איברים דומים באותו אגף: x² עם x², x עם x, ומספרים עם מספרים.";
+      }
+      return "העבירו את כל האיברים לאגף אחד והשאירו 0 באגף השני. כשמעבירים — מחליפים סימן, עדיין בלי לאחד איברים דומים.";
+    }
+    if (cls.kind === "identity") return "כל המקדמים 0 — זו זהות. כל x הוא פתרון.";
+    if (cls.kind === "none") return "התקבל מספר שונה מאפס ששווה לאפס. אין פתרון.";
+    if (cls.kind === "linear") {
+      return "המקדם של x² התאפס. זו משוואה ממעלה ראשונה — פתרו כמו משוואה רגילה.";
+    }
+    if (cls.methods.sqrt && cls.methods.factor) {
+      return "אין איבר x ואין מספר חופשי. בודדו x², או הוציאו גורם, או לחצו «נוסחת שורשים».";
+    }
+    if (cls.methods.sqrt) {
+      return "אין איבר x (המקדם b = 0 אחרי איסוף). בודדו x² והוציאו שורש. אפשר גם ללחוץ «נוסחת שורשים». אם האגף השני שלילי — אין פתרון ממשי.";
+    }
+    if (cls.methods.factor) {
+      return "המספר החופשי 0 אחרי איסוף. הוציאו גורם משותף x (ואפשר גם מספר). אפשר גם ללחוץ «נוסחת שורשים».";
+    }
+    if (!isAbcOrder(eqText)) {
+      return "a, b, c כולם שונים מאפס. עדיף לסדר ל־ax²+bx+c=0 (קודם x², אחר כך x, ואז המספר), ואז ללחוץ «נוסחת שורשים».";
+    }
+    return "a, b, c כולם שונים מאפס. לחצו «נוסחת שורשים».";
+  }
+
+  function nextMixedStep(eqText, pack) {
+    pack = pack || {};
+    if (hasXAfterParens(eqText)) {
+      return {
+        eq: pack.xMoved || moveXBeforeParensEq(eqText),
+        hint: mixedHintFor(pack, eqText),
+        explain: "מעבירים את ה־x לשמאל הסוגריים, ואז פותחים.",
+      };
+    }
+    if (hasExpandableParens(eqText)) {
+      return {
+        eq: pack.expanded || expandParensEq(eqText),
+        hint: mixedHintFor(pack, eqText),
+        explain: "פותחים סוגריים: כופלים כל מקדם בכל האיברים שבתוך הסוגריים.",
+      };
+    }
+    if (isSqrtSplit(pack)) {
+      if (bothSidesLive(eqText) && !isX2LeftConstRight(eqText)) {
+        return {
+          eq: moveX2LeftConstsRight(eqText),
+          hint: mixedHintFor(pack, eqText),
+          explain: "איברי x² לשמאל, מספרים חופשיים לימין. מחליפים סימן, בלי לאחד עדיין.",
+        };
+      }
+      if (isX2LeftConstRight(eqText) && hasUncombined(eqText)) {
+        return {
+          eq: pack.combinedSides || combineBothSides(eqText),
+          hint: mixedHintFor(pack, eqText),
+          explain: "אוספים איברים דומים בכל אגף.",
+        };
+      }
+      if (isolatedX2(eqText) || parseBothSides(eqText) || isRootAnswerText(eqText) || isNoRealText(eqText)) {
+        var fin = pack.sqrt ? nextSqrtStep(eqText, pack.sqrt) : null;
+        if (fin && fin.eq) {
+          return {
+            path: "sqrt",
+            eq: fin.eq,
+            hint: fin.hint || mixedHintFor(pack, eqText),
+            explain: fin.explain,
+          };
+        }
+      }
+      if (isX2LeftConstRight(eqText) && !hasUncombined(eqText) && !isolatedX2(eqText)) {
+        return {
+          path: "sqrt",
+          eq: near0(pack.a) ? null : "x^2=" + fmtLinNum(-pack.c / pack.a),
+          hint: mixedHintFor(pack, eqText),
+          explain: "בודדים x² בחלוקה במקדם.",
+        };
+      }
+    }
+    if (pack.classify && pack.classify.kind === "linear" && !hasX2(eqText) && !hasExpandableParens(eqText)) {
+      var linAct = global.DoctematicaTeach.nextAction(eqText);
+      if (linAct && linAct.eq) {
+        return {
+          path: "linear",
+          eq: linAct.eq,
+          hint: linAct.hint || mixedHintFor(pack, eqText),
+          explain: linAct.explain,
+        };
+      }
+      return {
+        path: "linear",
+        hint: (linAct && linAct.hint) || mixedHintFor(pack, eqText),
+        doneKind: "linear",
+      };
+    }
+    if (bothSidesLive(eqText)) {
+      return {
+        eq: moveAllToLeft(eqText),
+        hint: mixedHintFor(pack, eqText),
+        explain: "מעבירים לאגף אחד. כל איבר מחליף סימן, בלי לאחד עדיין.",
+      };
+    }
+    if (hasUncombined(eqText)) {
+      return {
+        eq: pack.unreduced || pack.standard,
+        hint: mixedHintFor(pack, eqText),
+        explain: "אוספים איברים דומים.",
+      };
+    }
+    if (!isStandardZero(eqText)) {
+      return {
+        eq: pack.standard,
+        hint: mixedHintFor(pack, eqText),
+        explain: "אוספים לאגף אחד. מקדמים בודקים אחרי האיסוף, לא לפי הנתון המפוזר.",
+      };
+    }
+    var cls = pack.classify;
+    if (cls.kind === "identity") {
+      return { eq: "כל x", hint: mixedHintFor(pack, eqText), doneKind: "identity" };
+    }
+    if (cls.kind === "none") {
+      return { eq: "אין פתרון", hint: mixedHintFor(pack, eqText), doneKind: "none" };
+    }
+    if (cls.kind === "linear") {
+      var act = global.DoctematicaTeach.nextAction(eqText);
+      return {
+        path: "linear",
+        eq: act && act.eq,
+        hint: (act && act.hint) || mixedHintFor(pack, eqText),
+        explain: act && act.explain,
+      };
+    }
+    var nat = pack.natural;
+    if (nat === "factor" && pack.factor) {
+      return {
+        path: "factor",
+        eq: pack.factor.factored,
+        hint: mixedHintFor(pack, eqText),
+      };
+    }
+    if (nat === "sqrt") {
+      var isoWant = near0(pack.a) ? null : "x^2=" + fmtLinNum(-pack.c / pack.a);
+      return {
+        path: "sqrt",
+        eq: isoWant,
+        hint: mixedHintFor(pack, eqText),
+      };
+    }
+    return {
+      path: "formula",
+      hint: mixedHintFor(pack, eqText),
+      explain: "a, b, c הם המקדמים של הצורה ax²+bx+c=0 אחרי האיסוף.",
+    };
+  }
+
+  function checkMixedTyped(prev, typed, pack) {
+    var t = String(typed || "").trim();
+    if (!t) return { ok: false, message: "כתבו את הצעד הבא." };
+    if (normFactorText(prev) === normFactorText(t)) {
+      return { ok: false, message: "זו אותה משוואה. כתבו צעד חדש." };
+    }
+    pack = pack || {};
+    var cls = pack.classify || classifyABC(pack);
+
+    if (looksLikeProduct(t)) {
+      if (!cls.methods || !cls.methods.factor) {
+        return {
+          ok: false,
+          message:
+            "יש מספר חופשי (לא אפס) אחרי איסוף, אז אי אפשר רק להוציא x כגורם משותף. הביאו ל־ax²+bx+c=0 והשתמשו בנוסחת שורשים.",
+        };
+      }
+      var fa = pack.factor || analyzeFactorStart(pack.standard);
+      var fres = checkFactorTyped(prev, t, fa, {
+        split: false,
+        eqs: [],
+        solved: [false, false],
+        progress: { z: false, o: false },
+      });
+      if (fres.ok) return { ok: true, path: "factor", factor: fa, raw: fres };
+      return { ok: false, message: fres.message };
+    }
+
+    var nextP = parseABC(t);
+    var prevP = parseABC(prev);
+    if (nextP && abcEquivalent(pack, nextP)) {
+      if (near0(nextP.a) && near0(nextP.b) && near0(nextP.c)) {
+        if (hasX2(t) || hasExpandableParens(t)) {
+          /* still rearranging */
+        } else {
+          return { ok: true, solved: true, message: "כל x הוא פתרון — זו זהות." };
+        }
+      }
+      if (near0(nextP.a) && near0(nextP.b) && !near0(nextP.c) && !hasX2(t) && !hasExpandableParens(t)) {
+        return { ok: true, solved: true, message: "סתירה: מספר שונה מאפס שווה לאפס. אין פתרון." };
+      }
+      if (near0(nextP.a) && !hasX2(t) && !hasExpandableParens(t)) {
+        return {
+          ok: true,
+          enter: "linear",
+          message: "המקדם של x² התאפס. המשיכו כמשוואה ממעלה ראשונה.",
+        };
+      }
+      if (isolatedX2(t) && !hasVisibleLinearX(prev)) {
+        if (!cls.methods || !cls.methods.sqrt) {
+          return { ok: false, message: mixedError(pack, nextP) };
+        }
+        return {
+          ok: true,
+          enter: "sqrt",
+          message: "x² מבודד. עכשיו הוציאו שורש משני האגפים. אם האגף השני שלילי — אין פתרון ממשי.",
+        };
+      }
+      var msg = "צעד חוקי.";
+      if (hasXAfterParens(prev) && !hasXAfterParens(t) && hasExpandableParens(t)) {
+        msg = "עכשיו פתחו את הסוגריים.";
+      } else if (hasExpandableParens(prev) && !hasExpandableParens(t)) {
+        msg = "עכשיו המשיכו לפי המקדמים, כמו במשוואה בלי סוגריים.";
+      } else if (isStandardZero(t) && !hasUncombined(t)) {
+        msg = mixedHintFor(pack, t);
+      } else if (isolatedX2(t) && hasVisibleLinearX(prev)) {
+        msg = "עכשיו הוציאו שורש משני האגפים. אם האגף השני שלילי — אין פתרון ממשי.";
+      } else if (isSqrtSplit(pack) && isX2LeftConstRight(t) && hasUncombined(t)) {
+        msg = "עכשיו אספו איברים דומים בכל אגף.";
+      } else if (isSqrtSplit(pack) && isX2LeftConstRight(t) && !hasUncombined(t) && !isolatedX2(t)) {
+        msg = "עכשיו בודדו x² (חלקו במקדם).";
+      } else if (isSqrtSplit(pack) && bothSidesLive(t) && !isX2LeftConstRight(t)) {
+        msg = "העבירו את איברי x² לשמאל ואת המספרים החופשיים לימין.";
+      } else if (!bothSidesLive(t) && hasUncombined(t)) {
+        msg = "עכשיו אספו איברים דומים (x² עם x², x עם x, מספרים עם מספרים).";
+      } else if (hasUncombined(prev) && !hasUncombined(t)) {
+        msg = "נכון. עכשיו אפשר להעביר לאגף אחד.";
+      } else {
+        msg = "אפשר להמשיך לאסוף עד ax²+bx+c=0.";
+      }
+      return { ok: true, rearrange: true, message: msg };
+    }
+
+    if (nextP) {
+      return { ok: false, message: mixedError(pack, nextP) };
+    }
+
+    if (parseBothSides(t) || isRootAnswerText(t) || isNoRealText(t) || isNoneText(t)) {
+      if (!cls.methods || !cls.methods.sqrt) {
+        return {
+          ok: false,
+          message: "יש עדיין איבר x במשוואה. אי אפשר לעבור לשורש לפני שמבודדים x², ורק אם b = 0 אחרי איסוף.",
+        };
+      }
+      return { ok: true, enter: "sqrt", message: "המשיכו בביצוע שורש." };
+    }
+
+    if (cls.kind === "identity" && /כל/.test(t)) {
+      return { ok: true, solved: true, message: "כל x הוא פתרון." };
+    }
+    if (cls.kind === "none" && (isNoneText(t) || isNoRealText(t) || /אין/.test(t))) {
+      return { ok: true, solved: true, message: "אין פתרון." };
+    }
+
+    if (prevP && !hasX2(t)) {
+      try {
+        var lin = global.DoctematicaAlgebra.checkStep(prev, t);
+        if (lin.ok && near0(pack.a)) {
+          return { ok: true, enter: "linear", linear: lin, message: lin.message };
+        }
+      } catch (err) {}
+    }
+
+    return {
+      ok: false,
+      message: "לא הצלחתי לקרוא את הצעד. כתבו משוואה שקולה, או בחרו דרך: שורש / גורם משותף / נוסחת שורשים.",
     };
   }
 
@@ -1440,8 +2545,23 @@
     isNoneText: isNoneText,
     discExpr: discExpr,
     hasX2: hasX2,
+    hasVisibleLinearX: hasVisibleLinearX,
     isRootAnswerText: isRootAnswerText,
     isolatedK: isolatedK,
+    parseABC: parseABC,
+    classifyABC: classifyABC,
+    abcEquivalent: abcEquivalent,
+    formatPolyEq: formatPolyEq,
+    moveAllToLeft: moveAllToLeft,
+    canonicalABC: canonicalABC,
+    isStandardZero: isStandardZero,
+    isAbcOrder: isAbcOrder,
+    expandParensEq: expandParensEq,
+    hasExpandableParens: hasExpandableParens,
+    analyzeMixedStart: analyzeMixedStart,
+    checkMixedTyped: checkMixedTyped,
+    nextMixedStep: nextMixedStep,
+    mixedHintFor: mixedHintFor,
     nextSqrtStep: nextSqrtStep,
     checkSqrtBothSides: checkSqrtBothSides,
     checkSqrtFinish: checkSqrtFinish,

@@ -59,6 +59,27 @@
         explain: "בודדו את x² כמו במשוואה רגילה, ואז הוציאו שורש משני האגפים. ייתכנו שני פתרונות, אחד, או אין פתרון ממשי.",
       };
     }
+    if (level.mode === "quad-mixed") {
+      var mx = DoctematicaQuadratic.analyzeMixedStart(ex.start);
+      return {
+        mode: "quad-mixed",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction,
+        prompt: ex.start,
+        startEquation: ex.start,
+        mixed: mx,
+        sqrt: mx.sqrt,
+        factor: mx.factor,
+        quad: mx.quad,
+        solutionSteps: mx.steps,
+        answer: mx.answer,
+        explain:
+          "אם יש סוגריים — פתחו אותם. אם b=0 מעבירים x² לשמאל ומספרים לימין; אם c=0 מוציאים גורם; אם x² מתאפס — משוואה רגילה; אחרת נוסחת שורשים.",
+      };
+    }
     if (level.mode === "quad-formula" || (ex.start && /x\^2|x²/.test(ex.start))) {
       var q = DoctematicaQuadratic.analyzeStart(ex.start);
       return {

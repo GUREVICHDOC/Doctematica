@@ -44,6 +44,7 @@
   var quadGuideEl = document.getElementById("quad-guide");
   var factorGuideEl = document.getElementById("factor-guide");
   var splitEqsBtn = document.getElementById("split-eqs-btn");
+  var useFormulaBtn = document.getElementById("use-formula-btn");
 
   var state = {
     topic: "equations",
@@ -56,6 +57,7 @@
     locked: false,
     streak: 0,
     history: [],
+    mixed: { path: null },
     stats: loadStats(),
   };
 
@@ -86,11 +88,14 @@
     return state.topic === "systems-sub";
   }
 
+  function isQuadraticTopic() {
+    return state.topic === "quadratic";
+  }
+
   function isQuadMode() {
     var level = currentLevel();
     return (
-      state.topic === "equations" &&
-      state.subtopic === "quadratic" &&
+      isQuadraticTopic() &&
       !!level &&
       level.mode === "quad-formula" &&
       level.exercises &&
@@ -101,8 +106,7 @@
   function isSqrtEqMode() {
     var level = currentLevel();
     return (
-      state.topic === "equations" &&
-      state.subtopic === "quadratic" &&
+      isQuadraticTopic() &&
       !!level &&
       level.mode === "quad-sqrt" &&
       level.exercises &&
@@ -113,8 +117,7 @@
   function isFactorEqMode() {
     var level = currentLevel();
     return (
-      state.topic === "equations" &&
-      state.subtopic === "quadratic" &&
+      isQuadraticTopic() &&
       !!level &&
       level.mode === "quad-factor" &&
       level.exercises &&
@@ -122,8 +125,39 @@
     );
   }
 
+  function isMixedEqMode() {
+    var level = currentLevel();
+    return (
+      isQuadraticTopic() &&
+      !!level &&
+      level.mode === "quad-mixed" &&
+      level.exercises &&
+      level.exercises.length > 0
+    );
+  }
+
+  function mixedPath() {
+    return (state.mixed && state.mixed.path) || null;
+  }
+
+  function formulaWorkActive() {
+    return isQuadMode() || (isMixedEqMode() && mixedPath() === "formula");
+  }
+
+  function factorWorkActive() {
+    return isFactorEqMode() || (isMixedEqMode() && mixedPath() === "factor");
+  }
+
+  function sqrtWorkActive() {
+    return isSqrtEqMode() || (isMixedEqMode() && mixedPath() === "sqrt");
+  }
+
   function isEqWorkMode() {
-    return isStepMode() || isSqrtEqMode() || isFactorEqMode();
+    return isStepMode() || isSqrtEqMode() || isFactorEqMode() || isMixedEqMode();
+  }
+
+  function emptyMixedState() {
+    return { path: null };
   }
 
   function emptyFactorState() {
@@ -162,7 +196,7 @@
   }
 
   function canSplitFactor() {
-    if (!isFactorEqMode() || state.locked) return false;
+    if (!factorWorkActive() || state.locked || !state.problem || !state.problem.factor) return false;
     var st = state.factor || emptyFactorState();
     if (st.split) return false;
     var last = lastHistoryEq();
@@ -173,8 +207,22 @@
 
   function updateSplitBtn() {
     if (!splitEqsBtn) return;
-    var show = isFactorEqMode() && !state.locked && canSplitFactor();
+    var show = factorWorkActive() && !state.locked && canSplitFactor();
     splitEqsBtn.classList.toggle("hidden", !show);
+  }
+
+  function canUseMixedFormula() {
+    if (!isMixedEqMode() || state.locked || !state.problem || !state.problem.mixed) return false;
+    if (mixedPath() === "formula") return false;
+    var pack = state.problem.mixed;
+    if (!pack.classify || !pack.classify.methods || !pack.classify.methods.formula) return false;
+    var last = lastHistoryEq();
+    return DoctematicaQuadratic.isStandardZero(last);
+  }
+
+  function updateFormulaBtn() {
+    if (!useFormulaBtn) return;
+    useFormulaBtn.classList.toggle("hidden", !canUseMixedFormula());
   }
 
   function renderFactorGuide() {
@@ -183,6 +231,7 @@
       factorGuideEl.innerHTML = "";
     }
     updateSplitBtn();
+    updateFormulaBtn();
   }
 
   function doFactorSplit() {
@@ -265,13 +314,14 @@
       return true;
     }
     mathField.clear();
-    showFeedback(true, "<strong>נכון.</strong> " + res.message);
+    var label = res.factored || res.solvedOne || res.solved ? "נכון" : "צעד חוקי";
+    showFeedback(true, "<strong>" + label + ".</strong> " + res.message);
     mathField.focus();
     return true;
   }
 
   function isGuidedMode() {
-    return isStepMode() || isSystemMode() || state.subtopic === "quadratic" || state.topic === "equations";
+    return isStepMode() || isSystemMode() || isQuadraticTopic() || state.topic === "equations";
   }
 
   function topicLevels() {
@@ -559,7 +609,7 @@
   }
 
   function renderSysKnown() {
-    if (isQuadMode() && state.quad && state.quad.gotAbc) {
+    if (formulaWorkActive() && state.quad && state.quad.gotAbc) {
       renderQuadKnown();
       return;
     }
@@ -919,8 +969,21 @@
 
   function renderSteps() {
     stepsEl.innerHTML = "";
-    if (isQuadMode() && state.quad && state.quad.trail && state.quad.trail.length) {
+    if (formulaWorkActive() && state.quad && state.quad.trail && state.quad.trail.length) {
       stepsEl.classList.remove("hidden");
+      if (isMixedEqMode() && state.history.length) {
+        state.history.forEach(function (eq, index) {
+          var li0 = document.createElement("li");
+          var n0 = document.createElement("span");
+          n0.className = "n";
+          n0.textContent = index === 0 ? "נתון" : String(index);
+          var body0 = document.createElement("span");
+          body0.innerHTML = DoctematicaMath.toHTML(eq);
+          li0.appendChild(n0);
+          li0.appendChild(body0);
+          stepsEl.appendChild(li0);
+        });
+      }
       state.quad.trail.forEach(function (item, index) {
         var li = document.createElement("li");
         var n = document.createElement("span");
@@ -944,7 +1007,7 @@
     var givenAt = (state.sys && state.sys.givenAt) || (isSystemMode() ? [0] : null);
     var stepNum = 0;
     var factorSplit =
-      isFactorEqMode() &&
+      factorWorkActive() &&
       state.factor &&
       state.factor.split &&
       state.factor.trails &&
@@ -1310,7 +1373,7 @@
   }
 
   function renderQuadGuide() {
-    if (!isQuadMode() || !state.quad) {
+    if (!formulaWorkActive() || !state.quad) {
       quadGuideEl.classList.add("hidden");
       quadGuideEl.innerHTML = "";
       return;
@@ -1882,6 +1945,19 @@
     var prev = state.history[state.history.length - 1];
     var pack = state.problem.sqrt;
     var Q = DoctematicaQuadratic;
+    if (Q.hasVisibleLinearX && Q.hasVisibleLinearX(prev)) {
+      var mixedPack = state.problem.mixed;
+      var nextP = Q.parseABC(typed);
+      var isoT = Q.isolatedK(typed);
+      if (mixedPack && nextP && Q.abcEquivalent(mixedPack, nextP) && isoT && (isoT.kind === "value" || isoT.kind === "unreduced" || isoT.kind === "expr")) {
+        state.history.push(typed);
+        renderSteps();
+        mathField.clear();
+        showFeedback(true, "<strong>נכון.</strong> x² מבודד. עכשיו הוציאו שורש משני האגפים.");
+        mathField.focus();
+        return true;
+      }
+    }
     var both = Q.checkSqrtBothSides(prev, typed);
     if (both) {
       if (!both.ok) {
@@ -1944,14 +2020,410 @@
     return true;
   }
 
+  function applyLinearTyped(typed) {
+    if (!typed) {
+      showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
+      return false;
+    }
+    state.stats.try += 1;
+    saveStats();
+    renderStats();
+    var result = DoctematicaAlgebra.checkStep(lastHistoryEq(), typed);
+    if (!result.ok) {
+      showFeedback(false, "<strong>עוד לא.</strong> " + result.message);
+      return false;
+    }
+    state.history.push(typed);
+    renderSteps();
+    if (result.solved) {
+      markSolved();
+      mathField.setDisabled(true);
+      checkBtn.disabled = true;
+      renderSteps();
+      nextAfterSolveBtn.classList.remove("hidden");
+      showFeedback(true, "<strong>כל הכבוד.</strong> " + result.message);
+      return true;
+    }
+    mathField.clear();
+    showFeedback(true, "<strong>צעד חוקי.</strong> " + result.message);
+    mathField.focus();
+    return true;
+  }
+
+  function enterMixedFormula() {
+    var pack = state.problem.mixed;
+    if (!state.problem.quad && pack) {
+      state.problem.quad = pack.quad || DoctematicaQuadratic.analyze(pack.a, pack.b, pack.c, pack.standard);
+    }
+    if (!state.problem.quad) {
+      showFeedback(false, "<strong>עוד לא.</strong> קודם הביאו לצורה ax²+bx+c=0.");
+      return;
+    }
+    state.mixed = state.mixed || emptyMixedState();
+    state.mixed.path = "formula";
+    startQuadSession();
+    renderQuadGuide();
+    renderSteps();
+    updateFormulaBtn();
+    showFeedback(
+      true,
+      "<strong>נוסחת שורשים.</strong> a, b, c הם המקדמים אחרי האיסוף, בצורה ax²+bx+c=0.",
+      "tip"
+    );
+  }
+
+  function applyMixedTyped(typed) {
+    typed = String(typed || "").trim();
+    if (!typed) {
+      showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
+      return false;
+    }
+    var path = mixedPath();
+    if (path === "formula") {
+      handleQuadSubmit();
+      return true;
+    }
+    if (path === "sqrt") return applySqrtEqTyped(typed);
+    if (path === "factor") return applyFactorTyped(typed);
+    if (path === "linear") return applyLinearTyped(typed);
+
+    var pack = state.problem.mixed;
+    var Q = DoctematicaQuadratic;
+    var res = Q.checkMixedTyped(lastHistoryEq(), typed, pack);
+    if (!res.ok) {
+      state.stats.try += 1;
+      saveStats();
+      renderStats();
+      showFeedback(false, "<strong>עוד לא.</strong> " + res.message);
+      return false;
+    }
+    if (res.path === "factor") {
+      if (res.factor) state.problem.factor = res.factor;
+      state.mixed.path = "factor";
+      return applyFactorTyped(typed);
+    }
+    if (res.enter === "sqrt") {
+      if (!state.problem.sqrt && pack && pack.sqrt) state.problem.sqrt = pack.sqrt;
+      if (!state.problem.sqrt && pack) {
+        try {
+          state.problem.sqrt = Q.analyzeSqrtStart(pack.standard);
+        } catch (err) {}
+      }
+      state.mixed.path = "sqrt";
+      state.sqrtProg = { pos: false, neg: false };
+      return applySqrtEqTyped(typed);
+    }
+    if (res.enter === "linear") {
+      state.mixed.path = "linear";
+      state.stats.try += 1;
+      saveStats();
+      renderStats();
+      state.history.push(typed);
+      renderSteps();
+      mathField.clear();
+      try {
+        var lin = DoctematicaAlgebra.parseEquation(typed);
+        if (DoctematicaAlgebra.isSolved(lin)) {
+          markSolved();
+          mathField.setDisabled(true);
+          checkBtn.disabled = true;
+          renderSteps();
+          nextAfterSolveBtn.classList.remove("hidden");
+          showFeedback(true, "<strong>כל הכבוד.</strong> " + res.message);
+          return true;
+        }
+      } catch (err2) {}
+      showFeedback(true, "<strong>נכון.</strong> " + res.message);
+      mathField.focus();
+      return true;
+    }
+    if (res.solved) {
+      state.stats.try += 1;
+      saveStats();
+      renderStats();
+      state.history.push(typed);
+      markSolved();
+      mathField.setDisabled(true);
+      checkBtn.disabled = true;
+      renderSteps();
+      nextAfterSolveBtn.classList.remove("hidden");
+      showFeedback(true, "<strong>כל הכבוד.</strong> " + res.message);
+      return true;
+    }
+    state.stats.try += 1;
+    saveStats();
+    renderStats();
+    state.history.push(typed);
+    renderSteps();
+    mathField.clear();
+    showFeedback(true, "<strong>צעד חוקי.</strong> " + res.message);
+    mathField.focus();
+    return true;
+  }
+
+  function mixedHint() {
+    var pack = state.problem.mixed;
+    var path = mixedPath();
+    if (path === "sqrt") return sqrtHint();
+    if (path === "factor") return factorHint();
+    if (path === "formula") return quadHint();
+    if (path === "linear") return stepHint();
+    var act = DoctematicaQuadratic.nextMixedStep(lastHistoryEq(), pack);
+    showFeedback(true, "<strong>רמז.</strong> " + ((act && act.hint) || DoctematicaQuadratic.mixedHintFor(pack, lastHistoryEq())), "tip");
+  }
+
+  function mixedOneStep() {
+    var pack = state.problem.mixed;
+    var path = mixedPath();
+    if (path === "sqrt") return sqrtOneStep();
+    if (path === "factor") return factorOneStep();
+    if (path === "formula") return fillQuadStep();
+    if (path === "linear") return stepOneStep();
+    var act = DoctematicaQuadratic.nextMixedStep(lastHistoryEq(), pack);
+    if (!act) return;
+    if (act.path === "formula") {
+      enterMixedFormula();
+      return;
+    }
+    if (act.path === "factor" && act.eq) {
+      if (pack.factor) state.problem.factor = pack.factor;
+      state.mixed.path = "factor";
+      applyFactorTyped(act.eq);
+      return;
+    }
+    if (act.eq) {
+      applyMixedTyped(act.eq);
+      return;
+    }
+    showFeedback(true, "<strong>רמז.</strong> " + (act.hint || "התרגיל כבר פתור."), "tip");
+  }
+
+  var MATH_FIELD_HINT =
+    "הקלידו רגיל. לשבר לחצו «שבר» — החצים זזים בין מונה למכנה. לשבר-בתוך-שבר עמדו במונה או במכנה ולחצו «שבר» שוב.";
+
+  function showEqSolution(title, opts) {
+    opts = opts || {};
+    if (!state.problem) return false;
+    var steps = state.problem.solutionSteps || [];
+    if (!opts.always && !steps.length) return false;
+    var notes = opts.withNotes ? state.problem.solutionNotes || [] : [];
+    var lines = steps
+      .map(function (step, i) {
+        var body = opts.plain
+          ? String(step).replace(/-/g, "−")
+          : DoctematicaMath.toHTML(step);
+        var why = notes[i] ? "<div class=\"why\">" + notes[i] + "</div>" : "";
+        return "<li" + (opts.plain ? " dir=\"ltr\"" : "") + ">" + body + why + "</li>";
+      })
+      .join("");
+    var extra = opts.note
+      ? " <span class=\"muted-note\">" + opts.note + "</span>"
+      : "";
+    var footer =
+      opts.footer != null
+        ? opts.footer
+        : String(state.problem.answer).replace(/-/g, "−");
+    modelEl.classList.remove("hidden");
+    modelEl.innerHTML =
+      "<strong>" + title + "</strong>" + extra + "<ol>" + lines + "</ol><p>" + footer + "</p>";
+    return true;
+  }
+
+  function quadHint() {
+    if (!state.quad) return;
+    var want = state.problem.quad;
+    var tips = {
+      abc: "a מקדם x², b מקדם x, c החופשי. כאן a = " + want.a + ".",
+      plug: "הציבו a, b, c. אם b שלילי, ב־b² כתבו עם סוגריים, למשל (−4)².",
+      compute:
+        "חשבו −b, את " +
+        DoctematicaQuadratic.discExpr(want.a, want.b, want.c) +
+        ", ואת 2a. שני מינוסים הופכים לפלוס.",
+      sqrt: "√(" + want.D + ") הוא מספר שלם.",
+      count: "הסתכלו על סימן הדיסקרימיננטה Δ = " + want.D + ". אפשר גם ללחוץ המשך.",
+      nosol: "רשמו שאין פתרון ממשי.",
+      rootwork: "חשבו קודם את המונה, ואז את השבר עם קו השבר. אחר כך את התוצאה.",
+      roots: "x = (−b ± √Δ) / (2a). צמצמו את השבר.",
+    };
+    showFeedback(true, "<strong>רמז.</strong> " + (tips[state.quad.phase] || "התרגיל כבר פתור."), "tip");
+  }
+
+  function sqrtHint() {
+    var cur = lastHistoryEq();
+    var act = DoctematicaTeach.nextAction(cur, { unknown: "x2" });
+    var extra = (act.isolated || act.done) && DoctematicaQuadratic.nextSqrtStep(cur, state.problem.sqrt);
+    showFeedback(true, "<strong>רמז.</strong> " + ((extra && extra.hint) || act.hint), "tip");
+  }
+
+  function sqrtOneStep() {
+    var cur = lastHistoryEq();
+    var act = DoctematicaTeach.nextAction(cur, { unknown: "x2" });
+    var nextEq = act.eq;
+    if (!nextEq) {
+      var fin = DoctematicaQuadratic.nextSqrtStep(cur, state.problem.sqrt);
+      nextEq = fin && fin.eq;
+    }
+    if (!nextEq) {
+      showFeedback(true, "<strong>רמז.</strong> " + (act.hint || "התרגיל כבר פתור."));
+      return;
+    }
+    applySqrtEqTyped(nextEq);
+  }
+
+  function factorHint() {
+    var act = DoctematicaQuadratic.nextFactorStep(
+      lastHistoryEq(),
+      state.problem.factor,
+      state.factor || emptyFactorState()
+    );
+    showFeedback(true, "<strong>רמז.</strong> " + ((act && act.hint) || "הוציאו גורם משותף x."), "tip");
+  }
+
+  function factorOneStep() {
+    var act = DoctematicaQuadratic.nextFactorStep(
+      lastHistoryEq(),
+      state.problem.factor,
+      state.factor || emptyFactorState()
+    );
+    if (act && act.split) {
+      doFactorSplit();
+      return;
+    }
+    if (!act || !act.eq) {
+      showFeedback(true, "<strong>רמז.</strong> " + ((act && act.hint) || "התרגיל כבר פתור."), "tip");
+      return;
+    }
+    applyFactorTyped(act.eq);
+  }
+
+  function stepHint() {
+    var act = DoctematicaTeach.nextAction(lastHistoryEq());
+    showFeedback(true, "<strong>רמז.</strong> " + act.hint, act.done ? undefined : "tip");
+  }
+
+  function stepOneStep() {
+    var cur = lastHistoryEq();
+    var act = DoctematicaTeach.nextAction(cur);
+    if (act.done || !act.eq) {
+      showFeedback(true, "<strong>רמז.</strong> " + (act.hint || "המשוואה כבר פתורה."));
+      return;
+    }
+    var result = DoctematicaAlgebra.checkStep(cur, act.eq);
+    if (!result.ok) {
+      showFeedback(false, "<strong>לא הצלחתי לבצע את הצעד.</strong> " + result.message);
+      return;
+    }
+    state.history.push(act.eq);
+    renderSteps();
+    mathField.clear();
+    if (result.solved) {
+      markSolved();
+      mathField.setDisabled(true);
+      checkBtn.disabled = true;
+      nextAfterSolveBtn.classList.remove("hidden");
+      showFeedback(true, "<strong>צעד של האתר.</strong> " + (act.explain || result.message));
+      renderSteps();
+    } else {
+      showFeedback(true, "<strong>צעד של האתר.</strong> " + (act.explain || result.message), "tip");
+      mathField.focus();
+    }
+  }
+
+  function currentGuide() {
+    if (isSystemMode()) {
+      return {
+        work: true,
+        hintText: MATH_FIELD_HINT,
+        showSolution: function () {
+          modelEl.classList.remove("hidden");
+          modelEl.innerHTML =
+            "<strong>המערכת:</strong> " +
+            DoctematicaMath.systemHTML(state.problem.eq1, state.problem.eq2) +
+            "<p>הפתרון: " +
+            state.problem.answer +
+            "</p><p>" +
+            state.problem.explain +
+            "</p>";
+        },
+      };
+    }
+    if (isQuadMode()) {
+      return {
+        work: true,
+        buttons: true,
+        hintText: MATH_FIELD_HINT,
+        hint: quadHint,
+        oneStep: function () {
+          fillQuadStep();
+        },
+        showSolution: function () {
+          showEqSolution("פתרון מלא — נוסחת שורשים", { plain: true, always: true });
+        },
+      };
+    }
+    if (isSqrtEqMode()) {
+      return {
+        work: true,
+        buttons: true,
+        hintText:
+          "בודדו את x² כמו במשוואה. אחרי x² = מספר אפשר √(x²)=√(מספר), ואז לחשב. אם השורש שלם / חצי / רבע — רשמו x = ± מספר. אם לא — אפשר להשאיר ±√. שלילי: אין פתרון ממשי.",
+        hint: sqrtHint,
+        oneStep: sqrtOneStep,
+        showSolution: function () {
+          showEqSolution("פתרון מלא — שורש רגיל", { always: true });
+        },
+      };
+    }
+    if (isFactorEqMode()) {
+      return {
+        work: true,
+        buttons: true,
+        hintText:
+          "הוציאו גורם משותף x, למשל x²−5x=0 → x(x−5)=0. אפשר גם 2x(x−4). אחרי הפירוק לחצו «חילוק למשוואות» ופתרו כל גורם = 0.",
+        hint: factorHint,
+        oneStep: factorOneStep,
+        showSolution: function () {
+          showEqSolution("פתרון מלא — הוצאת גורם משותף", { always: true });
+        },
+      };
+    }
+    if (isMixedEqMode()) {
+      return {
+        work: true,
+        buttons: true,
+        hintText:
+          "אם ה־x מימין לסוגריים — העבירו אותו לשמאל, ואז פתחו סוגריים. אחר כך: אם אין x — שורש; אם אין מספר חופשי — גורם משותף; אם a, b, c כולם שונים מאפס — נוסחת שורשים. אם x² מתאפס — משוואה רגילה.",
+        hint: mixedHint,
+        oneStep: mixedOneStep,
+        showSolution: function () {
+          showEqSolution("פתרון מלא — משוואה ריבועית מגוונת", { always: true });
+        },
+      };
+    }
+    if (isStepMode()) {
+      return {
+        work: true,
+        buttons: true,
+        hintText: MATH_FIELD_HINT,
+        hint: stepHint,
+        oneStep: stepOneStep,
+        showSolution: function () {
+          showEqSolution("פתרון מלא לפי הדרך הנלמדת", {
+            withNotes: true,
+            note: "(אפשר גם לדלג על שלבי ביניים, כל עוד המשוואה שקולה)",
+            footer: "הפתרון: x = " + state.problem.answer,
+          });
+        },
+      };
+    }
+    return null;
+  }
+
   function setModeUi() {
-    if (isStepMode() || isSystemMode() || isQuadMode() || isSqrtEqMode() || isFactorEqMode()) {
+    var g = currentGuide();
+    if (g && g.work) {
       answerLabelEl.textContent = "הצעד הבא";
-      hintEl.textContent = isSqrtEqMode()
-        ? "בודדו את x² כמו במשוואה. אחרי x² = מספר אפשר √(x²)=√(מספר), ואז לחשב. אם השורש שלם / חצי / רבע — רשמו x = ± מספר. אם לא — אפשר להשאיר ±√. שלילי: אין פתרון ממשי."
-        : isFactorEqMode()
-          ? "הוציאו גורם משותף x, למשל x²−5x=0 → x(x−5)=0. אפשר גם 2x(x−4). אחרי הפירוק לחצו «חילוק למשוואות» ופתרו כל גורם = 0."
-          : "הקלידו רגיל. לשבר לחצו «שבר» — החצים זזים בין מונה למכנה. לשבר-בתוך-שבר עמדו במונה או במכנה ולחצו «שבר» שוב.";
+      hintEl.textContent = g.hintText || MATH_FIELD_HINT;
     } else {
       answerLabelEl.textContent = "התשובה שלך";
       hintEl.textContent = "אפשר לכתוב מספר שלם, שבר כמו 3/4, או עשרוני כמו 0.75";
@@ -1978,11 +2450,13 @@
       state.sys = null;
       state.quad = null;
       state.factor = emptyFactorState();
+      state.mixed = emptyMixedState();
       if (quadGuideEl) {
         quadGuideEl.classList.add("hidden");
         quadGuideEl.innerHTML = "";
       }
       if (splitEqsBtn) splitEqsBtn.classList.add("hidden");
+      if (useFormulaBtn) useFormulaBtn.classList.add("hidden");
       topicLabelEl.textContent = currentTopicLabel() + " · " + currentLevel().title;
       setModeUi();
       hintBtn.classList.add("hidden");
@@ -2034,18 +2508,20 @@
       state.sys = null;
       state.quad = null;
       state.factor = emptyFactorState();
+      state.mixed = emptyMixedState();
       state.sqrtProg = { pos: false, neg: false };
       state.history = isEqWorkMode() ? [state.problem.startEquation] : [];
     }
     topicLabelEl.textContent = isWorksheet()
-      ? (state.topic === "equations" ? currentTopicLabel() + " · " : "") +
+      ? (state.topic === "equations" || isQuadraticTopic() ? currentTopicLabel() + " · " : "") +
         currentLevel().title +
         " · תרגיל " +
         state.problem.n
       : currentTopicLabel();
     setModeUi();
-    hintBtn.classList.toggle("hidden", !(isStepMode() || isQuadMode() || isSqrtEqMode() || isFactorEqMode()));
-    oneStepBtn.classList.toggle("hidden", !(isStepMode() || isQuadMode() || isSqrtEqMode() || isFactorEqMode()));
+    var guide = currentGuide();
+    hintBtn.classList.toggle("hidden", !(guide && guide.buttons));
+    oneStepBtn.classList.toggle("hidden", !(guide && guide.buttons));
     renderSources();
     renderWorksheetNav();
     renderKinds();
@@ -2080,7 +2556,7 @@
     mathWrap.classList.remove("hidden");
     checkBtn.classList.remove("hidden");
     answerLabelEl.classList.remove("hidden");
-    if (isStepMode() || isSqrtEqMode() || isFactorEqMode()) {
+    if (isStepMode() || isSqrtEqMode() || isFactorEqMode() || isMixedEqMode()) {
       promptEl.innerHTML = DoctematicaMath.toHTML(state.problem.startEquation);
       mathKeysEl.classList.remove("hidden");
     } else {
@@ -2097,6 +2573,16 @@
     });
   }
 
+  if (useFormulaBtn) {
+    useFormulaBtn.addEventListener("click", function () {
+      if (!canUseMixedFormula()) {
+        showFeedback(false, "<strong>עוד לא.</strong> קודם הביאו את כל האיברים לאגף אחד, עם 0 באגף השני.");
+        return;
+      }
+      enterMixedFormula();
+    });
+  }
+
   formEl.addEventListener("submit", function (event) {
     event.preventDefault();
     if (state.locked || !state.problem) return;
@@ -2108,6 +2594,11 @@
 
     if (isQuadMode()) {
       handleQuadSubmit();
+      return;
+    }
+
+    if (isMixedEqMode()) {
+      applyMixedTyped(typedAnswer());
       return;
     }
 
@@ -2179,204 +2670,20 @@
 
   showSolutionBtn.addEventListener("click", function () {
     if (!state.problem) return;
-    if (isSystemMode()) {
-      modelEl.classList.remove("hidden");
-      modelEl.innerHTML =
-        "<strong>המערכת:</strong> " +
-        DoctematicaMath.systemHTML(state.problem.eq1, state.problem.eq2) +
-        "<p>הפתרון: " +
-        state.problem.answer +
-        "</p><p>" +
-        state.problem.explain +
-        "</p>";
-      return;
-    }
-    if (isQuadMode()) {
-      modelEl.classList.remove("hidden");
-      var qlines = (state.problem.solutionSteps || [])
-        .map(function (step) {
-          return "<li dir=\"ltr\">" + String(step).replace(/-/g, "−") + "</li>";
-        })
-        .join("");
-      modelEl.innerHTML =
-        "<strong>פתרון מלא — נוסחת שורשים</strong><ol>" +
-        qlines +
-        "</ol><p>" +
-        String(state.problem.answer).replace(/-/g, "−") +
-        "</p>";
-      return;
-    }
-    if (isSqrtEqMode()) {
-      modelEl.classList.remove("hidden");
-      var slines = (state.problem.solutionSteps || [])
-        .map(function (step) {
-          return "<li>" + DoctematicaMath.toHTML(step) + "</li>";
-        })
-        .join("");
-      modelEl.innerHTML =
-        "<strong>פתרון מלא — ביצוע שורש</strong><ol>" +
-        slines +
-        "</ol><p>" +
-        String(state.problem.answer).replace(/-/g, "−") +
-        "</p>";
-      return;
-    }
-    if (isFactorEqMode()) {
-      modelEl.classList.remove("hidden");
-      var flines = (state.problem.solutionSteps || [])
-        .map(function (step) {
-          return "<li>" + DoctematicaMath.toHTML(step) + "</li>";
-        })
-        .join("");
-      modelEl.innerHTML =
-        "<strong>פתרון מלא — הוצאת גורם משותף</strong><ol>" +
-        flines +
-        "</ol><p>" +
-        String(state.problem.answer).replace(/-/g, "−") +
-        "</p>";
-      return;
-    }
-    if (!state.problem.solutionSteps) return;
-    modelEl.classList.remove("hidden");
-    var notes = state.problem.solutionNotes || [];
-    var lines = state.problem.solutionSteps
-      .map(function (step, i) {
-        var why = notes[i]
-          ? "<div class=\"why\">" + notes[i] + "</div>"
-          : "";
-        return "<li>" + DoctematicaMath.toHTML(step) + why + "</li>";
-      })
-      .join("");
-    modelEl.innerHTML =
-      "<strong>פתרון מלא לפי הדרך הנלמדת</strong> <span class=\"muted-note\">(אפשר גם לדלג על שלבי ביניים, כל עוד המשוואה שקולה)</span><ol>" +
-      lines +
-      "</ol><p>הפתרון: x = " +
-      state.problem.answer +
-      "</p>";
+    var g = currentGuide();
+    if (g && g.showSolution) g.showSolution();
   });
 
   hintBtn.addEventListener("click", function () {
     if (!state.problem) return;
-    if (isQuadMode() && state.quad) {
-      var want = state.problem.quad;
-      var phase = state.quad.phase;
-      var tip =
-        phase === "abc"
-          ? "a מקדם x², b מקדם x, c החופשי. כאן a = " + want.a + "."
-          : phase === "plug"
-            ? "הציבו a, b, c. אם b שלילי, ב־b² כתבו עם סוגריים, למשל (−4)²."
-            : phase === "compute"
-              ? "חשבו −b, את " +
-                DoctematicaQuadratic.discExpr(want.a, want.b, want.c) +
-                ", ואת 2a. שני מינוסים הופכים לפלוס."
-              : phase === "sqrt"
-                ? "√(" + want.D + ") הוא מספר שלם."
-                : phase === "count"
-                  ? "הסתכלו על סימן הדיסקרימיננטה Δ = " + want.D + ". אפשר גם ללחוץ המשך."
-                  : phase === "nosol"
-                    ? "רשמו שאין פתרון ממשי."
-                    : phase === "rootwork"
-                      ? "חשבו קודם את המונה, ואז את השבר עם קו השבר. אחר כך את התוצאה."
-                      : phase === "roots"
-                        ? "x = (−b ± √Δ) / (2a). צמצמו את השבר."
-                        : "התרגיל כבר פתור.";
-      showFeedback(true, "<strong>רמז.</strong> " + tip, "tip");
-      return;
-    }
-    if (isSqrtEqMode()) {
-      var scur = state.history[state.history.length - 1];
-      var sact = DoctematicaTeach.nextAction(scur, { unknown: "x2" });
-      if (sact.isolated || sact.done) {
-        var sfin = DoctematicaQuadratic.nextSqrtStep(scur, state.problem.sqrt);
-        showFeedback(true, "<strong>רמז.</strong> " + ((sfin && sfin.hint) || sact.hint), "tip");
-        return;
-      }
-      showFeedback(true, "<strong>רמז.</strong> " + sact.hint, "tip");
-      return;
-    }
-    if (isFactorEqMode()) {
-      var fhint = DoctematicaQuadratic.nextFactorStep(
-        lastHistoryEq(),
-        state.problem.factor,
-        state.factor || emptyFactorState()
-      );
-      showFeedback(true, "<strong>רמז.</strong> " + ((fhint && fhint.hint) || "הוציאו גורם משותף x."), "tip");
-      return;
-    }
-    if (!isStepMode()) return;
-    var cur = state.history[state.history.length - 1];
-    var act = DoctematicaTeach.nextAction(cur);
-    if (act.done) {
-      showFeedback(true, "<strong>רמז.</strong> " + act.hint);
-      return;
-    }
-    showFeedback(true, "<strong>רמז.</strong> " + act.hint, "tip");
+    var g = currentGuide();
+    if (g && g.hint) g.hint();
   });
 
   oneStepBtn.addEventListener("click", function () {
     if (state.locked || !state.problem) return;
-    if (isQuadMode()) {
-      fillQuadStep();
-      return;
-    }
-    if (isSqrtEqMode()) {
-      var qcur = state.history[state.history.length - 1];
-      var qact = DoctematicaTeach.nextAction(qcur, { unknown: "x2" });
-      var nextEq = qact.eq;
-      if (!nextEq) {
-        var qfin = DoctematicaQuadratic.nextSqrtStep(qcur, state.problem.sqrt);
-        nextEq = qfin && qfin.eq;
-      }
-      if (!nextEq) {
-        showFeedback(true, "<strong>רמז.</strong> " + (qact.hint || "התרגיל כבר פתור."));
-        return;
-      }
-      applySqrtEqTyped(nextEq);
-      return;
-    }
-    if (isFactorEqMode()) {
-      var fnext = DoctematicaQuadratic.nextFactorStep(
-        lastHistoryEq(),
-        state.problem.factor,
-        state.factor || emptyFactorState()
-      );
-      if (fnext && fnext.split) {
-        doFactorSplit();
-        return;
-      }
-      if (!fnext || !fnext.eq) {
-        showFeedback(true, "<strong>רמז.</strong> " + ((fnext && fnext.hint) || "התרגיל כבר פתור."), "tip");
-        return;
-      }
-      applyFactorTyped(fnext.eq);
-      return;
-    }
-    if (!isStepMode()) return;
-    var cur = state.history[state.history.length - 1];
-    var act = DoctematicaTeach.nextAction(cur);
-    if (act.done || !act.eq) {
-      showFeedback(true, "<strong>רמז.</strong> " + (act.hint || "המשוואה כבר פתורה."));
-      return;
-    }
-    var result = DoctematicaAlgebra.checkStep(cur, act.eq);
-    if (!result.ok) {
-      showFeedback(false, "<strong>לא הצלחתי לבצע את הצעד.</strong> " + result.message);
-      return;
-    }
-    state.history.push(act.eq);
-    renderSteps();
-    mathField.clear();
-    if (result.solved) {
-      markSolved();
-      mathField.setDisabled(true);
-      checkBtn.disabled = true;
-      nextAfterSolveBtn.classList.remove("hidden");
-      showFeedback(true, "<strong>צעד של האתר.</strong> " + (act.explain || result.message));
-      renderSteps();
-    } else {
-      showFeedback(true, "<strong>צעד של האתר.</strong> " + (act.explain || result.message), "tip");
-      mathField.focus();
-    }
+    var g = currentGuide();
+    if (g && g.oneStep) g.oneStep();
   });
 
   nextAfterSolveBtn.addEventListener("click", function () {

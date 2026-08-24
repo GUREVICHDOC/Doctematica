@@ -22,7 +22,8 @@
   }
 
   var topics = [
-    { id: "equations", label: "משוואות" },
+    { id: "equations", label: "משוואות בנעלם אחד" },
+    { id: "quadratic", label: "משוואות ריבועיות" },
     { id: "systems-sub", label: "מערכת משוואות" },
   ];
 
@@ -30,7 +31,6 @@
     equations: [
       { id: "basic", label: "משוואות בסיס" },
       { id: "denom", label: "משוואות עם מכנה" },
-      { id: "quadratic", label: "משוואות ריבועיות" },
     ],
   };
 

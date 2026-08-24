@@ -233,6 +233,8 @@ button {
 
 #exercise-nums {
   margin-bottom: 12px;
+  direction: ltr;
+  justify-content: flex-start;
 }
 
 #exercise-nums button {
