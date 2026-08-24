@@ -110,6 +110,7 @@
           <div class="solve-main">
             <p class="prompt" id="prompt">טוען שאלה…</p>
             <ol class="steps hidden" id="steps" aria-label="צעדי המשוואה"></ol>
+            <div id="factor-guide" class="factor-guide hidden"></div>
             <div id="sys-guide" class="sys-guide hidden"></div>
             <form id="answer-form">
               <label id="answer-label">התשובה שלך</label>
@@ -125,6 +126,7 @@
               <p class="hint" id="hint">אפשר לכתוב מספר שלם, שבר כמו 3/4, או עשרוני כמו 0.75</p>
             </form>
             <div class="actions" id="eq-actions">
+              <button type="button" class="ghost hidden" id="split-eqs-btn">חילוק למשוואות</button>
               <button type="button" class="ghost" id="hint-btn">רמז</button>
               <button type="button" class="ghost" id="one-step-btn">צעד אחד</button>
               <button type="button" class="ghost" id="show-solution">פתרון מלא</button>

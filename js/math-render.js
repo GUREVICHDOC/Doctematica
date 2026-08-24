@@ -90,7 +90,7 @@
         i += sqrtm[0].length;
         continue;
       }
-      var algFrac = s.slice(i).match(/^([−-]?(\d+\([^()]+\)|\([^()]+\)|\d*[xy]|\d+))\s*\/\s*(\([^()]+\)|[−-]?\d+)(?![.\dxy])/i);
+      var algFrac = s.slice(i).match(/^((\d+\([^()]+\)|\([^()]+\)|\d*[xy]|\d+))\s*\/\s*(\([^()]+\)|[−-]?\d+)(?![.\dxy])/i);
       if (algFrac && algFrac[0].indexOf("/") !== -1) {
         out += fracWrap(sideToHTML(unwrapParens(algFrac[1])), sideToHTML(unwrapParens(algFrac[3])));
         i += algFrac[0].length;

@@ -7,6 +7,23 @@
     return v && typeof v === "object" && v.type === "sqrt";
   }
 
+  function grabFracNumerator(left) {
+    var s = String(left || "");
+    var alg = s.match(/((?:\d+(?:\.\d+)?)?[xy](?:\^2)?)$/i);
+    var grabbed = alg || s.match(/(-?\d+(?:\.\d+)?)$/);
+    if (!grabbed) return { left: s, num: "" };
+    var num = grabbed[1];
+    var rest = s.slice(0, -num.length);
+    if (alg && /[-−]$/.test(rest)) {
+      var before = rest.slice(0, -1);
+      if (!before || /[+\-−×*\/(=]$/.test(before)) {
+        num = rest.slice(-1) + num;
+        rest = before;
+      }
+    }
+    return { left: rest, num: num };
+  }
+
   function MathField(host, actionsHost) {
     this.host = host;
     this.actionsHost = actionsHost;
@@ -240,12 +257,9 @@
     var cursor = el && el.selectionStart != null ? el.selectionStart : value.length;
     var left = value.slice(0, cursor);
     var right = value.slice(cursor);
-    var num = "";
-    var grabbed = left.match(/(-?\d+)$/);
-    if (grabbed) {
-      num = grabbed[1];
-      left = left.slice(0, -num.length);
-    }
+    var grabbed = grabFracNumerator(left);
+    var num = grabbed.num;
+    left = grabbed.left;
     var nested = { type: "frac", num: num, den: "" };
     if (left || right) nested.num = left + num + right;
     this.setAt(part, path, nested);
@@ -264,12 +278,9 @@
       return;
     }
     var split = this.splitCurrentText();
-    var num = "";
-    var grabbed = split.left.match(/(-?\d+)$/);
-    if (grabbed) {
-      num = grabbed[1];
-      split.left = split.left.slice(0, -num.length);
-    }
+    var grabbed = grabFracNumerator(split.left);
+    var num = grabbed.num;
+    split.left = grabbed.left;
     this.insertWithSplit(split, { type: "frac", num: num, den: "" });
     this.normalize();
     this.focusPath = [num ? "den" : "num"];
@@ -314,6 +325,8 @@
     this.caretPos = a + String(ch).length;
     if (el.classList.contains("ml-text")) {
       this.fitText(el, el.classList.contains("is-grow"));
+    } else {
+      this.fitAllSlots();
     }
     try {
       el.setSelectionRange(this.caretPos, this.caretPos);
@@ -508,6 +521,28 @@
     input.style.width = Math.max(10, w) + "px";
   };
 
+  MathField.prototype.fitSlot = function (input) {
+    if (!input) return;
+    input.style.width = "1px";
+    var w = Math.max(28, input.scrollWidth + 12);
+    input.style.width = w + "px";
+  };
+
+  MathField.prototype.fitAllSlots = function () {
+    var slots = this.host.querySelectorAll(".ml-slot, .ml-base, .ml-exp, .ml-whole");
+    var i;
+    for (i = 0; i < slots.length; i++) this.fitSlot(slots[i]);
+    var fracs = this.host.querySelectorAll(".ml-frac");
+    for (i = 0; i < fracs.length; i++) {
+      var num = fracs[i].querySelector(":scope > .m-num.ml-slot");
+      var den = fracs[i].querySelector(":scope > .m-den.ml-slot");
+      if (!num || !den) continue;
+      var wide = Math.max(num.offsetWidth, den.offsetWidth);
+      num.style.width = wide + "px";
+      den.style.width = wide + "px";
+    }
+  };
+
   MathField.prototype.makeInput = function (partIndex, path, value, cls) {
     var self = this;
     var input = document.createElement("input");
@@ -524,8 +559,9 @@
     input.addEventListener("input", function () {
       if (self.parts[partIndex]) self.setAt(self.parts[partIndex], path, input.value);
       if (path.length === 1 && path[0] === "value") {
-        var grow = input.classList.contains("is-grow");
-        self.fitText(input, grow);
+        self.fitText(input, input.classList.contains("is-grow"));
+      } else {
+        self.fitAllSlots();
       }
     });
     input.addEventListener("focus", function () {
@@ -619,6 +655,7 @@
       var texts = run.querySelectorAll(".ml-text");
       for (var t = 0; t < texts.length; t++) self.fitText(texts[t], false);
     }
+    this.fitAllSlots();
     this.setDisabled(this.disabled);
   };
 

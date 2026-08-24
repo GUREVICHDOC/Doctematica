@@ -15,7 +15,7 @@ window.DoctematicaChecks = {
     {
       id: "unreduced_fraction",
       title: "חילוק כשבר",
-      what: "x=8/2 נחשב צעד חוקי, לא תשובה סופית.",
+      what: "x=8/2 נחשב צעד חוקי, לא תשובה סופית. תשובה שגויה בשלב הזה מציינת במפורש מה לחשב (למשל 12/2).",
     },
     {
       id: "move_without_sign_flip",

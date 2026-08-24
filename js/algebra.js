@@ -304,6 +304,38 @@
     return p.d === 1 || gcdNum(p.n, p.d) !== 1;
   }
 
+  function isolatedOtherSide(text, v) {
+    var eq = rewriteFractions(asEquation(String(text).trim()));
+    var parts = eq.split("=");
+    if (parts.length !== 2) return null;
+    var other = null;
+    if (isBareLetter(parts[0], v)) other = parts[1];
+    else if (isBareLetter(parts[1], v)) other = parts[0];
+    else return null;
+    return { other: String(other).trim(), kind: isolatedRhsKind(text, v) };
+  }
+
+  function formatFracHint(side) {
+    var p = fracParts(side);
+    if (p) return String(p.n).replace(/-/g, "−") + "/" + p.d;
+    return String(side).replace(/\s+/g, "").replace(/-/g, "−");
+  }
+
+  function pendingComputeHint(prevText, unknown) {
+    var iso = isolatedOtherSide(prevText, unknown || "x");
+    if (!iso) return null;
+    if (iso.kind === "unreduced") {
+      return "עכשיו צריך לחשב את השבר: " + formatFracHint(iso.other) + ".";
+    }
+    if (iso.kind === "expr") {
+      var t = iso.other.replace(/\s+/g, "");
+      if (/[+\-×*\/]/.test(t.replace(/^-/, ""))) {
+        return "עכשיו צריך לחשב: " + t.replace(/-/g, "−").replace(/\*/g, "×") + ".";
+      }
+    }
+    return null;
+  }
+
   function isSolvedText(text) {
     var raw = String(text).trim();
     if (raw.indexOf("=") === -1 && !/x/i.test(raw)) {
@@ -391,6 +423,10 @@
       return { ok: false, message: err.message };
     }
     if (!equivalent(prev, next)) {
+      var computeHint = pendingComputeHint(previousText, unknown);
+      if (computeHint) {
+        return { ok: false, errorId: "compute_rhs", message: computeHint };
+      }
       var classified = DoctematicaErrors.classify(prev, next);
       return {
         ok: false,

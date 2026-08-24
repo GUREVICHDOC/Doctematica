@@ -261,6 +261,7 @@
     var sides = splitEq(eqText);
     if (!sides) return null;
     if (/^\s*x\s*$/i.test(sides.left) || /^\s*x\s*$/i.test(sides.right)) return null;
+    if (/^\s*(x\^2|x²)\s*$/i.test(sides.left) || /^\s*(x\^2|x²)\s*$/i.test(sides.right)) return null;
     if (isSimpleCoeffFracEq(sides)) return null;
     var leftTerms = splitRawTerms(sides.left);
     var rightTerms = splitRawTerms(sides.right);
@@ -342,6 +343,9 @@
     var lcd = sharedLcd(eqText);
     if (lcd <= 1) return null;
     var sides = splitEq(eqText);
+    if (!sides) return null;
+    if (/^\s*x\s*$/i.test(sides.left) || /^\s*x\s*$/i.test(sides.right)) return null;
+    if (/^\s*(x\^2|x²)\s*$/i.test(sides.left) || /^\s*(x\^2|x²)\s*$/i.test(sides.right)) return null;
     function dropSide(side) {
       return joinPrettyParts(
         splitRawTerms(side).map(function (term) {
@@ -530,10 +534,10 @@
         : { done: true, hint: "המשוואה כבר פתורה: x מבודד ומחושב." };
     }
 
-    var lcdAct = lcdStep(eqText, decimals);
+    var lcdAct = unknownKind === "x2" && (kind === "unreduced" || kind === "expr") ? null : lcdStep(eqText, decimals);
     if (lcdAct) return lcdAct;
 
-    var dropped = dropDenomsStep(eqText, decimals);
+    var dropped = unknownKind === "x2" && (kind === "unreduced" || kind === "expr") ? null : dropDenomsStep(eqText, decimals);
     if (dropped) return dropped;
 
     var opened = expandParensStep(eqText, decimals);

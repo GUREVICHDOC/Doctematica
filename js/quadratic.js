@@ -726,19 +726,109 @@
     } else if (kind === "one") {
       steps.push("x = 0");
     } else {
-      steps.push("x = ±√(" + fmtDisp(kFrac) + ")");
-      steps.push("x = " + fmtDisp(root) + ", x = −" + fmtDisp(root));
+      steps.push("√(x²) = √(" + fmtDisp(kFrac) + ")");
+      if (root) {
+        steps.push("x = ±" + fmtDisp(root));
+      } else {
+        steps.push("x = ±√(" + fmtDisp(kFrac) + ")");
+      }
     }
     var answer =
       kind === "none"
         ? "אין פתרון ממשי"
         : kind === "one"
           ? "x = 0"
-          : "x = " + fmtDisp(root) + ", x = −" + fmtDisp(root);
+          : root
+            ? "x = " + fmtDisp(root) + ", x = −" + fmtDisp(root)
+            : "x = ±√(" + fmtDisp(kFrac) + ")";
     return { k: k, kind: kind, root: root, steps: steps, answer: answer, start: start };
   }
 
+  function unwrapSqrtSide(side) {
+    var t = String(side || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "")
+      .replace(/sqrt/gi, "√");
+    var wrapped = t.match(/^√\((.+)\)$/);
+    if (wrapped) return wrapped[1];
+    var bare = t.match(/^√(.+)$/);
+    return bare ? bare[1] : null;
+  }
+
+  function parseBothSides(text) {
+    var raw = String(text || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/sqrt/gi, "√");
+    var i = raw.indexOf("=");
+    if (i < 0) return null;
+    var L = unwrapSqrtSide(raw.slice(0, i));
+    var R = unwrapSqrtSide(raw.slice(i + 1));
+    if (!L || !R) return null;
+    return { left: L, right: R };
+  }
+
+  function kFracOf(pack) {
+    return fracFromNumber(pack.k) || frac(Math.round(pack.k * 1000), 1000);
+  }
+
+  function checkSqrtBothSides(prev, typed) {
+    var sides = parseBothSides(typed);
+    if (!sides) return null;
+    var A = global.DoctematicaAlgebra;
+    try {
+      var before = A.parseEquation(prev, { unknown: "x2" });
+      var inner = A.parseEquation(sides.left + "=" + sides.right, { unknown: "x2" });
+      if (!A.equivalent(before, inner)) {
+        return {
+          ok: false,
+          message: "בתוך השורשים צריכים להיות האגפים של המשוואה הקודמת.",
+        };
+      }
+    } catch (err) {
+      return { ok: false, message: err.message };
+    }
+    var iso = isolatedK(prev);
+    if (iso.k != null && iso.k < -EPS) {
+      return {
+        ok: true,
+        message: "הוצאתם שורש משני האגפים, אבל משלילי אין שורש ממשי. רשמו שאין פתרון ממשי.",
+      };
+    }
+    return {
+      ok: true,
+      message: "הוצאתם שורש משני האגפים. עכשיו חשבו את השורש והשאירו x בצד אחד.",
+    };
+  }
+
   function nextSqrtStep(eqText, pack) {
+    var r = pack.root ? fmtDisp(pack.root) : null;
+    var kShow = fmtDisp(kFracOf(pack));
+    if (parseBothSides(eqText) || (isRootAnswerText(eqText) && /√|sqrt/i.test(eqText))) {
+      if (pack.kind === "none") {
+        return {
+          eq: "אין פתרון ממשי",
+          hint: "אחרי הבידוד x² יצא שלילי. לשלילי אין שורש ממשי, ולכן אין פתרון ממשי.",
+          explain: "מוציאים שורש רק ממספר אי־שלילי.",
+          solved: true,
+        };
+      }
+      if (pack.kind === "one") {
+        return {
+          eq: "x = 0",
+          hint: "√0 = 0, ולכן פתרון ממשי אחד: x = 0.",
+          explain: "כש־x² = 0 יש פתרון יחיד.",
+          solved: true,
+        };
+      }
+      return {
+        eq: r ? "x = ±" + r : "x = ±√(" + kShow + ")",
+        hint: r
+          ? "חשבו את השורש. אם יוצא מספר שלם או עשרוני פשוט, רשמו x = ±" + r + "."
+          : "השאירו x = ±√(" + kShow + ").",
+        explain: "אחרי שורש משני האגפים מחשבים, או משאירים ±√ כשזה לא מספר פשוט.",
+        solved: true,
+      };
+    }
     var iso = isolatedK(eqText);
     if (iso.k == null && iso.kind !== "value" && iso.kind !== "unreduced") return null;
     if (pack.kind === "none") {
@@ -757,12 +847,11 @@
         solved: true,
       };
     }
-    var r = fmtDisp(pack.root);
     return {
-      eq: "x = ±" + r,
-      hint: "הוציאו שורש משני האגפים. לשורש ממשי יש שני סימנים: x = ±" + r + ".",
-      explain: "x² = מספר חיובי נותן שני פתרונות נגדיים.",
-      solved: true,
+      eq: "√(x²) = √(" + kShow + ")",
+      hint: "הוציאו שורש משני האגפים. אפשר לכתוב √(x²) = √(" + kShow + ").",
+      explain: "מוציאים שורש משני האגפים, ואז מחשבים אם השורש מספר פשוט.",
+      solved: false,
     };
   }
 
@@ -843,45 +932,64 @@
       if (zero) return { ok: true, solved: true, message: "הפתרון היחיד הוא x = 0." };
       return { ok: false, message: "כאן x² = 0, לכן רק x = 0." };
     }
-    var want = pack.root.n / pack.root.d;
+    var nice = !!(pack.root);
+    var want = nice ? pack.root.n / pack.root.d : null;
     function nearWant(v) {
+      if (!nice) return false;
       return Math.abs(Math.abs(v) - Math.abs(want)) < 1e-6;
     }
-    var rShow = fmtDisp(pack.root);
+    var rShow = nice ? fmtDisp(pack.root) : "√(" + fmtDisp(kFracOf(pack)) + ")";
+    if (parsed.hadSqrt && nice) {
+      var sqrtMatches = parsed.pm
+        ? nearWant(parsed.abs)
+        : parsed.vals.every(function (v) {
+            return nearWant(v);
+          });
+      if (!sqrtMatches) {
+        return { ok: false, message: "בדקו איזה מספר נמצא מתחת לשורש. זה צריך להיות האגף אחרי הבידוד." };
+      }
+      return {
+        ok: true,
+        more: true,
+        solved: false,
+        message: parsed.pm
+          ? "עכשיו חשבו את השורש ורשמו x = ± מספר."
+          : "עכשיו חשבו את השורש למספר, ואז רשמו את שני הסימנים.",
+      };
+    }
     if (parsed.pm) {
-      if (!nearWant(parsed.abs)) {
+      if (nice && !nearWant(parsed.abs)) {
         return { ok: false, message: "הערך לא מדויק. אחרי השורש צריך להתקבל ±" + rShow + "." };
       }
-      if (parsed.hadSqrt) {
-        return {
-          ok: true,
-          more: true,
-          solved: false,
-          message: "נכון. חשבו את השורש וכתבו x = ±" + rShow + ".",
-        };
+      if (!nice && !parsed.hadSqrt) {
+        return { ok: false, message: "כאן השורש לא מספר פשוט. רשמו x = ±" + rShow + "." };
       }
       return {
         ok: true,
         solved: true,
-        message: "שני הפתרונות: x = " + rShow + ", x = −" + rShow + ".",
+        message: nice
+          ? "שני הפתרונות: x = " + rShow + ", x = −" + rShow + "."
+          : "שני הפתרונות: x = ±" + rShow + ".",
       };
     }
     var nextProg = { pos: progress.pos, neg: progress.neg };
     var j;
     for (j = 0; j < parsed.vals.length; j++) {
-      if (!nearWant(parsed.vals[j])) {
+      if (nice && !nearWant(parsed.vals[j])) {
         return { ok: false, message: "הערך לא מדויק. הפתרונות הם x = ±" + rShow + "." };
+      }
+      if (!nice && !parsed.hadSqrt) {
+        return { ok: false, message: "כאן השורש לא מספר פשוט. רשמו x = ±" + rShow + "." };
       }
       if (parsed.vals[j] > EPS) nextProg.pos = true;
       else if (parsed.vals[j] < -EPS) nextProg.neg = true;
     }
-    if (parsed.hadSqrt && nextProg.pos && nextProg.neg) {
+    if (!nice && parsed.hadSqrt && nextProg.pos && nextProg.neg) {
       return {
         ok: true,
-        more: true,
-        solved: false,
+        solved: true,
         progress: nextProg,
-        message: "נכון. חשבו את השורש וכתבו את שני המספרים.",
+        message: "שני הפתרונות: x = ±" + rShow + ".",
       };
     }
     if (nextProg.pos && nextProg.neg) {
@@ -900,6 +1008,406 @@
       message: nextProg.pos
         ? "יש גם פתרון שלילי. רשמו גם x = −" + rShow + ", או x = ±" + rShow + "."
         : "יש גם פתרון חיובי. רשמו גם x = " + rShow + ", או x = ±" + rShow + ".",
+    };
+  }
+
+  function nearNum(a, b) {
+    return Math.abs(a - b) < 1e-6;
+  }
+
+  function isIntNum(n) {
+    return Math.abs(n - Math.round(n)) < 1e-8;
+  }
+
+  function normFactorText(s) {
+    return String(s || "")
+      .replace(/²/g, "^2")
+      .replace(/[−–—]/g, "-")
+      .replace(/[×·]/g, "*")
+      .replace(/\s+/g, "");
+  }
+
+  function unwrapParens(s) {
+    var t = String(s || "").trim();
+    while (t.charAt(0) === "(" && t.charAt(t.length - 1) === ")") {
+      var inner = t.slice(1, -1);
+      var d = 0;
+      var ok = true;
+      var i;
+      for (i = 0; i < inner.length; i++) {
+        if (inner.charAt(i) === "(") d += 1;
+        if (inner.charAt(i) === ")") d -= 1;
+        if (d < 0) ok = false;
+      }
+      if (!ok || d !== 0) break;
+      t = inner;
+    }
+    return t;
+  }
+
+  function readPolyNum(s, i) {
+    if (s.charAt(i) === "(") {
+      var j = s.indexOf(")", i);
+      if (j < 0) return null;
+      var inner = s.slice(i + 1, j);
+      var bits = inner.split("/");
+      var v =
+        bits.length === 2 ? parseFloat(bits[0], 10) / parseFloat(bits[1], 10) : parseFloat(inner, 10);
+      if (!isFinite(v)) return null;
+      return { v: v, i: j + 1, had: true };
+    }
+    var m = s.slice(i).match(/^(\d+(?:\.\d+)?(?:\/\d+)?)/);
+    if (!m) return { v: 1, i: i, had: false };
+    var tok = m[1];
+    var val;
+    if (tok.indexOf("/") !== -1) {
+      var q = tok.split("/");
+      val = parseFloat(q[0], 10) / parseFloat(q[1], 10);
+    } else val = parseFloat(tok, 10);
+    return { v: val, i: i + tok.length, had: true };
+  }
+
+  function polySide(side) {
+    var t = normFactorText(side);
+    if (!t || t === "0") return { a: 0, b: 0, c: 0 };
+    if (t.charAt(0) !== "+" && t.charAt(0) !== "-") t = "+" + t;
+    var a = 0;
+    var b = 0;
+    var c = 0;
+    var i = 0;
+    while (i < t.length) {
+      var sign = t.charAt(i) === "-" ? -1 : 1;
+      if (t.charAt(i) === "+" || t.charAt(i) === "-") i += 1;
+      var num = readPolyNum(t, i);
+      if (!num) return null;
+      i = num.i;
+      if (t.slice(i, i + 3) === "x^2") {
+        a += sign * (num.had ? num.v : 1);
+        i += 3;
+      } else if (t.charAt(i) === "x" || t.charAt(i) === "X") {
+        b += sign * (num.had ? num.v : 1);
+        i += 1;
+      } else {
+        if (!num.had) return null;
+        c += sign * num.v;
+      }
+    }
+    return { a: a, b: b, c: c };
+  }
+
+  function parseAxBxZero(text) {
+    var s = normFactorText(text);
+    var parts = s.split("=");
+    if (parts.length !== 2) return null;
+    var L = polySide(parts[0]);
+    var R = polySide(parts[1]);
+    if (!L || !R) return null;
+    var a = L.a - R.a;
+    var b = L.b - R.b;
+    var c = L.c - R.c;
+    if (Math.abs(a) < EPS) return null;
+    if (Math.abs(c) > 1e-6) return null;
+    return { a: a, b: b, c: c };
+  }
+
+  function fmtLinNum(n) {
+    var p = fracFromNumber(n);
+    if (p) return fmt(p);
+    if (isIntNum(n)) return String(Math.round(n));
+    return String(n);
+  }
+
+  function formatLinear(a, b) {
+    var xs;
+    if (nearNum(a, 1)) xs = "x";
+    else if (nearNum(a, -1)) xs = "-x";
+    else xs = fmtLinNum(a) + "x";
+    if (Math.abs(b) < EPS) return xs;
+    if (b > 0) return xs + "+" + fmtLinNum(b);
+    return xs + "-" + fmtLinNum(-b);
+  }
+
+  function preferredFactorEq(a, b) {
+    var g = 1;
+    if (isIntNum(a) && isIntNum(b)) {
+      g = gcd(Math.round(a), Math.round(b));
+      if (a < 0) g = -g;
+    }
+    var a2 = a / g;
+    var b2 = b / g;
+    var outer = nearNum(g, 1) ? "x" : nearNum(g, -1) ? "-x" : fmtLinNum(g) + "x";
+    return outer + "(" + formatLinear(a2, b2) + ")=0";
+  }
+
+  function parseLinearFactor(text) {
+    var raw = unwrapParens(normFactorText(text));
+    if (!raw) return null;
+    try {
+      var eq = global.DoctematicaAlgebra.parseEquation(raw + "=0");
+      var a = eq.left.a - eq.right.a;
+      var b = eq.left.b - eq.right.b;
+      if (Math.abs(a) < EPS) return null;
+      return { a: a, b: b, src: raw };
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function splitProductLeft(left) {
+    var s = unwrapParens(normFactorText(left));
+    var depth = 0;
+    var i;
+    for (i = 0; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (ch === "(") depth += 1;
+      else if (ch === ")") depth -= 1;
+      else if (depth === 0 && ch === "*" && i > 0) {
+        return [s.slice(0, i), s.slice(i + 1)];
+      }
+    }
+    depth = 0;
+    for (i = 0; i < s.length - 1; i++) {
+      var c = s.charAt(i);
+      var n = s.charAt(i + 1);
+      if (c === "(") depth += 1;
+      else if (c === ")") {
+        depth -= 1;
+        if (depth === 0 && (n === "(" || n === "x" || n === "X" || (n >= "0" && n <= "9"))) {
+          return [s.slice(0, i + 1), s.slice(i + 1)];
+        }
+      } else if (depth === 0 && (c === "x" || c === "X") && n === "(") {
+        return [s.slice(0, i + 1), s.slice(i + 1)];
+      }
+    }
+    return null;
+  }
+
+  function parseProductEq(text) {
+    var s = normFactorText(text);
+    var parts = s.split("=");
+    if (parts.length !== 2) return null;
+    var left = parts[0];
+    var right = parts[1];
+    if (right === "0" || right === "+0" || right === "-0") {
+      /* keep left */
+    } else if (left === "0" || left === "+0" || left === "-0") {
+      left = right;
+    } else return null;
+    var bits = splitProductLeft(left);
+    if (!bits) return null;
+    var f1 = parseLinearFactor(bits[0]);
+    var f2 = parseLinearFactor(bits[1]);
+    if (!f1 || !f2) return null;
+    return {
+      f1: f1,
+      f2: f2,
+      e1: unwrapParens(bits[0]) + "=0",
+      e2: unwrapParens(bits[1]) + "=0",
+    };
+  }
+
+  function isProductEq(text) {
+    return !!parseProductEq(text);
+  }
+
+  function productMatches(pack, prod) {
+    var A = prod.f1.a * prod.f2.a;
+    var B = prod.f1.a * prod.f2.b + prod.f1.b * prod.f2.a;
+    var C = prod.f1.b * prod.f2.b;
+    if (Math.abs(C) > 1e-6) return false;
+    if (Math.abs(A) < EPS) return false;
+    return Math.abs(A * pack.b - B * pack.a) < 1e-5;
+  }
+
+  function linearSolved(eq) {
+    try {
+      return global.DoctematicaAlgebra.isSolved(global.DoctematicaAlgebra.parseEquation(eq));
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function analyzeFactorStart(start) {
+    var abc = parseAxBxZero(start);
+    if (!abc) throw new Error("זו לא משוואה מהצורה ax²+bx=0.");
+    var a = abc.a;
+    var b = abc.b;
+    var other = a === 0 ? 0 : -b / a;
+    var otherF = fracFromNumber(other) || frac(Math.round(other * 1000), 1000);
+    var factored = preferredFactorEq(a, b);
+    var prod = parseProductEq(factored);
+    var steps = [start, factored];
+    if (prod) {
+      steps.push(prod.e1);
+      steps.push(prod.e2);
+    }
+    var r0 = "x = 0";
+    var r1 = "x = " + fmtDisp(otherF);
+    steps.push(r0);
+    steps.push(r1);
+    return {
+      a: a,
+      b: b,
+      other: other,
+      otherF: otherF,
+      factored: factored,
+      steps: steps,
+      answer: r0 + ", " + r1,
+      start: start,
+    };
+  }
+
+  function parseRootVals(text) {
+    var parsed = parseSqrtTyped(text);
+    if (!parsed || parsed.ok === false || parsed.none) return null;
+    if (parsed.pm) return [parsed.abs, -parsed.abs];
+    return parsed.vals;
+  }
+
+  function checkFactorRoots(typed, pack, progress) {
+    progress = progress || { z: false, o: false };
+    var vals = parseRootVals(typed);
+    if (!vals || !vals.length) return null;
+    var next = { z: progress.z, o: progress.o };
+    var i;
+    for (i = 0; i < vals.length; i++) {
+      if (nearNum(vals[i], 0)) next.z = true;
+      else if (nearNum(vals[i], pack.other)) next.o = true;
+      else return { ok: false, message: "זה לא אחד הפתרונות של המשוואה הזו." };
+    }
+    if (next.z && next.o) {
+      return {
+        ok: true,
+        solved: true,
+        progress: next,
+        message: "שני הפתרונות: x = 0, x = " + fmtDisp(pack.otherF) + ".",
+      };
+    }
+    return {
+      ok: true,
+      more: true,
+      solved: false,
+      progress: next,
+      message: next.z
+        ? "נכון, x = 0. יש עוד משוואה מהסוגריים — פתרו אותה, או לחצו «חילוק למשוואות»."
+        : "נכון. יש גם את הפתרון x = 0, כי הוצאתם x כגורם משותף.",
+    };
+  }
+
+  function nextFactorStep(eqText, pack, st) {
+    st = st || {};
+    if (st.split) {
+      var k;
+      for (k = 0; k < 2; k++) {
+        if (st.solved && st.solved[k]) continue;
+        var cur = (st.eqs && st.eqs[k]) || "";
+        if (linearSolved(cur)) continue;
+        var act = global.DoctematicaTeach.nextAction(cur);
+        if (act && act.eq) {
+          return { eq: act.eq, hint: act.hint, explain: act.explain, which: k };
+        }
+        var lin = parseLinearFactor(String(cur).replace(/=.*$/, ""));
+        var val = "0";
+        if (lin && Math.abs(lin.b) >= EPS) val = fmtLinNum(-lin.b / lin.a);
+        return { eq: "x = " + val, hint: "בודדו את x.", which: k };
+      }
+      return {
+        eq: "x = 0, x = " + fmt(pack.otherF),
+        hint: "רשמו את שני הפתרונות.",
+        solved: true,
+      };
+    }
+    if (isProductEq(eqText) && productMatches(pack, parseProductEq(eqText))) {
+      return {
+        split: true,
+        hint: "אחרי הוצאת הגורם המשותף מחלקים לשתי משוואות: כל גורם שווה לאפס.",
+        explain: "מכפלה שווה אפס רק אם אחד הגורמים אפס.",
+      };
+    }
+    return {
+      eq: pack.factored,
+      hint: "הוציאו גורם משותף x (ואפשר גם מספר). למשל x²−5x=0 הופך ל־x(x−5)=0.",
+      explain: "מוציאים x מחוץ לסוגריים.",
+    };
+  }
+
+  function checkFactorTyped(prev, typed, pack, st) {
+    st = st || { split: false, eqs: [], solved: [false, false], progress: { z: false, o: false } };
+    var t = String(typed || "").trim();
+    if (!t) return { ok: false, message: "כתבו את הצעד הבא." };
+
+    var prodTyped = parseProductEq(t);
+    if (prodTyped && productMatches(pack, prodTyped)) {
+      var e1 = prodTyped.e1;
+      var e2 = prodTyped.e2;
+      return {
+        ok: true,
+        factored: true,
+        eqs: [e1, e2],
+        solved: [linearSolved(e1), linearSolved(e2)],
+        solvedFlags: [linearSolved(e1), linearSolved(e2)],
+        message: "נכון. הוצאתם גורם משותף. עכשיו לחצו «חילוק למשוואות», או פתרו כל גורם בנפרד.",
+      };
+    }
+    if (prodTyped) {
+      return { ok: false, message: "המכפלה לא מתאימה למשוואה המקורית. בדקו מה מוציאים מחוץ לסוגריים ומה נשאר בפנים." };
+    }
+
+    var roots = checkFactorRoots(t, pack, st.progress);
+
+    var tryEqs = [];
+    if (st.split && st.eqs && st.eqs.length) tryEqs = st.eqs;
+    else if (isProductEq(prev) && productMatches(pack, parseProductEq(prev))) {
+      var p0 = parseProductEq(prev);
+      tryEqs = [p0.e1, p0.e2];
+    }
+
+    if (tryEqs.length) {
+      var j;
+      for (j = 0; j < tryEqs.length; j++) {
+        if (st.solved && st.solved[j]) continue;
+        var result;
+        try {
+          result = global.DoctematicaAlgebra.checkStep(tryEqs[j], t);
+        } catch (err) {
+          continue;
+        }
+        if (!result.ok) continue;
+        var eqs = tryEqs.slice();
+        eqs[j] = t;
+        var solvedFlags = (st.solved || [false, false]).slice();
+        if (result.solved || linearSolved(t)) solvedFlags[j] = true;
+        var both = solvedFlags[0] && solvedFlags[1];
+        return {
+          ok: true,
+          split: true,
+          eqs: eqs,
+          solvedFlags: solvedFlags,
+          which: j,
+          solvedOne: result.solved,
+          solvedAll: both,
+          message: both
+            ? "שני הפתרונות: x = 0, x = " + fmtDisp(pack.otherF) + "."
+            : result.solved
+              ? "נכון. זו משוואה אחת. פתרו גם את המשוואה השנייה."
+              : "צעד חוקי במשוואה " + (j + 1) + ". " + result.message,
+        };
+      }
+      if (roots && (st.split || isProductEq(prev) || st.progress.z || st.progress.o)) {
+        return roots;
+      }
+      return {
+        ok: false,
+        message: "פתרו אחת משתי המשוואות שקיבלתם אחרי הוצאת הגורם, או רשמו x = מספר.",
+      };
+    }
+
+    if (roots && (st.split || isProductEq(prev) || st.progress.z || st.progress.o)) {
+      return roots;
+    }
+    return {
+      ok: false,
+      message: "הוציאו גורם משותף x (ואפשר גם מספר), למשל x(x−5)=0.",
     };
   }
 
@@ -935,6 +1443,15 @@
     isRootAnswerText: isRootAnswerText,
     isolatedK: isolatedK,
     nextSqrtStep: nextSqrtStep,
+    checkSqrtBothSides: checkSqrtBothSides,
     checkSqrtFinish: checkSqrtFinish,
+    analyzeFactorStart: analyzeFactorStart,
+    parseProductEq: parseProductEq,
+    isProductEq: isProductEq,
+    preferredFactorEq: preferredFactorEq,
+    nextFactorStep: nextFactorStep,
+    checkFactorTyped: checkFactorTyped,
+    linearSolved: linearSolved,
+    productMatches: productMatches,
   };
 })(window);

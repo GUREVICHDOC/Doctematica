@@ -82,7 +82,8 @@
 
 .m-op,
 .m-eq {
-  padding: 0 0.08em;
+  padding: 0 0.12em;
+  vertical-align: middle;
 }
 
 .m-mixed {
@@ -172,16 +173,22 @@
 }
 
 .ml-slot {
-  width: 1.7em;
+  box-sizing: content-box;
+  width: auto;
   min-width: 1.4em;
   min-height: 1.15em;
   border: 1px dashed #c8bba8;
   border-radius: 3px;
-  padding: 2px 3px;
+  padding: 2px 6px;
   font: inherit;
   font-size: 0.95rem;
   text-align: center;
   background: #fbf8f2;
+  overflow: visible;
+}
+
+.ml-frac {
+  align-items: stretch;
 }
 
 .m-num.ml-slot {

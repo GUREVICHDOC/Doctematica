@@ -25,6 +25,23 @@
         explain: "בודדו משתנה, הציבו במשוואה השנייה, ואז מצאו את המשתנה השני.",
       };
     }
+    if (level.mode === "quad-factor") {
+      var fa = DoctematicaQuadratic.analyzeFactorStart(ex.start);
+      return {
+        mode: "quad-factor",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction,
+        prompt: ex.start,
+        startEquation: ex.start,
+        factor: fa,
+        solutionSteps: fa.steps,
+        answer: fa.answer,
+        explain: "הוציאו גורם משותף x (ואפשר גם מספר), ואז פתרו כל גורם כמשוואה ששווה לאפס.",
+      };
+    }
     if (level.mode === "quad-sqrt") {
       var sq = DoctematicaQuadratic.analyzeSqrtStart(ex.start);
       return {
