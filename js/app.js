@@ -45,6 +45,7 @@
   var factorGuideEl = document.getElementById("factor-guide");
   var splitEqsBtn = document.getElementById("split-eqs-btn");
   var useFormulaBtn = document.getElementById("use-formula-btn");
+  var md53Btn = document.getElementById("md53-btn");
 
   var state = {
     topic: "equations",
@@ -157,7 +158,7 @@
   }
 
   function emptyMixedState() {
-    return { path: null };
+    return { path: null, md53: false };
   }
 
   function emptyFactorState() {
@@ -213,16 +214,18 @@
 
   function canUseMixedFormula() {
     if (!isMixedEqMode() || state.locked || !state.problem || !state.problem.mixed) return false;
-    if (mixedPath() === "formula") return false;
-    var pack = state.problem.mixed;
-    if (!pack.classify || !pack.classify.methods || !pack.classify.methods.formula) return false;
+    if (mixedPath()) return false;
     var last = lastHistoryEq();
-    return DoctematicaQuadratic.isStandardZero(last);
+    var Q = DoctematicaQuadratic;
+    if (!Q.isAbcOrder(last)) return false;
+    var p = Q.parseABC(last);
+    return !!(p && p.a);
   }
 
   function updateFormulaBtn() {
-    if (!useFormulaBtn) return;
-    useFormulaBtn.classList.toggle("hidden", !canUseMixedFormula());
+    var show = canUseMixedFormula();
+    if (useFormulaBtn) useFormulaBtn.classList.toggle("hidden", !show);
+    if (md53Btn) md53Btn.classList.toggle("hidden", !show);
   }
 
   function renderFactorGuide() {
@@ -1388,9 +1391,11 @@
 
     if (q.phase === "abc") {
       note.innerHTML =
-        "רשמו את המקדמים בנוסחה " +
-        DoctematicaMath.toHTML("ax^2+bx+c=0") +
-        ". אחרי כל מקדם לחצו Enter.";
+        state.mixed && state.mixed.md53
+          ? "md53: רשמו a, אחר כך b, אחר כך c (Enter אחרי כל אחד). גם 0 אם אין איבר. אחרי c המחשבון פותר."
+          : "רשמו את המקדמים בנוסחה " +
+            DoctematicaMath.toHTML("ax^2+bx+c=0") +
+            ". אחרי כל מקדם לחצו Enter.";
       quadGuideEl.appendChild(note);
       var row = document.createElement("div");
       row.className = "q-abc";
@@ -1659,6 +1664,12 @@
           String(want.c).replace(/-/g, "−") +
           "</span>",
       });
+      if (state.mixed && state.mixed.md53) {
+        renderQuadGuide();
+        renderSteps();
+        finishQuad("לפי md53: " + want.answer);
+        return;
+      }
       q.phase = "plug";
       showFeedback(true, "<strong>נכון.</strong> " + result.message);
       renderQuadGuide();
@@ -1939,6 +1950,13 @@
       showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
       return false;
     }
+    if (DoctematicaAlgebra.missingEqualsSign(typed)) {
+      state.stats.try += 1;
+      saveStats();
+      renderStats();
+      showFeedback(false, "<strong>עוד לא.</strong> חסר סימן שווה");
+      return false;
+    }
     state.stats.try += 1;
     saveStats();
     renderStats();
@@ -2061,6 +2079,7 @@
     }
     state.mixed = state.mixed || emptyMixedState();
     state.mixed.path = "formula";
+    state.mixed.md53 = false;
     startQuadSession();
     renderQuadGuide();
     renderSteps();
@@ -2072,16 +2091,39 @@
     );
   }
 
+  function enterMixedMd53() {
+    var last = lastHistoryEq();
+    var Q = DoctematicaQuadratic;
+    var p = Q.parseABC(last);
+    if (!p || !p.a) {
+      showFeedback(false, "<strong>עוד לא.</strong> קודם סדרו ל־ax²+bx+c=0 (גם אם b או c אפס).");
+      return;
+    }
+    state.problem.quad = Q.analyze(p.a, p.b, p.c, last);
+    state.mixed = state.mixed || emptyMixedState();
+    state.mixed.path = "formula";
+    state.mixed.md53 = true;
+    startQuadSession();
+    renderQuadGuide();
+    renderSteps();
+    updateFormulaBtn();
+    showFeedback(
+      true,
+      "<strong>md53.</strong> כמו במחשבון: רשמו a, אחר כך b, אחר כך c. אחרי שלושתם מופיע הפתרון. גם אם b=0 או c=0.",
+      "tip"
+    );
+  }
+
   function applyMixedTyped(typed) {
     typed = String(typed || "").trim();
-    if (!typed) {
-      showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
-      return false;
-    }
     var path = mixedPath();
     if (path === "formula") {
       handleQuadSubmit();
       return true;
+    }
+    if (!typed) {
+      showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
+      return false;
     }
     if (path === "sqrt") return applySqrtEqTyped(typed);
     if (path === "factor") return applyFactorTyped(typed);
@@ -2388,11 +2430,20 @@
       };
     }
     if (isMixedEqMode()) {
+      var mixedLevel = currentLevel();
+      var mixedId = mixedLevel && mixedLevel.id;
+      var hintText =
+        mixedId === "quad-mixed-5"
+          ? "פתחו (a±b)² בכפל מקוצר, למשל (x−3)²=x²−6x+9. אם יש עוד סוגריים או גורם מימין כמו (x+1)2 — פתחו גם אותם באותו צעד. אחר כך סדרו ax²+bx+c=0 ולחצו md53 (גם אם b=0 או c=0) או נוסחת שורשים."
+          : mixedId === "quad-mixed-4"
+          ? "אם יש מקדם מחוץ לכפל שני סוגריים — קודם סוגר בסוגר (המקדם נשאר בחוץ), ואז כופלים את המקדם בכל איבר. בלי לאחד. אחר כך סדרו ax²+bx+c=0: md53 או נוסחת שורשים (גם אם b=0 או c=0)."
+          : mixedId === "quad-mixed-3"
+            ? "פתחו סוגריים כפולים: הראשון בסוגר הראשון בראשון ובשני של הסוגר השני, ואז האיבר השני בסוגר הראשון בשני איברי הסוגר השני — בלי לאחד. אחר כך סדרו ax²+bx+c=0: md53 או נוסחת שורשים (גם אם b=0 או c=0)."
+            : "אם ה־x מימין לסוגריים — העבירו אותו לשמאל, ואז פתחו סוגריים. אחר כך סדרו ax²+bx+c=0 ולחצו md53 או נוסחת שורשים (גם אם b=0 או c=0). אם x² מתאפס — משוואה רגילה.";
       return {
         work: true,
         buttons: true,
-        hintText:
-          "אם ה־x מימין לסוגריים — העבירו אותו לשמאל, ואז פתחו סוגריים. אחר כך: אם אין x — שורש; אם אין מספר חופשי — גורם משותף; אם a, b, c כולם שונים מאפס — נוסחת שורשים. אם x² מתאפס — משוואה רגילה.",
+        hintText: hintText,
         hint: mixedHint,
         oneStep: mixedOneStep,
         showSolution: function () {
@@ -2457,6 +2508,7 @@
       }
       if (splitEqsBtn) splitEqsBtn.classList.add("hidden");
       if (useFormulaBtn) useFormulaBtn.classList.add("hidden");
+      if (md53Btn) md53Btn.classList.add("hidden");
       topicLabelEl.textContent = currentTopicLabel() + " · " + currentLevel().title;
       setModeUi();
       hintBtn.classList.add("hidden");
@@ -2576,10 +2628,20 @@
   if (useFormulaBtn) {
     useFormulaBtn.addEventListener("click", function () {
       if (!canUseMixedFormula()) {
-        showFeedback(false, "<strong>עוד לא.</strong> קודם הביאו את כל האיברים לאגף אחד, עם 0 באגף השני.");
+        showFeedback(false, "<strong>עוד לא.</strong> קודם סדרו ל־ax²+bx+c=0 (קודם x², אחר כך x, ואז המספר).");
         return;
       }
       enterMixedFormula();
+    });
+  }
+
+  if (md53Btn) {
+    md53Btn.addEventListener("click", function () {
+      if (!canUseMixedFormula()) {
+        showFeedback(false, "<strong>עוד לא.</strong> קודם סדרו ל־ax²+bx+c=0 (גם אם b=0 או c=0).");
+        return;
+      }
+      enterMixedMd53();
     });
   }
 

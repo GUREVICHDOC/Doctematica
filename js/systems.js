@@ -51,7 +51,7 @@
   function tokenize(text) {
     var s = rewrite(text);
     if (!s) throw new Error("השדה ריק.");
-    if (s.indexOf("=") === -1) throw new Error("חסר סימן =. כתבו משוואה מלאה.");
+    if (s.indexOf("=") === -1) throw new Error("חסר סימן שווה");
     var tokens = [];
     var i = 0;
     while (i < s.length) {
@@ -174,7 +174,7 @@
         eqIndex = j;
       }
     }
-    if (eqIndex === -1) throw new Error("חסר סימן =.");
+    if (eqIndex === -1) throw new Error("חסר סימן שווה");
     var leftToks = tokens.slice(0, eqIndex);
     var rightToks = tokens.slice(eqIndex + 1);
     if (!leftToks.length || !rightToks.length) throw new Error("חסר אגף במשוואה.");

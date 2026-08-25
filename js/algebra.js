@@ -66,9 +66,18 @@
     if (!t) throw new Error("השדה ריק.");
     if (t.indexOf("=") !== -1) return t;
     if (/x/i.test(t)) {
-      throw new Error("חסר סימן =. כתבו משוואה מלאה, למשל (x+3)2 = 10.");
+      throw new Error("חסר סימן שווה");
     }
     return "x = " + t;
+  }
+
+  function missingEqualsSign(text) {
+    var s = String(text || "").trim();
+    if (!s) return false;
+    if (/[=＝]/.test(s)) return false;
+    if (/(אין\s*פתרון|כל\s*x|זהות|סתירה|אינסוף)/.test(s)) return false;
+    if (/^[+\-−]?\d+([./]\d+)?$/.test(s.replace(/\s+/g, ""))) return false;
+    return /[0-9xXyY()+\-−*/^√±]/.test(s);
   }
 
   function tokenize(text) {
@@ -228,7 +237,7 @@
         eqIndex = i;
       }
     }
-    if (eqIndex === -1) throw new Error("חסר סימן =. כתבו משוואה מלאה, למשל 2x = 8.");
+    if (eqIndex === -1) throw new Error("חסר סימן שווה");
     var leftToks = tokens.slice(0, eqIndex);
     var rightToks = tokens.slice(eqIndex + 1);
     if (!leftToks.length || !rightToks.length) throw new Error("חסר אגף במשוואה.");
@@ -410,6 +419,9 @@
         message: "זו אותה משוואה. כתבו צעד חדש — למשל חיבור/חיסור משני האגפים, או חילוק במקדם.",
       };
     }
+    if (missingEqualsSign(nextText)) {
+      return { ok: false, message: "חסר סימן שווה" };
+    }
     var prev;
     var next;
     try {
@@ -501,5 +513,6 @@
     formatNumber: formatNumber,
     asEquation: asEquation,
     isolatedRhsKind: isolatedRhsKind,
+    missingEqualsSign: missingEqualsSign,
   };
 })(window);

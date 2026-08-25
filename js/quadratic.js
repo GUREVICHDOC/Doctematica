@@ -56,7 +56,7 @@
       .replace(/[−–—]/g, "-")
       .replace(/\s+/g, "");
     var parts = s.split("=");
-    if (parts.length !== 2) throw new Error("חסר סימן =.");
+    if (parts.length !== 2) throw new Error("חסר סימן שווה");
     var left = parts[0];
     var right = parts[1];
     if (right !== "0") throw new Error("הביאו את המשוואה לצורה ax²+bx+c=0.");
@@ -1397,6 +1397,9 @@
     st = st || { split: false, eqs: [], solved: [false, false], progress: { z: false, o: false } };
     var t = String(typed || "").trim();
     if (!t) return { ok: false, message: "כתבו את הצעד הבא." };
+    if (global.DoctematicaAlgebra && global.DoctematicaAlgebra.missingEqualsSign(t)) {
+      return { ok: false, message: "חסר סימן שווה" };
+    }
 
     var prodTyped = parseProductEq(t);
     if (prodTyped && productMatches(pack, prodTyped)) {
@@ -1516,6 +1519,14 @@
         i += 1;
         continue;
       }
+      if (c === "^") {
+        if (s.slice(i, i + 2) === "^2") {
+          tokens.push({ t: "pow2" });
+          i += 2;
+          continue;
+        }
+        return null;
+      }
       if (c === "x" || c === "X") {
         if (s.slice(i + 1, i + 3) === "^2") {
           tokens.push({ t: "x2" });
@@ -1587,7 +1598,13 @@
         var v = parseUnary();
         return v ? polyNeg(v) : null;
       }
-      return parsePrimary();
+      var primary = parsePrimary();
+      if (!primary) return null;
+      if (peek() && peek().t === "pow2") {
+        eat();
+        primary = polyMul(primary, primary);
+      }
+      return primary;
     }
     function parsePrimary() {
       var tok = peek();
@@ -1635,6 +1652,8 @@
   function rewriteTermXBeforeParens(term) {
     var t = normFactorText(term);
     if (/x\^2$/i.test(t)) return term;
+    var numAfter = t.match(/^([+-]?)(\([^()]+\))(\d+)$/);
+    if (numAfter) return (numAfter[1] || "") + numAfter[3] + numAfter[2];
     var m = t.match(/^([+-]?)(\d*)(\([^()]+\))(\d*)x$/i);
     if (!m) return term;
     var sign = m[1] || "";
@@ -1704,36 +1723,177 @@
     return out;
   }
 
-  function expandSideTerms(side) {
+  function hasFoilParens(text) {
+    return /\([^()]+\)\([^()]+\)/.test(normFactorText(text));
+  }
+
+  function hasSquaredParens(text) {
+    return /\([^()]+\)\^2/.test(normFactorText(text));
+  }
+
+  function mulPolyAtoms(u, v) {
+    if (!u || !v) return null;
+    var c = u.coef * v.coef;
+    if (u.kind === "n") return { kind: v.kind, coef: c };
+    if (v.kind === "n") return { kind: u.kind, coef: c };
+    if (u.kind === "x" && v.kind === "x") return { kind: "x2", coef: c };
+    return null;
+  }
+
+  function expandFoilTerm(term) {
+    var t = normFactorText(term);
+    var m = t.match(/^([+-]?)(\d*)(\([^()]+\))(\([^()]+\))$/);
+    if (!m) return null;
+    var left = splitPolyTerms(unwrapParens(m[3]));
+    var right = splitPolyTerms(unwrapParens(m[4]));
+    if (!left || left.length !== 2 || !right || right.length !== 2) return null;
+    var out = [];
+    var i;
+    var j;
+    for (i = 0; i < left.length; i++) {
+      for (j = 0; j < right.length; j++) {
+        var prod = mulPolyAtoms(left[i], right[j]);
+        if (!prod) return null;
+        if (!near0(prod.coef)) out.push(prod);
+      }
+    }
+    if (!out.length) return "0";
+    var foil = formatTermList(out);
+    var keepOuter = !!(m[2] || m[1] === "-");
+    if (!keepOuter) return foil;
+    if (m[2]) return (m[1] === "-" ? "-" : "") + m[2] + "(" + foil + ")";
+    return "-(" + foil + ")";
+  }
+
+  function expandSquareTerm(term) {
+    var t = normFactorText(term);
+    var m = t.match(/^([+-]?)(\d*)(\([^()]+\))\^2$/);
+    if (!m) return null;
+    var inner = parseQuadSide(m[3]);
+    if (!inner || !near0(inner.a)) return null;
+    var sq = polyMul(inner, inner);
+    if (!sq) return null;
+    var body = formatSide(sq.a, sq.b, sq.c);
+    var keepOuter = !!(m[2] || m[1] === "-");
+    if (!keepOuter) return body;
+    if (m[2]) return (m[1] === "-" ? "-" : "") + m[2] + "(" + body + ")";
+    return "-(" + body + ")";
+  }
+
+  function expandSquareKeepOuterSide(side) {
+    return mapSignedSideTerms(side, function (term) {
+      var sq = expandSquareTerm(term);
+      if (sq) return sq;
+      return term.charAt(0) === "+" ? term.slice(1) : term;
+    });
+  }
+
+  function expandDistributeTerm(term) {
+    var t = normFactorText(term);
+    if (hasFoilParens(t)) return null;
+    var m = t.match(/^([+-]?)(\d*)(x)?\(([^()]*)\)$/i);
+    if (!m) return null;
+    var inner = splitPolyTerms(m[4]);
+    if (!inner.length) return null;
+    var k = m[2] ? parseFloat(m[2], 10) : 1;
+    if (m[1] === "-") k = -k;
+    var byX = !!m[3];
+    var out = [];
+    var i;
+    for (i = 0; i < inner.length; i++) {
+      var atom = inner[i];
+      var prod = byX ? mulPolyAtoms(atom, { kind: "x", coef: 1 }) : { kind: atom.kind, coef: atom.coef };
+      if (!prod) return null;
+      prod.coef *= k;
+      if (!near0(prod.coef)) out.push(prod);
+    }
+    if (!out.length) return "0";
+    return formatTermList(out);
+  }
+
+  function hasOtherParensBesideSquares(text) {
+    var s = normFactorText(text).replace(/\([^()]+\)\^2/g, "#");
+    return hasFoilParens(s) || hasXAfterParens(s) || hasExpandableParens(s);
+  }
+
+  function expandOneParenLayer(text) {
+    var s = normFactorText(text);
+    var parts = s.split("=");
+    if (parts.length !== 2) return text;
+    if (hasSquaredParens(s)) {
+      return expandSquareKeepOuterSide(parts[0]) + "=" + expandSquareKeepOuterSide(parts[1]);
+    }
+    if (hasXAfterParens(s)) return moveXBeforeParensEq(s);
+    if (hasFoilParens(s)) {
+      return expandFoilKeepOuterSide(parts[0]) + "=" + expandFoilKeepOuterSide(parts[1]);
+    }
+    var L = expandDistributeSide(parts[0]);
+    var R = expandDistributeSide(parts[1]);
+    if (L == null || R == null) return text;
+    return L + "=" + R;
+  }
+
+  function mapSignedSideTerms(side, eachTerm) {
     var terms = splitSignedTerms(side);
     if (!terms.length) return "0";
     var parts = [];
     var i;
     for (i = 0; i < terms.length; i++) {
-      var term = terms[i];
-      if (!hasExpandableParens(term)) {
-        parts.push(term.charAt(0) === "+" ? term.slice(1) : term);
-        continue;
-      }
-      var p = parseQuadSide(term);
-      if (!p) return side;
-      parts.push(formatSide(p.a, p.b, p.c));
+      var piece = eachTerm(terms[i]);
+      if (piece == null) return null;
+      parts.push(piece.charAt(0) === "+" ? piece.slice(1) : piece);
     }
     var s = parts[0] || "0";
     for (i = 1; i < parts.length; i++) {
-      var piece = parts[i];
-      if (!piece || piece === "0") continue;
-      if (piece.charAt(0) === "-") s += piece;
-      else s += "+" + piece;
+      var next = parts[i];
+      if (!next || next === "0") continue;
+      if (next.charAt(0) === "-") s += next;
+      else s += "+" + next;
     }
     return s;
   }
 
+  function expandFoilKeepOuterSide(side) {
+    return mapSignedSideTerms(side, function (term) {
+      var foil = expandFoilTerm(term);
+      if (foil) return foil;
+      return term.charAt(0) === "+" ? term.slice(1) : term;
+    });
+  }
+
+  function expandDistributeSide(side) {
+    return mapSignedSideTerms(side, function (term) {
+      if (!hasExpandableParens(term)) {
+        return term.charAt(0) === "+" ? term.slice(1) : term;
+      }
+      var dist = expandDistributeTerm(term);
+      if (dist) return dist;
+      var p = parseQuadSide(term);
+      if (!p) return null;
+      return formatSide(p.a, p.b, p.c);
+    });
+  }
+
+  function expandSideTerms(side) {
+    if (hasFoilParens(side)) return expandFoilKeepOuterSide(side) || side;
+    var dist = expandDistributeSide(side);
+    return dist == null ? side : dist;
+  }
+
   function expandParensEq(text) {
     var s = normFactorText(text);
-    var parts = s.split("=");
-    if (parts.length !== 2) return text;
-    return expandSideTerms(parts[0]) + "=" + expandSideTerms(parts[1]);
+    if (s.split("=").length !== 2) return text;
+    var withSquare = hasSquaredParens(s);
+    var nxt = expandOneParenLayer(s);
+    if (!withSquare || !hasOtherParensBesideSquares(s)) return nxt;
+    var guard = 0;
+    while (guard < 8 && (hasFoilParens(nxt) || hasXAfterParens(nxt) || hasExpandableParens(nxt))) {
+      guard += 1;
+      var more = expandOneParenLayer(nxt);
+      if (normFactorText(more) === normFactorText(nxt)) break;
+      nxt = more;
+    }
+    return nxt;
   }
 
   function parseABC(text) {
@@ -1793,6 +1953,7 @@
     var p = parseABC(text);
     if (!p) return false;
     if (hasUncombined(text)) return false;
+    if (hasSquaredParens(text) || hasExpandableParens(text) || hasXAfterParens(text)) return false;
     return sideZero(p.L) || sideZero(p.R);
   }
 
@@ -2078,7 +2239,7 @@
   }
 
   function mixedError(pack, nextP) {
-    if (!nextP) return "לא הצלחתי לקרוא את המשוואה. כתבו משוואה מלאה עם =.";
+    if (!nextP) return "לא הצלחתי לקרוא את המשוואה. כתבו משוואה מלאה עם סימן שווה.";
     if (!near0(pack.b) && near0(nextP.b) && !near0(nextP.a)) {
       return "נראה שהשמטתם את איבר ה־x. אחרי איסוף עדיין יש מקדם ל־x, אז אי אפשר לבודד רק x².";
     }
@@ -2107,9 +2268,33 @@
   function analyzeMixedStart(start) {
     var raw = parseABC(start);
     if (!raw) throw new Error("לא הצלחתי לקרוא את המשוואה הריבועית.");
-    var xMoved = hasXAfterParens(start) ? moveXBeforeParensEq(start) : start;
+    var xMoved =
+      hasSquaredParens(start) || hasFoilParens(start)
+        ? start
+        : hasXAfterParens(start)
+          ? moveXBeforeParensEq(start)
+          : start;
     var expandFrom = xMoved;
-    var expanded = hasExpandableParens(expandFrom) ? expandParensEq(expandFrom) : expandFrom;
+    var expanded = expandFrom;
+    var steps = [start];
+    if (normFactorText(xMoved) !== normFactorText(start)) steps.push(xMoved);
+    var guard = 0;
+    while (
+      guard < 10 &&
+      (hasSquaredParens(expanded) ||
+        hasFoilParens(expanded) ||
+        hasXAfterParens(expanded) ||
+        hasExpandableParens(expanded))
+    ) {
+      guard += 1;
+      var nxt;
+      if (hasSquaredParens(expanded) || hasFoilParens(expanded)) nxt = expandParensEq(expanded);
+      else if (hasXAfterParens(expanded)) nxt = moveXBeforeParensEq(expanded);
+      else nxt = expandParensEq(expanded);
+      if (normFactorText(nxt) === normFactorText(expanded)) break;
+      steps.push(nxt);
+      expanded = nxt;
+    }
     var body = expanded;
     var canon = canonicalABC(raw.a, raw.b, raw.c);
     var cls = classifyABC(canon);
@@ -2118,9 +2303,6 @@
     var gathered = null;
     var combinedSides = null;
     var moved = body;
-    var steps = [start];
-    if (normFactorText(xMoved) !== normFactorText(start)) steps.push(xMoved);
-    if (normFactorText(expanded) !== normFactorText(xMoved)) steps.push(expanded);
     var sqrtSeed = standard;
     if (sqrtSplit) {
       if (bothSidesLive(body) && !isX2LeftConstRight(body)) {
@@ -2227,13 +2409,22 @@
 
   function mixedHintFor(pack, eqText) {
     var cls = pack.classify;
+    if (hasSquaredParens(eqText)) {
+      if (hasXAfterParens(eqText) || hasOtherParensBesideSquares(eqText)) {
+        return "יש גם חזקה וגם סוגריים נוספים (למשל גורם מימין כמו (x+1)2). פתחו את החזקה בכפל מקוצר, ובאותו צעד העבירו את הגורם לשמאל ופתחו את שאר הסוגריים.";
+      }
+      return "פתחו את הסוגריים שבחזקה: כפל מקוצר, למשל (x−3)² = x²−6x+9, או פיצול לדו־איבר (x−3)(x−3) ואז פתיחה כמו קודם.";
+    }
+    if (hasFoilParens(eqText)) {
+      return "פתחו את הסוגריים: כופלים איבר באיבר — הראשון בסוגר הראשון בראשון ובשני של הסוגר השני, ואז האיבר השני בסוגר הראשון בשני איברי הסוגר השני. עדיין בלי לאחד, ואת המקדם שמחוץ לכפל משאירים בחוץ.";
+    }
     if (hasXAfterParens(eqText)) {
-      return "אם ה־x מימין לסוגריים, עדיף להעביר אותו לשמאל, למשל (x−5)x → x(x−5). אחר כך פותחים סוגריים.";
+      return "אם יש גורם מימין לסוגריים, העבירו אותו לשמאל, למשל (x−4)10 → 10(x−4). אחר כך פותחים סוגריים.";
     }
     if (hasExpandableParens(eqText)) {
-      return "פתחו את הסוגריים: כופלים את מה שמחוץ לסוגריים בכל איבר שבפנים. עדיין בלי לאחד איברים דומים.";
+      return "פתחו את הסוגריים: כופלים את המקדם שבחוץ בכל איבר שבפנים. עדיין בלי לאחד איברים דומים.";
     }
-    if (isSqrtSplit(pack)) {
+    if (isSqrtSplit(pack) && !isStandardZero(eqText)) {
       if (bothSidesLive(eqText) && !isX2LeftConstRight(eqText)) {
         return "אין איבר x (b = 0). העבירו את איברי x² לאגף שמאל ואת המספרים החופשיים לאגף ימין. כשמעבירים — מחליפים סימן, עדיין בלי לאחד.";
       }
@@ -2255,35 +2446,54 @@
     if (cls.kind === "linear") {
       return "המקדם של x² התאפס. זו משוואה ממעלה ראשונה — פתרו כמו משוואה רגילה.";
     }
-    if (cls.methods.sqrt && cls.methods.factor) {
-      return "אין איבר x ואין מספר חופשי. בודדו x², או הוציאו גורם, או לחצו «נוסחת שורשים».";
+    return mixedArrangedHint(eqText);
+  }
+
+  function mixedArrangedHint(eqText) {
+    var p = parseABC(eqText);
+    var b0 = p && near0(p.b);
+    var c0 = p && near0(p.c);
+    var always = "אפשר «נוסחת שורשים» או «md53»";
+    var extra = [];
+    if (b0) extra.push("שורש");
+    if (c0) extra.push("גורם משותף");
+    var opts = extra.length ? always + ". אפשר גם " + extra.join(" או ") : always;
+    if (isAbcOrder(eqText)) {
+      return "המשוואה מסודרת בצד אחד, ax²+bx+c=0. " + opts + ".";
     }
-    if (cls.methods.sqrt) {
-      return "אין איבר x (המקדם b = 0 אחרי איסוף). בודדו x² והוציאו שורש. אפשר גם ללחוץ «נוסחת שורשים». אם האגף השני שלילי — אין פתרון ממשי.";
-    }
-    if (cls.methods.factor) {
-      return "המספר החופשי 0 אחרי איסוף. הוציאו גורם משותף x (ואפשר גם מספר). אפשר גם ללחוץ «נוסחת שורשים».";
-    }
-    if (!isAbcOrder(eqText)) {
-      return "a, b, c כולם שונים מאפס. עדיף לסדר ל־ax²+bx+c=0 (קודם x², אחר כך x, ואז המספר), ואז ללחוץ «נוסחת שורשים».";
-    }
-    return "a, b, c כולם שונים מאפס. לחצו «נוסחת שורשים».";
+    return "הכל בצד אחד. עדיף לסדר קודם x², אחר כך x, ואז המספר. " + opts + ".";
   }
 
   function nextMixedStep(eqText, pack) {
     pack = pack || {};
+    if (hasSquaredParens(eqText)) {
+      return {
+        eq: expandParensEq(eqText),
+        hint: mixedHintFor(pack, eqText),
+        explain: hasOtherParensBesideSquares(eqText)
+          ? "פותחים (a±b)² בכפל מקוצר, ובאותו צעד גם את שאר הסוגריים במשוואה."
+          : "פותחים (a±b)² בכפל מקוצר, או מפצלים ל־(a±b)(a±b) וממשיכים כמו בסוגריים כפולים.",
+      };
+    }
+    if (hasFoilParens(eqText)) {
+      return {
+        eq: expandParensEq(eqText),
+        hint: mixedHintFor(pack, eqText),
+        explain: "פותחים סוגריים כפולים: כל איבר בסוגר הראשון בכל איבר בסוגר השני. מקדם שמחוץ לכפל נשאר בחוץ, בלי לאחד.",
+      };
+    }
     if (hasXAfterParens(eqText)) {
       return {
-        eq: pack.xMoved || moveXBeforeParensEq(eqText),
+        eq: moveXBeforeParensEq(eqText),
         hint: mixedHintFor(pack, eqText),
-        explain: "מעבירים את ה־x לשמאל הסוגריים, ואז פותחים.",
+        explain: "מעבירים את הגורם לשמאל הסוגריים, ואז פותחים.",
       };
     }
     if (hasExpandableParens(eqText)) {
       return {
-        eq: pack.expanded || expandParensEq(eqText),
+        eq: expandParensEq(eqText),
         hint: mixedHintFor(pack, eqText),
-        explain: "פותחים סוגריים: כופלים כל מקדם בכל האיברים שבתוך הסוגריים.",
+        explain: "פותחים סוגריים: כופלים את המקדם שבחוץ בכל איבר שבפנים, בלי לאחד.",
       };
     }
     if (isSqrtSplit(pack)) {
@@ -2400,13 +2610,16 @@
   function checkMixedTyped(prev, typed, pack) {
     var t = String(typed || "").trim();
     if (!t) return { ok: false, message: "כתבו את הצעד הבא." };
+    if (global.DoctematicaAlgebra && global.DoctematicaAlgebra.missingEqualsSign(t)) {
+      return { ok: false, message: "חסר סימן שווה" };
+    }
     if (normFactorText(prev) === normFactorText(t)) {
       return { ok: false, message: "זו אותה משוואה. כתבו צעד חדש." };
     }
     pack = pack || {};
     var cls = pack.classify || classifyABC(pack);
 
-    if (looksLikeProduct(t)) {
+    if (looksLikeProduct(t) && !hasFoilParens(prev) && !hasSquaredParens(prev)) {
       if (!cls.methods || !cls.methods.factor) {
         return {
           ok: false,
