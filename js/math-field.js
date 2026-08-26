@@ -7,6 +7,22 @@
     return v && typeof v === "object" && v.type === "sqrt";
   }
 
+  function isNrootNode(v) {
+    return v && typeof v === "object" && v.type === "nroot";
+  }
+
+  function isPowNode(v) {
+    return v && typeof v === "object" && v.type === "pow";
+  }
+
+  /** Plain "x^3" / "2^4" → pow node (for radicands that stored caret as text). */
+  function tryParsePowText(s) {
+    var t = String(s || "").replace(/\s+/g, "");
+    var m = t.match(/^([A-Za-z]|-?\d+(?:\.\d+)?)\^(\d+)$/);
+    if (!m) return null;
+    return { type: "pow", base: m[1], exp: m[2] };
+  }
+
   function grabFracNumerator(left) {
     var s = String(left || "");
     var alg = s.match(/((?:\d+(?:\.\d+)?)?[xy](?:\^2)?)$/i);
@@ -22,6 +38,37 @@
       }
     }
     return { left: rest, num: num };
+  }
+
+  /** Grab base for ^ : full (...), optional leading coeff, or letter/number. */
+  function grabPowBase(left) {
+    var s = String(left || "");
+    if (!s) return { left: "", base: "x" };
+
+    if (s.charAt(s.length - 1) === ")") {
+      var depth = 0;
+      var i;
+      for (i = s.length - 1; i >= 0; i--) {
+        var ch = s.charAt(i);
+        if (ch === ")") depth += 1;
+        else if (ch === "(") {
+          depth -= 1;
+          if (depth === 0) {
+            var start = i;
+            var before = s.slice(0, start);
+            var coef = before.match(/(\d+(?:\.\d+)?)$/);
+            if (coef) start = before.length - coef[1].length;
+            return { left: s.slice(0, start), base: s.slice(start) };
+          }
+        }
+      }
+    }
+
+    var atom = s.match(/([A-Za-z]|-?\d+(?:\.\d+)?)$/);
+    if (atom) {
+      return { left: s.slice(0, -atom[1].length), base: atom[1] };
+    }
+    return { left: s, base: "x" };
   }
 
   function MathField(host, actionsHost) {
@@ -69,7 +116,13 @@
       return;
     }
     if (node.type === "sqrt") {
-      if (isFracNode(node.rad)) this.collectSlots(node.rad, path.concat("rad"), out);
+      if (isFracNode(node.rad) || isPowNode(node.rad)) this.collectSlots(node.rad, path.concat("rad"), out);
+      else out.push({ path: path.concat("rad") });
+      return;
+    }
+    if (node.type === "nroot") {
+      out.push({ path: path.concat("index") });
+      if (isFracNode(node.rad) || isPowNode(node.rad)) this.collectSlots(node.rad, path.concat("rad"), out);
       else out.push({ path: path.concat("rad") });
       return;
     }
@@ -107,17 +160,35 @@
       if (/^-?\d+$/.test(n) && /^-?\d+$/.test(d) && d !== "0" && d !== "-0") return n + "/" + d;
       return "(" + n + ")/(" + d + ")";
     }
+    if (isPowNode(val)) {
+      var b = this.serializeSlot(val.base);
+      var e = this.serializeSlot(val.exp);
+      if (!e) e = "2";
+      if (/^[xy]$/i.test(b)) return b + "^" + e;
+      if (/^-?\d+(?:\.\d+)?$/.test(b)) return b + "^" + e;
+      if (/^\(.*\)$/.test(b)) return b + "^" + e;
+      return "(" + b + ")^" + e;
+    }
     return String(val || "").trim();
   };
 
   MathField.prototype.serializePart = function (part) {
     if (part.type === "text") return part.value || "";
     if (part.type === "sqrt") return "√(" + this.serializeSlot(part.rad) + ")";
+    if (part.type === "nroot") {
+      var idx = this.serializeSlot(part.index) || "3";
+      var radS = this.serializeSlot(part.rad);
+      if (idx === "3") return "∛(" + radS + ")";
+      if (idx === "4") return "∜(" + radS + ")";
+      return "√[" + idx + "](" + radS + ")";
+    }
     if (part.type === "pow") {
       var b = this.serializeSlot(part.base);
       var e = this.serializeSlot(part.exp);
-      if (/^[xy]$/i.test(b) && e === "2") return b + "^2";
+      if (!e) e = "2";
       if (/^[xy]$/i.test(b)) return b + "^" + e;
+      if (/^-?\d+(?:\.\d+)?$/.test(b)) return b + "^" + e;
+      if (/^\(.*\)$/.test(b)) return b + "^" + e;
       return "(" + b + ")^" + e;
     }
     if (part.type === "frac") return this.serializeSlot(part);
@@ -306,6 +377,67 @@
     this.focus();
   };
 
+  MathField.prototype.insertNroot = function () {
+    if (this.disabled) return;
+    var part = this.parts[this.focusPart];
+    if (part && part.type !== "text") return;
+    var split = this.splitCurrentText();
+    var rad = "";
+    var grabbed = split.left.match(/(-?\d+(?:\.\d+)?|[xy](?:\^[2-9])?)$/i);
+    if (grabbed) {
+      rad = grabbed[1];
+      split.left = split.left.slice(0, -rad.length);
+    }
+    var radNode = tryParsePowText(rad) || rad;
+    this.insertWithSplit(split, { type: "nroot", index: "3", rad: radNode });
+    this.normalize();
+    this.focusPath = ["index"];
+    this.render();
+    this.focus();
+  };
+
+  MathField.prototype.nestPowInSlot = function () {
+    this.readInputs();
+    var part = this.parts[this.focusPart];
+    if (!part || part.type === "text") return false;
+    var path = this.focusPath.slice();
+    // אינדקס של שורש-n: חזקה שייכת לתוך השורש, לא למעלה
+    if (part.type === "nroot" && path[0] === "index") {
+      path = ["rad"];
+      this.focusPath = ["rad"];
+    }
+    var parentPath = path.slice(0, -1);
+    var last = path[path.length - 1];
+    if (parentPath.length && isPowNode(this.getAt(part, parentPath))) {
+      if (last === "base") {
+        this.focusPath = parentPath.concat("exp");
+        this.render();
+        this.focus();
+        return true;
+      }
+      return true;
+    }
+    var cur = this.getAt(part, path);
+    if (isFracNode(cur) || isPowNode(cur) || (cur != null && typeof cur === "object")) return false;
+    var value = String(cur || "");
+    var el = this.host.querySelector(
+      'input[data-part="' + this.focusPart + '"][data-path="' + this.pathKey(path) + '"]'
+    );
+    var cursor = el && el.selectionStart != null ? el.selectionStart : value.length;
+    var left = value.slice(0, cursor);
+    var right = value.slice(cursor);
+    var grabbed = grabPowBase(left);
+    var base = grabbed.base;
+    var remLeft = grabbed.left;
+    if (remLeft || right) base = remLeft + base + right;
+    this.setAt(part, path, { type: "pow", base: base, exp: "2" });
+    this.focusPath = path.concat("exp");
+    this.normalize();
+    this.render();
+    this.focus();
+    return true;
+  };
+
   MathField.prototype.insertChars = function (ch) {
     if (this.disabled) return;
     this.readInputs();
@@ -338,17 +470,13 @@
     if (this.disabled) return;
     var part = this.parts[this.focusPart];
     if (!part || part.type !== "text") {
-      this.insertChars("^");
+      if (this.nestPowInSlot()) return;
       return;
     }
     var split = this.splitCurrentText();
-    var base = "x";
-    var grabbed = split.left.match(/([A-Za-z]|\)|\d+(?:\.\d+)?)$/);
-    if (grabbed) {
-      base = grabbed[1];
-      split.left = split.left.slice(0, -base.length);
-    }
-    this.insertWithSplit(split, { type: "pow", base: base, exp: "2" });
+    var grabbed = grabPowBase(split.left);
+    split.left = grabbed.left;
+    this.insertWithSplit(split, { type: "pow", base: grabbed.base, exp: "2" });
     this.normalize();
     this.focusPath = ["exp"];
     this.render();
@@ -600,6 +728,30 @@
     return input;
   };
 
+  MathField.prototype.renderPowNode = function (node, partIndex, path) {
+    var pow = document.createElement("span");
+    pow.className = "ml-pow";
+    pow.appendChild(this.makeInput(partIndex, path.concat("base"), node.base, "ml-base"));
+    var exp = this.makeInput(partIndex, path.concat("exp"), node.exp, "ml-exp");
+    exp.placeholder = "n";
+    pow.appendChild(exp);
+    return pow;
+  };
+
+  MathField.prototype.renderRadContent = function (rad, partIndex, path) {
+    if (typeof rad === "string" || rad == null) {
+      var asPow = tryParsePowText(rad);
+      if (asPow) {
+        var owner = this.parts[partIndex];
+        if (owner && path.length === 1 && path[0] === "rad") owner.rad = asPow;
+        return this.renderPowNode(asPow, partIndex, path);
+      }
+    }
+    if (isPowNode(rad)) return this.renderPowNode(rad, partIndex, path);
+    if (isFracNode(rad)) return this.renderFracNode(rad, partIndex, path);
+    return this.makeInput(partIndex, path, rad, "ml-slot");
+  };
+
   MathField.prototype.render = function () {
     this.host.innerHTML = "";
     this.host.setAttribute("dir", "ltr");
@@ -624,23 +776,30 @@
         sqrt.appendChild(sign);
         var rad = document.createElement("span");
         rad.className = "ml-rad";
-        if (isFracNode(part.rad)) {
-          rad.appendChild(self.renderFracNode(part.rad, index, ["rad"]));
-        } else {
-          rad.appendChild(self.makeInput(index, ["rad"], part.rad, "ml-slot"));
-        }
+        rad.appendChild(self.renderRadContent(part.rad, index, ["rad"]));
         sqrt.appendChild(rad);
         run.appendChild(sqrt);
         return;
       }
+      if (part.type === "nroot") {
+        var nroot = document.createElement("span");
+        nroot.className = "ml-sqrt ml-nroot";
+        var idxEl = self.makeInput(index, ["index"], part.index, "ml-nroot-idx");
+        idxEl.placeholder = "n";
+        nroot.appendChild(idxEl);
+        var nSign = document.createElement("span");
+        nSign.className = "ml-rad-sign";
+        nSign.textContent = "√";
+        nroot.appendChild(nSign);
+        var nRad = document.createElement("span");
+        nRad.className = "ml-rad";
+        nRad.appendChild(self.renderRadContent(part.rad, index, ["rad"]));
+        nroot.appendChild(nRad);
+        run.appendChild(nroot);
+        return;
+      }
       if (part.type === "pow") {
-        var pow = document.createElement("span");
-        pow.className = "ml-pow";
-        pow.appendChild(self.makeInput(index, ["base"], part.base, "ml-base"));
-        var exp = self.makeInput(index, ["exp"], part.exp, "ml-exp");
-        exp.placeholder = "n";
-        pow.appendChild(exp);
-        run.appendChild(pow);
+        run.appendChild(self.renderPowNode(part, index, []));
         return;
       }
       if (part.type === "mixed") {
@@ -678,10 +837,24 @@
         },
       },
       {
+        label: "שורש n",
+        icon: '<span class="nroot-icon" aria-hidden="true"><sup>n</sup>√</span>',
+        run: function () {
+          self.insertNroot();
+        },
+      },
+      {
         label: "±",
         icon: '<span class="pm-icon" aria-hidden="true">±</span>',
         run: function () {
           self.insertChars("±");
+        },
+      },
+      {
+        label: "שונה",
+        icon: '<span class="neq-icon" aria-hidden="true">≠</span>',
+        run: function () {
+          self.insertChars("≠");
         },
       },
       {

@@ -70,6 +70,85 @@
     return false;
   }
 
+  /** Match algebraic numerator / denominator as one stacked fraction. */
+  function matchBalancedParen(s, start) {
+    if (s.charAt(start) !== "(") return null;
+    var depth = 0;
+    var i;
+    for (i = start; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (ch === "(") depth += 1;
+      else if (ch === ")") {
+        depth -= 1;
+        if (depth === 0) return s.slice(start, i + 1);
+      }
+    }
+    return null;
+  }
+
+  function matchSlashDen(s, from) {
+    var m = s.slice(from).match(/^\s*\/\s*/);
+    if (!m) return null;
+    var p = from + m[0].length;
+    var start = p;
+    if (s.charAt(p) === "+" || s.charAt(p) === "-" || s.charAt(p) === "−") p += 1;
+    while (p < s.length && isNumChar(s.charAt(p))) p += 1;
+    if (s.charAt(p) === "(") {
+      while (s.charAt(p) === "(") {
+        var par = matchBalancedParen(s, p);
+        if (!par) return null;
+        p += par.length;
+      }
+    } else if (/^[xy]/i.test(s.charAt(p))) {
+      p += 1;
+      if (s.slice(p, p + 2) === "^2" || s.charAt(p) === "²") {
+        p += s.charAt(p) === "²" ? 1 : 2;
+      }
+    } else if (p === start || (p === start + 1 && /[+\-−]/.test(s.charAt(start)) && !isNumChar(s.charAt(start + 1)))) {
+      return null;
+    }
+    var den = s.slice(start, p);
+    if (!den) return null;
+    if (/[.\dxy]/i.test(s.charAt(p))) return null;
+    return { consumed: p - from, den: den };
+  }
+
+  function matchAlgFrac(s, i) {
+    var j = i;
+    while (j < s.length && isNumChar(s.charAt(j))) j += 1;
+    var numEnd = -1;
+
+    if (s.charAt(j) === "(") {
+      var p1 = matchBalancedParen(s, j);
+      if (!p1) return null;
+      var k = j + p1.length;
+      if (s.charAt(k) === "(") {
+        var p2 = matchBalancedParen(s, k);
+        if (!p2) return null;
+        numEnd = k + p2.length;
+      } else if (s.slice(k, k + 2) === "^2" || s.charAt(k) === "²") {
+        numEnd = k + (s.charAt(k) === "²" ? 1 : 2);
+      } else {
+        numEnd = k;
+      }
+    } else if (/^[xy]/i.test(s.charAt(j))) {
+      var letterEnd = j + 1;
+      if (s.slice(letterEnd, letterEnd + 2) === "^2" || s.charAt(letterEnd) === "²") {
+        letterEnd += s.charAt(letterEnd) === "²" ? 1 : 2;
+      }
+      numEnd = letterEnd;
+    } else if (j > i) {
+      numEnd = j;
+    } else {
+      return null;
+    }
+
+    var slashDen = matchSlashDen(s, numEnd);
+    if (!slashDen) return null;
+    var full = s.slice(i, numEnd + slashDen.consumed);
+    return [full, s.slice(i, numEnd), slashDen.den];
+  }
+
   function sideToHTML(side) {
     var s = String(side);
     var out = "";
@@ -81,6 +160,22 @@
         i += mixed[0].length;
         continue;
       }
+      var nrootm =
+        s.slice(i).match(/^√\[(\d+)\]\(([^()]*)\)/) ||
+        s.slice(i).match(/^∛\(([^()]*)\)/) ||
+        s.slice(i).match(/^∜\(([^()]*)\)/);
+      if (nrootm) {
+        var nIdx = nrootm[2] != null ? nrootm[1] : s.charAt(i) === "∜" ? "4" : "3";
+        var nRad = nrootm[2] != null ? nrootm[2] : nrootm[1];
+        out +=
+          '<span class="m-sqrt m-nroot"><sup class="m-nroot-idx">' +
+          escapeHtml(nIdx) +
+          '</sup><span class="m-rad-sign">√</span><span class="m-rad">' +
+          sideToHTML(nRad) +
+          "</span></span>";
+        i += nrootm[0].length;
+        continue;
+      }
       var sqrtm = s.slice(i).match(/^√\(([^()]*)\)/) || s.slice(i).match(/^√(\d+(?:\.\d+)?)/);
       if (sqrtm) {
         out +=
@@ -90,24 +185,83 @@
         i += sqrtm[0].length;
         continue;
       }
-      var algFrac = s.slice(i).match(/^((\d+\([^()]+\)|\([^()]+\)|\d*[xy]|\d+))\s*\/\s*(\([^()]+\)|[−-]?\d+)(?![.\dxy])/i);
-      if (algFrac && algFrac[0].indexOf("/") !== -1) {
-        out += fracWrap(sideToHTML(unwrapParens(algFrac[1])), sideToHTML(unwrapParens(algFrac[3])));
+      var algFrac = matchAlgFrac(s, i);
+      if (algFrac) {
+        out += fracWrap(sideToHTML(unwrapParens(algFrac[1])), sideToHTML(unwrapParens(algFrac[2])));
         i += algFrac[0].length;
         continue;
       }
-      var pow = s.slice(i).match(/^((?:\(-?\d+\))|(?:-?\d+)|[xy])(\^2|²)/i);
+      var pow = s.slice(i).match(/^((?:\(-?\d+\))|(?:-?\d+)|[xy])(\^[2-6]|²|³|⁴|⁵|⁶)/i);
       if (pow) {
         var base = pow[1];
+        var expTok = pow[2];
+        var exp =
+          expTok === "^6" || expTok === "⁶"
+            ? "6"
+            : expTok === "^5" || expTok === "⁵"
+              ? "5"
+              : expTok === "^4" || expTok === "⁴"
+                ? "4"
+                : expTok === "^3" || expTok === "³"
+                  ? "3"
+                  : "2";
         var baseHtml;
         if (/^[xy]$/i.test(base)) {
           baseHtml = '<span class="m-x">' + escapeHtml(base) + "</span>";
         } else {
           baseHtml = sideToHTML(base);
         }
-        out += '<span class="m-pow">' + baseHtml + '<sup class="m-sup">2</sup></span>';
+        out += '<span class="m-pow">' + baseHtml + '<sup class="m-sup">' + exp + "</sup></span>";
         i += pow[0].length;
         continue;
+      }
+      var parenPow = s.slice(i).match(/^(\([^()]+\))(\^[2-6]|²|³|⁴|⁵|⁶)/);
+      if (parenPow) {
+        var pTok = parenPow[2];
+        var pExp =
+          pTok === "^6" || pTok === "⁶"
+            ? "6"
+            : pTok === "^5" || pTok === "⁵"
+              ? "5"
+              : pTok === "^4" || pTok === "⁴"
+                ? "4"
+                : pTok === "^3" || pTok === "³"
+                  ? "3"
+                  : "2";
+        out +=
+          '<span class="m-pow">' +
+          sideToHTML(parenPow[1]) +
+          '<sup class="m-sup">' +
+          pExp +
+          "</sup></span>";
+        i += parenPow[0].length;
+        continue;
+      }
+      // Balanced paren power: (…)^2 / (…)^3 when inner has nested parens
+      if (s.charAt(i) === "(") {
+        var bal = matchBalancedParen(s, i);
+        if (bal) {
+          var afterBal = i + bal.length;
+          var balExp = null;
+          var balPowLen = 0;
+          if (s.slice(afterBal, afterBal + 2) === "^3" || s.charAt(afterBal) === "³") {
+            balExp = "3";
+            balPowLen = s.charAt(afterBal) === "³" ? 1 : 2;
+          } else if (s.slice(afterBal, afterBal + 2) === "^2" || s.charAt(afterBal) === "²") {
+            balExp = "2";
+            balPowLen = s.charAt(afterBal) === "²" ? 1 : 2;
+          }
+          if (balExp) {
+            out +=
+              '<span class="m-pow">' +
+              sideToHTML(bal) +
+              '<sup class="m-sup">' +
+              balExp +
+              "</sup></span>";
+            i = afterBal + balPowLen;
+            continue;
+          }
+        }
       }
       var wrappedFrac = s.slice(i).match(/^\((-?\d+)\)\s*\/\s*\((-?\d+)\)/);
       if (wrappedFrac) {

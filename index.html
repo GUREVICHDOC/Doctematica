@@ -110,10 +110,12 @@
           <div class="solve-main">
             <p class="prompt" id="prompt">טוען שאלה…</p>
             <ol class="steps hidden" id="steps" aria-label="צעדי המשוואה"></ol>
+            <div id="lcd-guide" class="lcd-guide hidden"></div>
             <div id="factor-guide" class="factor-guide hidden"></div>
             <div id="sys-guide" class="sys-guide hidden"></div>
             <form id="answer-form">
               <label id="answer-label">התשובה שלך</label>
+              <div id="domain-guide" class="domain-guide hidden"></div>
               <div id="quad-guide" class="quad-guide hidden"></div>
               <div class="answer-row" id="answer-row">
                 <div id="math-wrap">
@@ -126,6 +128,9 @@
               <p class="hint" id="hint">אפשר לכתוב מספר שלם, שבר כמו 3/4, או עשרוני כמו 0.75</p>
             </form>
             <div class="actions" id="eq-actions">
+              <button type="button" class="ghost hidden" id="domain-btn">הצג תחום הצבה</button>
+              <button type="button" class="ghost hidden" id="split-domain-btn">פיצול תחום</button>
+              <button type="button" class="ghost hidden" id="lcd-btn">ביצוע מכנה משותף</button>
               <button type="button" class="ghost hidden" id="split-eqs-btn">חילוק למשוואות</button>
               <button type="button" class="ghost hidden" id="use-formula-btn">נוסחת שורשים</button>
               <button type="button" class="ghost hidden" id="md53-btn">md53</button>

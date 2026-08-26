@@ -48,6 +48,10 @@
       .replace(/¾/g, "(3/4)")
       .replace(/⅓/g, "(1/3)")
       .replace(/⅔/g, "(2/3)")
+      .replace(/⁶/g, "^6")
+      .replace(/⁵/g, "^5")
+      .replace(/⁴/g, "^4")
+      .replace(/³/g, "^3")
       .replace(/²/g, "^2")
       .replace(/[−–—]/g, "-")
       .replace(/[×·]/g, "*")
@@ -422,16 +426,36 @@
     if (missingEqualsSign(nextText)) {
       return { ok: false, message: "חסר סימן שווה" };
     }
+    var Teach = global.DoctematicaTeach;
+    if (
+      unknown !== "x2" &&
+      Teach &&
+      typeof Teach.eqHasVarDenom === "function" &&
+      (Teach.eqHasVarDenom(previousText) || Teach.eqHasVarDenom(nextText)) &&
+      typeof Teach.checkRationalStep === "function"
+    ) {
+      return Teach.checkRationalStep(previousText, nextText);
+    }
     var prev;
     var next;
     try {
       prev = parseEquation(previousText, parseOpts);
     } catch (err) {
+      if (Teach && typeof Teach.checkRationalStep === "function") {
+        try {
+          return Teach.checkRationalStep(previousText, nextText);
+        } catch (e2) {}
+      }
       return { ok: false, message: "המשוואה הקודמת לא ניתנת לקריאה: " + err.message };
     }
     try {
       next = parseEquation(nextText, parseOpts);
     } catch (err) {
+      if (Teach && typeof Teach.checkRationalStep === "function") {
+        try {
+          return Teach.checkRationalStep(previousText, nextText);
+        } catch (e2) {}
+      }
       return { ok: false, message: err.message };
     }
     if (!equivalent(prev, next)) {
@@ -509,6 +533,7 @@
     parseEquation: parseEquation,
     checkStep: checkStep,
     isSolved: isSolved,
+    solutionOf: solutionOf,
     equivalent: equivalent,
     formatNumber: formatNumber,
     asEquation: asEquation,

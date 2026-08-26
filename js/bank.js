@@ -389,7 +389,11 @@
     });
     var value = 0;
     try {
-      var eq = DoctematicaAlgebra.parseEquation(start);
+      var eqText =
+        global.DoctematicaTeach.eqHasVarDenom && global.DoctematicaTeach.eqHasVarDenom(start)
+          ? global.DoctematicaTeach.toClearedEquation(start)
+          : start;
+      var eq = DoctematicaAlgebra.parseEquation(eqText);
       var d = eq.left.a - eq.right.a;
       if (d) value = (eq.right.b - eq.left.b) / d;
     } catch (e) {}

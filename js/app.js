@@ -46,6 +46,11 @@
   var splitEqsBtn = document.getElementById("split-eqs-btn");
   var useFormulaBtn = document.getElementById("use-formula-btn");
   var md53Btn = document.getElementById("md53-btn");
+  var lcdBtn = document.getElementById("lcd-btn");
+  var domainBtn = document.getElementById("domain-btn");
+  var splitDomainBtn = document.getElementById("split-domain-btn");
+  var domainGuideEl = document.getElementById("domain-guide");
+  var lcdGuideEl = document.getElementById("lcd-guide");
 
   var state = {
     topic: "equations",
@@ -59,12 +64,67 @@
     streak: 0,
     history: [],
     mixed: { path: null },
+    lcd: null,
+    lcdMarks: {},
+    domain: null,
     stats: loadStats(),
   };
 
   function typedAnswer() {
+    if (domainPending() && domainMulti()) return readDomainCellTyped();
     if (isGuidedMode()) return mathField.serialize();
     return answerEl.value;
+  }
+
+  function readDomainCellTyped() {
+    if (!domainGuideEl || !state.domain) return "";
+    var idx = state.domain.activeBranch || 0;
+    var inp = domainGuideEl.querySelector('.domain-cell-input[data-domain-branch="' + idx + '"]');
+    return inp ? String(inp.value || "").trim() : "";
+  }
+
+  function insertAtInputCursor(input, text) {
+    if (!input) return;
+    var start = input.selectionStart != null ? input.selectionStart : input.value.length;
+    var end = input.selectionEnd != null ? input.selectionEnd : start;
+    var val = input.value;
+    input.value = val.slice(0, start) + text + val.slice(end);
+    var pos = start + text.length;
+    input.setSelectionRange(pos, pos);
+    input.focus();
+  }
+
+  function focusActiveDomainInput() {
+    if (!domainGuideEl) return;
+    var inp = domainGuideEl.querySelector(".domain-cell-input.is-active");
+    if (inp) inp.focus();
+  }
+
+  function wireDomainMathKeys() {
+    if (!mathKeysEl || state.domainKeysWired) return;
+    state.domainKeysWired = true;
+    mathKeysEl.addEventListener(
+      "click",
+      function (event) {
+        if (!domainPending() || !domainMulti()) return;
+        var btn = event.target.closest("button.math-action");
+        if (!btn) return;
+        var inp = domainGuideEl && domainGuideEl.querySelector(".domain-cell-input.is-active");
+        if (!inp) return;
+        var labelEl = btn.querySelector("span:last-child");
+        var label = labelEl ? labelEl.textContent : "";
+        if (label === "שונה") {
+          event.stopImmediatePropagation();
+          event.preventDefault();
+          insertAtInputCursor(inp, "≠");
+        } else if (label === "±") {
+          event.stopImmediatePropagation();
+          event.preventDefault();
+          insertAtInputCursor(inp, "±");
+        }
+      },
+      true
+    );
   }
 
   function loadStats() {
@@ -87,6 +147,10 @@
 
   function isSystemMode() {
     return state.topic === "systems-sub";
+  }
+
+  function isHighPowerTopic() {
+    return state.topic === "high-power";
   }
 
   function isQuadraticTopic() {
@@ -115,12 +179,23 @@
     );
   }
 
+  function isHighRootEqMode() {
+    var level = currentLevel();
+    return (
+      isHighPowerTopic() &&
+      !!level &&
+      level.mode === "high-root" &&
+      level.exercises &&
+      level.exercises.length > 0
+    );
+  }
+
   function isFactorEqMode() {
     var level = currentLevel();
     return (
-      isQuadraticTopic() &&
+      ((isQuadraticTopic() && level && level.mode === "quad-factor") ||
+        (isHighPowerTopic() && level && level.mode === "high-factor")) &&
       !!level &&
-      level.mode === "quad-factor" &&
       level.exercises &&
       level.exercises.length > 0
     );
@@ -150,11 +225,11 @@
   }
 
   function sqrtWorkActive() {
-    return isSqrtEqMode() || (isMixedEqMode() && mixedPath() === "sqrt");
+    return isSqrtEqMode() || isHighRootEqMode() || (isMixedEqMode() && mixedPath() === "sqrt");
   }
 
   function isEqWorkMode() {
-    return isStepMode() || isSqrtEqMode() || isFactorEqMode() || isMixedEqMode();
+    return isStepMode() || isSqrtEqMode() || isHighRootEqMode() || isFactorEqMode() || isMixedEqMode();
   }
 
   function emptyMixedState() {
@@ -167,18 +242,27 @@
       eqs: [],
       solved: [false, false],
       progress: { z: false, o: false },
+      sqrtProg: { pos: false, neg: false },
       trails: [[], []],
     };
   }
 
   function startFactorTrails(e1, e2) {
     var Q = DoctematicaQuadratic;
+    var pack = state.problem && state.problem.factor;
     state.factor = state.factor || emptyFactorState();
     state.factor.split = true;
     state.factor.eqs = [e1, e2];
     if (!state.factor.trails[0].length && !state.factor.trails[1].length) {
       state.factor.trails = [[e1], [e2]];
-      state.factor.solved = [Q.linearSolved(e1), Q.linearSolved(e2)];
+      if (pack && pack.high) {
+        state.factor.solved = [
+          !!(Q.linearSolved(e1) && /x\s*=\s*0/i.test(e1)),
+          false,
+        ];
+      } else {
+        state.factor.solved = [Q.linearSolved(e1), Q.linearSolved(e2)];
+      }
     }
   }
 
@@ -199,11 +283,26 @@
   function canSplitFactor() {
     if (!factorWorkActive() || state.locked || !state.problem || !state.problem.factor) return false;
     var st = state.factor || emptyFactorState();
-    if (st.split) return false;
     var last = lastHistoryEq();
     var Q = DoctematicaQuadratic;
+    var pack = state.problem.factor;
+    if (pack.high) {
+      if (!st.split) {
+        var hi = Q.parseHighProductEq(last);
+        return !!(hi && Q.highProductMatches(pack, hi));
+      }
+      var bi;
+      for (bi = 0; bi < 2; bi++) {
+        if (st.solved && st.solved[bi]) continue;
+        var beq = (st.eqs && st.eqs[bi]) || "";
+        var bp = Q.parseProductEq(beq) || Q.parseHighProductEq(beq);
+        if (bp && (bp.e2Kind === "linear" || (bp.f1 && bp.f2))) return true;
+      }
+      return false;
+    }
+    if (st.split) return false;
     var prod = Q.parseProductEq(last);
-    return !!(prod && Q.productMatches(state.problem.factor, prod));
+    return !!(prod && Q.productMatches(pack, prod));
   }
 
   function updateSplitBtn() {
@@ -228,6 +327,909 @@
     if (md53Btn) md53Btn.classList.toggle("hidden", !show);
   }
 
+  function emptyLcdState() {
+    return null;
+  }
+
+  function canUseLcdAssist() {
+    if ((!isStepMode() && !isMixedEqMode()) || state.locked || !state.problem) return false;
+    if (domainPending()) return false;
+    if (state.lcd && state.lcd.phase) return false;
+    if (state.lcdMarks && state.lcdMarks[state.history.length - 1]) return false;
+    if (!DoctematicaTeach || typeof DoctematicaTeach.analyzeLcdNeed !== "function") return false;
+    try {
+      return !!DoctematicaTeach.analyzeLcdNeed(lastHistoryEq());
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function domainPending() {
+    return !!(state.domain && state.domain.needed && !state.domain.done);
+  }
+
+  function domainItems() {
+    return (state.domain && state.domain.info && state.domain.info.items) || [];
+  }
+
+  function domainMulti() {
+    return domainItems().length > 1;
+  }
+
+  function emptyDomainProgress(info) {
+    return (info.items || []).map(function () {
+      return { phase: null, display: null, trail: [], itemIndex: null };
+    });
+  }
+
+  function domainProgressItems() {
+    if (!state.domain) return [];
+    if (!state.domain.progress) {
+      state.domain.progress = emptyDomainProgress(state.domain.info || { items: [] });
+    }
+    return state.domain.progress;
+  }
+
+  function domainAllSolved() {
+    var items = domainItems();
+    var prog = domainProgressItems();
+    var i;
+    for (i = 0; i < items.length; i++) {
+      if (!prog[i] || prog[i].phase !== "solved") return false;
+    }
+    return items.length > 0;
+  }
+
+  function nextUnsolvedDomainBranch() {
+    var items = domainItems();
+    var prog = domainProgressItems();
+    var i;
+    for (i = 0; i < items.length; i++) {
+      if (!prog[i] || prog[i].phase !== "solved") return i;
+    }
+    return -1;
+  }
+
+  function resetDomainState(eqText) {
+    state.domain = null;
+    if (!DoctematicaTeach || typeof DoctematicaTeach.analyzeDomain !== "function") return;
+    var info = null;
+    try {
+      info = DoctematicaTeach.analyzeDomain(eqText || (state.problem && state.problem.startEquation) || "");
+    } catch (err) {
+      info = null;
+    }
+    if (!info) return;
+    var multi = info.items && info.items.length > 1;
+    state.domain = {
+      needed: true,
+      done: false,
+      split: multi,
+      phase: null,
+      info: info,
+      display: info.display,
+      trail: [],
+      progress: emptyDomainProgress(info),
+      activeBranch: 0,
+      drafts: {},
+    };
+  }
+
+  function domainHistoryInSteps() {
+    if (!state.domain || !state.domain.needed || (!isStepMode() && !isMixedEqMode())) return false;
+    if (domainMulti()) {
+      if (state.domain.done) return true;
+      return domainProgressItems().some(function (p) {
+        return p && p.trail && p.trail.length;
+      });
+    }
+    return !!((state.domain.trail && state.domain.trail.length) || state.domain.done);
+  }
+
+  function renderDomainTrailFork(baseNum) {
+    var items = domainItems();
+    var prog = domainProgressItems();
+    var letters = ["א", "ב", "ג"];
+    var wrap = document.createElement("li");
+    wrap.className = "factor-fork domain-fork";
+    var i;
+    for (i = 0; i < items.length; i++) {
+      (function (branchIdx) {
+        var p = prog[branchIdx] || { phase: null, trail: [] };
+        var solved = p.phase === "solved";
+        var col = document.createElement("div");
+        col.className = "factor-branch" + (solved ? " is-done" : "");
+        var trail = p.trail && p.trail.length ? p.trail : [];
+        if (!trail.length) {
+          var empty = document.createElement("div");
+          empty.className = "factor-branch-step";
+          var n0 = document.createElement("span");
+          n0.className = "n";
+          n0.textContent = baseNum + ".0." + (letters[branchIdx] || String(branchIdx + 1));
+          var b0 = document.createElement("span");
+          b0.className = "domain-fork-empty";
+          b0.textContent = "…";
+          empty.appendChild(n0);
+          empty.appendChild(b0);
+          col.appendChild(empty);
+        } else {
+          trail.forEach(function (entry, k) {
+            var row = document.createElement("div");
+            var isLast = k === trail.length - 1;
+            row.className =
+              "factor-branch-step" + (solved && isLast ? " is-final" : "");
+            var n = document.createElement("span");
+            n.className = "n";
+            n.textContent = baseNum + "." + k + "." + (letters[branchIdx] || String(branchIdx + 1));
+            var body = document.createElement("span");
+            body.innerHTML = DoctematicaMath.toHTML(entry.display);
+            row.appendChild(n);
+            row.appendChild(body);
+            if (solved && isLast) {
+              var ok = document.createElement("span");
+              ok.className = "factor-eq-n";
+              ok.textContent = "✓";
+              row.appendChild(ok);
+            }
+            col.appendChild(row);
+          });
+        }
+        wrap.appendChild(col);
+      })(i);
+    }
+    return wrap;
+  }
+
+  function appendDomainHistorySteps(stepsEl, stepNumRef) {
+    if (!domainHistoryInSteps()) return;
+    if (domainMulti()) {
+      stepsEl.appendChild(renderDomainTrailFork(1));
+      return;
+    }
+    var trail = state.domain.trail || [];
+    if (!trail.length && state.domain.done) {
+      trail = [{ display: state.domain.display || state.domain.info.display }];
+    }
+    trail.forEach(function (entry, k) {
+      var row = document.createElement("li");
+      row.className = "domain-step-row";
+      var num = document.createElement("span");
+      num.className = "n";
+      if (k === 0) num.textContent = "תחום";
+      else {
+        stepNumRef.n += 1;
+        num.textContent = String(stepNumRef.n);
+      }
+      var body = document.createElement("span");
+      body.innerHTML = DoctematicaMath.toHTML(entry.display);
+      row.appendChild(num);
+      row.appendChild(body);
+      stepsEl.appendChild(row);
+    });
+  }
+
+  function snapshotDomainDrafts() {
+    if (!domainGuideEl || !state.domain) return;
+    state.domain.drafts = state.domain.drafts || {};
+    var nodes = domainGuideEl.querySelectorAll(".domain-cell-input");
+    var i;
+    for (i = 0; i < nodes.length; i++) {
+      state.domain.drafts[nodes[i].getAttribute("data-domain-branch")] = nodes[i].value;
+    }
+  }
+
+  function renderDomainGuide() {
+    if (!domainGuideEl) return;
+    snapshotDomainDrafts();
+    if (!domainPending() || !domainMulti()) {
+      domainGuideEl.classList.add("hidden");
+      domainGuideEl.innerHTML = "";
+      if (mathWrap) mathWrap.classList.remove("hidden");
+      return;
+    }
+    wireDomainMathKeys();
+    domainGuideEl.classList.remove("hidden");
+    if (mathWrap) mathWrap.classList.add("hidden");
+    var items = domainItems();
+    var prog = domainProgressItems();
+    var drafts = state.domain.drafts || {};
+    var letters = ["א", "ב", "ג"];
+    domainGuideEl.innerHTML = "";
+    var cells = document.createElement("div");
+    cells.className = "domain-cells";
+    var i;
+    for (i = 0; i < items.length; i++) {
+      (function (branchIdx) {
+        var p = prog[branchIdx] || { phase: null, trail: [] };
+        var solved = p.phase === "solved";
+        var active = state.domain.activeBranch === branchIdx;
+        var wrap = document.createElement("div");
+        wrap.className =
+          "domain-cell-wrap" + (solved ? " is-done" : "") + (active && !solved ? " is-active" : "");
+        wrap.setAttribute("data-domain-branch", String(branchIdx));
+
+        var head = document.createElement("div");
+        head.className = "domain-cell-head";
+        var tag = document.createElement("span");
+        tag.className = "domain-cell-tag";
+        tag.textContent = letters[branchIdx] || String(branchIdx + 1);
+        head.appendChild(tag);
+        if (solved) {
+          var okHead = document.createElement("span");
+          okHead.className = "domain-cell-ok";
+          okHead.textContent = "✓";
+          head.appendChild(okHead);
+        }
+        wrap.appendChild(head);
+
+        var trail = p.trail && p.trail.length ? p.trail : [];
+        trail.forEach(function (entry) {
+          var chip = document.createElement("div");
+          chip.className = "domain-cell-chip";
+          chip.innerHTML = DoctematicaMath.toHTML(entry.display);
+          wrap.appendChild(chip);
+        });
+
+        if (!solved) {
+          var inp = document.createElement("input");
+          inp.type = "text";
+          inp.className = "domain-cell-input" + (active ? " is-active" : "");
+          inp.setAttribute("data-domain-branch", String(branchIdx));
+          inp.dir = "ltr";
+          inp.autocomplete = "off";
+          inp.spellcheck = false;
+          inp.value = drafts[String(branchIdx)] || "";
+          inp.addEventListener("focus", function () {
+            if (state.domain.activeBranch === branchIdx) return;
+            snapshotDomainDrafts();
+            state.domain.activeBranch = branchIdx;
+            renderDomainGuide();
+            setModeUi();
+          });
+          inp.addEventListener("keydown", function (event) {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            state.domain.activeBranch = branchIdx;
+            tryApplyDomainTyped(String(inp.value || "").trim());
+          });
+          wrap.addEventListener("click", function (event) {
+            if (event.target === inp) return;
+            snapshotDomainDrafts();
+            state.domain.activeBranch = branchIdx;
+            renderDomainGuide();
+            focusActiveDomainInput();
+          });
+          wrap.appendChild(inp);
+        }
+        cells.appendChild(wrap);
+      })(i);
+    }
+    domainGuideEl.appendChild(cells);
+    focusActiveDomainInput();
+  }
+
+  function updateDomainBtn() {
+    if (!domainBtn) return;
+    domainBtn.classList.toggle("hidden", !domainPending() || state.locked);
+    if (splitDomainBtn) splitDomainBtn.classList.add("hidden");
+  }
+
+  function appendDomainTrail(text, parts) {
+    if (!state.domain) return;
+    state.domain.trail = state.domain.trail || [];
+    state.domain.trail.push({
+      display: text,
+      parts: parts || null,
+    });
+  }
+
+  function applyDomainDone(display, opts) {
+    opts = opts || {};
+    if (!state.domain) return;
+    state.domain.done = true;
+    state.domain.phase = "solved";
+    state.domain.display = display || state.domain.info.display;
+    if (!opts.skipTrail) {
+      var already = (state.domain.trail || []).some(function (t) {
+        return t.display === state.domain.display;
+      });
+      if (!already) {
+        appendDomainTrail(state.domain.display, state.domain.info.parts);
+      }
+    }
+    updateDomainBtn();
+    renderDomainGuide();
+    renderSteps();
+    setModeUi();
+    updateLcdBtn();
+    mathField.clear();
+    showFeedback(
+      true,
+      opts.message ||
+        "<strong>תחום הצבה:</strong> " +
+          state.domain.display +
+          ". עכשיו פתרו את המשוואה (אפשר מכנה משותף).",
+      "tip"
+    );
+    mathField.focus();
+  }
+
+  function applyDomainRaw(display, parts, message) {
+    if (!state.domain) return;
+    state.domain.phase = "work";
+    state.domain.rawDisplay = display;
+    if (!domainMulti()) {
+      var last = (state.domain.trail || [])[state.domain.trail.length - 1];
+      if (!last || last.display !== display) appendDomainTrail(display, parts);
+    }
+    renderDomainGuide();
+    renderSteps();
+    setModeUi();
+    updateDomainBtn();
+    mathField.clear();
+    showFeedback(true, message || "עכשיו פשטו ל־x≠…", "tip");
+    if (domainMulti()) focusActiveDomainInput();
+    else mathField.focus();
+  }
+
+  function applyDomainItemResult(res) {
+    if (!state.domain || res.itemIndex == null) return;
+    state.domain.progress = res.progressItems || state.domain.progress;
+    var idx = res.itemIndex;
+    if (res.nextBranch != null && res.nextBranch >= 0) {
+      state.domain.activeBranch = res.nextBranch;
+    } else if (state.domain.split) {
+      var n = nextUnsolvedDomainBranch();
+      if (n >= 0) state.domain.activeBranch = n;
+    }
+    if (state.domain.drafts) delete state.domain.drafts[String(idx)];
+    if (domainGuideEl) {
+      var live = domainGuideEl.querySelector('.domain-cell-input[data-domain-branch="' + idx + '"]');
+      if (live) live.value = "";
+    }
+    renderDomainGuide();
+    renderSteps();
+    setModeUi();
+    updateDomainBtn();
+    if (!domainMulti()) mathField.clear();
+    if (res.done) {
+      var parts = domainItems().map(function (it, i) {
+        var p = domainProgressItems()[i];
+        return (p && p.display) || it.solvedPart;
+      });
+      state.domain.trail = [
+        {
+          display: res.display || state.domain.info.display,
+          parts: parts,
+        },
+      ];
+      applyDomainDone(res.display || state.domain.info.display, {
+        skipTrail: true,
+        message: "<strong>נכון.</strong> תחום הצבה: " + (res.display || state.domain.info.display) + ".",
+      });
+      return;
+    }
+    showFeedback(true, res.message || "המשיכו.", "tip");
+    if (domainMulti()) focusActiveDomainInput();
+    else mathField.focus();
+  }
+
+  function fillDomainFromButton() {
+    if (!domainPending()) return;
+    if (domainMulti()) {
+      var items = domainItems();
+      var prog = domainProgressItems();
+      var i;
+      for (i = 0; i < items.length; i++) {
+        prog[i] = {
+          phase: "solved",
+          display: items[i].solvedPart,
+          itemIndex: i,
+          trail: [{ display: items[i].solvedPart }],
+        };
+      }
+      state.domain.progress = prog;
+      applyDomainDone(state.domain.info.display, {
+        message:
+          "<strong>תחום הצבה:</strong> " +
+          state.domain.info.display +
+          ". עכשיו פתרו את המשוואה.",
+      });
+      return;
+    }
+    if (state.domain.phase === "raw") {
+      applyDomainDone(state.domain.info.display, {
+        message:
+          "<strong>תחום הצבה:</strong> " +
+          state.domain.info.display +
+          ". עכשיו פתרו את המשוואה.",
+      });
+      return;
+    }
+    applyDomainDone(state.domain.info.display, {
+      message:
+        "<strong>תחום הצבה:</strong> " +
+        state.domain.info.display +
+        ". עכשיו פתרו את המשוואה.",
+    });
+  }
+
+  function tryApplyDomainTyped(typed) {
+    if (!domainPending()) return false;
+    if (!typed) {
+      showFeedback(
+        false,
+        "<strong>עוד לא.</strong> רשמו תחום הצבה (למשל " +
+          ((state.domain.info && state.domain.info.rawDisplay) || "x+2≠0") +
+          " ואז x≠…), או לחצו «הצג תחום הצבה»."
+      );
+      return true;
+    }
+    state.stats.try += 1;
+    saveStats();
+    renderStats();
+    var eq = (state.problem && state.problem.startEquation) || lastHistoryEq();
+    var res;
+    var trail = (state.domain && state.domain.trail) || [];
+    if (domainMulti()) {
+      var br = state.domain.activeBranch || 0;
+      res = DoctematicaTeach.checkDomainProgress(
+        eq,
+        typed,
+        {
+          items: domainProgressItems(),
+          split: true,
+          activeBranch: br,
+        },
+        {}
+      );
+    } else {
+      res = DoctematicaTeach.checkDomain(eq, typed, {
+        previous:
+          trail.length
+            ? trail[trail.length - 1].display
+            : (state.domain.info.items && state.domain.info.items[0] && state.domain.info.items[0].rawPart) ||
+              state.domain.info.rawDisplay,
+        started: trail.length > 0,
+      });
+    }
+    if (!res.ok) {
+      showFeedback(false, "<strong>עוד לא.</strong> " + res.message);
+      return true;
+    }
+    if (res.partial || (res.progressItems && res.itemIndex != null)) {
+      applyDomainItemResult(res);
+      return true;
+    }
+    if (res.done) {
+      applyDomainDone(res.display || state.domain.info.display, {
+        message: "<strong>נכון.</strong> תחום הצבה: " + (res.display || state.domain.info.display) + ".",
+      });
+      return true;
+    }
+    if (res.phase === "raw" || res.phase === "work") {
+      applyDomainRaw(res.display, res.parts, res.message);
+      return true;
+    }
+    applyDomainDone(res.display || state.domain.info.display, {
+      message: "<strong>נכון.</strong> תחום הצבה: " + (res.display || state.domain.info.display) + ".",
+    });
+    return true;
+  }
+
+  function updateLcdBtn() {
+    if (!lcdBtn) return;
+    lcdBtn.classList.toggle("hidden", !canUseLcdAssist());
+  }
+
+  function clearLcdAssist() {
+    state.lcd = null;
+    renderLcdGuide();
+    updateLcdBtn();
+  }
+
+  function startLcdAssist() {
+    var info = DoctematicaTeach.analyzeLcdNeed(lastHistoryEq());
+    if (!info) {
+      showFeedback(false, "<strong>עוד לא.</strong> כרגע אין צורך במכנה משותף.");
+      return;
+    }
+    state.lcd = { phase: "ask", info: info, lcd: null, got: [] };
+    renderLcdGuide();
+    updateLcdBtn();
+    showFeedback(
+      true,
+      "<strong>מכנה משותף.</strong> רשמו את המכנה המשותף המצומצם ביותר, ואז מעל כל איבר — בכמה מכפילים.",
+      "tip"
+    );
+  }
+
+  function lcdTermSignParts(text) {
+    var raw = String(text || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "");
+    var sign = "+";
+    if (raw.charAt(0) === "-") {
+      sign = "-";
+      raw = raw.slice(1);
+    } else if (raw.charAt(0) === "+") {
+      raw = raw.slice(1);
+    }
+    return { sign: sign, body: raw || "0" };
+  }
+
+  function fitLcdMulEl(el) {
+    if (!el) return;
+    var text = el.tagName === "INPUT" ? String(el.value || "") : String(el.textContent || "");
+    var probe = text || "x";
+    var mirror = document.createElement("span");
+    mirror.className = "lcd-mul-measure";
+    mirror.textContent = probe;
+    var cs = window.getComputedStyle(el);
+    var eq = el.closest ? el.closest(".lcd-eq") : null;
+    var eqCs = eq ? window.getComputedStyle(eq) : null;
+    mirror.style.fontFamily = cs.fontFamily || '"Segoe Print", "Comic Sans MS", "Frank Ruhl Libre", cursive';
+    mirror.style.fontWeight = cs.fontWeight || "700";
+    mirror.style.fontSize = cs.fontSize && cs.fontSize !== "0px" ? cs.fontSize : eqCs ? "0.72em" : "0.95rem";
+    if (eqCs && (!cs.fontSize || cs.fontSize === "0px")) {
+      mirror.style.fontSize = "calc(" + eqCs.fontSize + " * 0.72)";
+    }
+    mirror.style.letterSpacing = cs.letterSpacing;
+    mirror.style.padding = "0 3px";
+    mirror.style.border = "0";
+    mirror.style.visibility = "hidden";
+    mirror.style.position = "absolute";
+    mirror.style.left = "-9999px";
+    mirror.style.whiteSpace = "nowrap";
+    if (eq) eq.appendChild(mirror);
+    else document.body.appendChild(mirror);
+    var w = Math.ceil(mirror.getBoundingClientRect().width) + 6;
+    mirror.parentNode.removeChild(mirror);
+    el.style.width = Math.max(w, 24) + "px";
+  }
+
+  function wireLcdMulFit(el) {
+    if (!el) return;
+    fitLcdMulEl(el);
+    if (el.tagName !== "INPUT" || el._lcdFitWired) return;
+    el._lcdFitWired = true;
+    el.addEventListener("input", function () {
+      fitLcdMulEl(el);
+    });
+  }
+
+  function refitLcdMuls(root) {
+    if (!root) return;
+    var nodes = root.querySelectorAll(".lcd-mul");
+    var i;
+    for (i = 0; i < nodes.length; i++) fitLcdMulEl(nodes[i]);
+  }
+
+  function renderLcdTermChip(term, index, gotOk, opts) {
+    opts = opts || {};
+    var wrap = document.createElement("span");
+    wrap.className = "lcd-term";
+    var mulVal = opts.mul != null ? opts.mul : term.mul;
+    if (opts.readonly) {
+      var hat = document.createElement("span");
+      hat.className = "lcd-mul is-ok lcd-mul-view";
+      hat.textContent = String(mulVal);
+      wrap.appendChild(hat);
+      wireLcdMulFit(hat);
+    } else {
+      var inp = document.createElement("input");
+      inp.type = "text";
+      inp.className = "lcd-mul" + (gotOk ? " is-ok" : "");
+      inp.setAttribute("data-lcd-mul", String(index));
+      inp.setAttribute("aria-label", "מכפיל לאיבר " + (index + 1));
+      inp.inputMode = "text";
+      inp.autocomplete = "off";
+      if (gotOk) {
+        inp.value = String(mulVal);
+        inp.disabled = true;
+      }
+      wrap.appendChild(inp);
+      wireLcdMulFit(inp);
+    }
+    var body = document.createElement("span");
+    body.className = "lcd-term-body";
+    var display = opts.bodyText != null ? opts.bodyText : term.text;
+    body.innerHTML = DoctematicaMath.toHTML(display);
+    wrap.appendChild(body);
+    return wrap;
+  }
+
+  function appendLcdSide(eqEl, terms, startIndex, got, opts) {
+    opts = opts || {};
+    var i;
+    for (i = 0; i < terms.length; i++) {
+      var term = terms[i];
+      var parts = lcdTermSignParts(term.text);
+      if (i > 0 || parts.sign === "-") {
+        var op = document.createElement("span");
+        op.className = "lcd-op";
+        op.textContent = parts.sign === "-" ? "−" : "+";
+        eqEl.appendChild(op);
+      }
+      var mulOverride =
+        opts.muls && opts.muls[startIndex + i] != null ? opts.muls[startIndex + i] : null;
+      eqEl.appendChild(
+        renderLcdTermChip(term, startIndex + i, !!(got && got[startIndex + i]), {
+          readonly: !!opts.readonly,
+          mul: mulOverride != null ? mulOverride : term.mul,
+          bodyText: parts.body,
+        })
+      );
+    }
+  }
+
+  function buildLcdEqView(mark) {
+    var eqEl = document.createElement("div");
+    eqEl.className = "lcd-eq lcd-eq-step";
+    var terms = mark.terms || [];
+    var leftN = mark.leftN || 0;
+    var muls = mark.muls || [];
+    appendLcdSide(eqEl, terms.slice(0, leftN), 0, null, { readonly: true, muls: muls });
+    var eqSign = document.createElement("span");
+    eqSign.className = "lcd-op";
+    eqSign.textContent = "=";
+    eqEl.appendChild(eqSign);
+    appendLcdSide(eqEl, terms.slice(leftN), leftN, null, { readonly: true, muls: muls });
+    return eqEl;
+  }
+
+  function renderLcdGuide() {
+    if (!lcdGuideEl) return;
+    lcdGuideEl.innerHTML = "";
+    if (state.lcd && state.lcd.phase === "ask") {
+      lcdGuideEl.classList.remove("hidden");
+      var title = document.createElement("p");
+      title.className = "lcd-guide-title";
+      title.textContent = "רשמו את המכנה המשותף (המצומצם ביותר), ואז Enter או בדיקה.";
+      lcdGuideEl.appendChild(title);
+      var ask = document.createElement("div");
+      ask.className = "lcd-ask";
+      ask.innerHTML =
+        '<label>מכנה משותף <input type="text" id="lcd-value" inputmode="numeric" autocomplete="off" aria-label="מכנה משותף" /></label>';
+      lcdGuideEl.appendChild(ask);
+      var tip = document.createElement("p");
+      tip.className = "lcd-hint-line";
+      tip.textContent = "אפשר גם בלי זה — לכתוב ישר את המשוואה עם מכנה משותף בשדה למטה.";
+      lcdGuideEl.appendChild(tip);
+      var inp = lcdGuideEl.querySelector("#lcd-value");
+      if (inp) {
+        inp.focus();
+        inp.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            handleLcdSubmit();
+          }
+        });
+      }
+      updateLcdBtn();
+      return;
+    }
+    if (state.lcd && state.lcd.phase === "muls") {
+      lcdGuideEl.classList.remove("hidden");
+      var titleM = document.createElement("p");
+      titleM.className = "lcd-guide-title";
+      titleM.textContent =
+        "מכנה משותף " +
+        state.lcd.lcd +
+        ". מעל כל איבר רשמו בכמה מכפילים (כמו במחברת), ואז בדיקה.";
+      lcdGuideEl.appendChild(titleM);
+      var eqEl = document.createElement("div");
+      eqEl.className = "lcd-eq";
+      var info = state.lcd.info;
+      var got = state.lcd.got || [];
+      var leftN = info.leftTerms.length;
+      appendLcdSide(eqEl, info.terms.slice(0, leftN), 0, got);
+      var eqSign = document.createElement("span");
+      eqSign.className = "lcd-op";
+      eqSign.textContent = "=";
+      eqEl.appendChild(eqSign);
+      appendLcdSide(eqEl, info.terms.slice(leftN), leftN, got);
+      lcdGuideEl.appendChild(eqEl);
+      refitLcdMuls(eqEl);
+      var tip2 = document.createElement("p");
+      tip2.className = "lcd-hint-line";
+      tip2.textContent = "המכפיל = המכנה המשותף חלקי המכנה של האיבר.";
+      lcdGuideEl.appendChild(tip2);
+      var first = lcdGuideEl.querySelector(".lcd-mul:not(:disabled)");
+      if (first) first.focus();
+      var muls = lcdGuideEl.querySelectorAll(".lcd-mul");
+      var mi;
+      for (mi = 0; mi < muls.length; mi++) {
+        muls[mi].addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            handleLcdSubmit();
+          }
+        });
+      }
+      updateLcdBtn();
+      return;
+    }
+    if (canUseLcdAssist()) {
+      lcdGuideEl.classList.remove("hidden");
+      var offer = document.createElement("div");
+      offer.className = "lcd-offer";
+      var offerText = document.createElement("p");
+      offerText.className = "lcd-guide-title";
+      offerText.textContent =
+        "לפני שפותרים — אפשר לסמן מעל כל איבר בכמה מכפילים כדי להגיע למכנה משותף (כמו במחברת).";
+      offer.appendChild(offerText);
+      var offerBtn = document.createElement("button");
+      offerBtn.type = "button";
+      offerBtn.className = "lcd-offer-btn";
+      offerBtn.id = "lcd-offer-start";
+      offerBtn.textContent = "ביצוע מכנה משותף";
+      offerBtn.addEventListener("click", function () {
+        startLcdAssist();
+      });
+      offer.appendChild(offerBtn);
+      lcdGuideEl.appendChild(offer);
+      updateLcdBtn();
+      return;
+    }
+    lcdGuideEl.classList.add("hidden");
+    updateLcdBtn();
+  }
+
+  function handleLcdSubmit() {
+    if (!state.lcd || !state.lcd.phase) return false;
+    var Teach = DoctematicaTeach;
+    if (state.lcd.phase === "ask") {
+      var box = lcdGuideEl && lcdGuideEl.querySelector("#lcd-value");
+      var typed = box ? box.value : "";
+      var res = Teach.checkLcdValue(lastHistoryEq(), typed);
+      state.stats.try += 1;
+      saveStats();
+      renderStats();
+      if (!res.ok) {
+        showFeedback(false, "<strong>עוד לא.</strong> " + res.message);
+        if (box) box.focus();
+        return true;
+      }
+      state.lcd.phase = "muls";
+      state.lcd.lcd = res.lcd;
+      state.lcd.info = res.info || Teach.analyzeLcdNeed(lastHistoryEq());
+      state.lcd.got = [];
+      renderLcdGuide();
+      showFeedback(true, "<strong>נכון.</strong> " + res.message, "tip");
+      return true;
+    }
+    if (state.lcd.phase === "muls") {
+      var info = state.lcd.info;
+      var got = state.lcd.got ? state.lcd.got.slice() : [];
+      var i;
+      var anyTyped = false;
+      for (i = 0; i < info.terms.length; i++) {
+        if (got[i]) continue;
+        var el = lcdGuideEl.querySelector('[data-lcd-mul="' + i + '"]');
+        var raw = el ? String(el.value || "").trim() : "";
+        if (!raw) continue;
+        anyTyped = true;
+        var mulRes = Teach.checkLcdMultiplier(info.terms[i], raw);
+        if (!mulRes.ok) {
+          state.stats.try += 1;
+          saveStats();
+          renderStats();
+          showFeedback(false, "<strong>עוד לא.</strong> " + mulRes.message);
+          if (el) el.focus();
+          return true;
+        }
+        got[i] = true;
+      }
+      state.stats.try += 1;
+      saveStats();
+      renderStats();
+      if (!anyTyped && !info.terms.every(function (_, idx) { return got[idx]; })) {
+        showFeedback(false, "<strong>עוד לא.</strong> רשמו מעל האיברים בכמה מכפילים כל אחד.");
+        var firstEmpty = lcdGuideEl.querySelector(".lcd-mul:not(:disabled)");
+        if (firstEmpty) firstEmpty.focus();
+        return true;
+      }
+      state.lcd.got = got;
+      var allDone = info.terms.every(function (_, idx) {
+        return got[idx];
+      });
+      if (!allDone) {
+        renderLcdGuide();
+        showFeedback(true, "<strong>נכון.</strong> המשיכו למלא את שאר המכפילים.", "tip");
+        return true;
+      }
+      var lcdVal = state.lcd.lcd;
+      var mark = {
+        lcd: lcdVal,
+        muls: info.terms.map(function (t) {
+          return t.mulDisplay != null ? t.mulDisplay : t.mul;
+        }),
+        terms: info.terms.map(function (t) {
+          return {
+            text: t.text,
+            mul: t.mulDisplay != null ? t.mulDisplay : t.mul,
+            den: t.den,
+            side: t.side,
+          };
+        }),
+        leftN: info.leftTerms.length,
+      };
+      clearLcdAssist();
+      pushLcdMarksStep(mark, {
+        message:
+          "<strong>צעד חוקי.</strong> סימנתם את המכפילים למכנה משותף " +
+          lcdVal +
+          ". עכשיו הקלידו את המשוואה אחרי הכפל בכל איבר.",
+      });
+      return true;
+    }
+    return false;
+  }
+
+  function pushLcdMarksStep(mark, opts) {
+    opts = opts || {};
+    var baseEq = lastHistoryEq();
+    state.history.push(baseEq);
+    state.lcdMarks[state.history.length - 1] = mark;
+    renderSteps();
+    renderLcdGuide();
+    updateLcdBtn();
+    mathField.clear();
+    showFeedback(
+      true,
+      opts.message ||
+        "<strong>צעד.</strong> מכנה משותף " +
+          mark.lcd +
+          " — רשמו/ראו את המכפילים מעל כל איבר, ואז ממשיכים אחרי הכפל.",
+      "tip"
+    );
+    mathField.focus();
+  }
+
+  function markFromLcdInfo(info) {
+    return {
+      lcd: info.lcd,
+      muls: info.terms.map(function (t) {
+        return t.mulDisplay != null ? t.mulDisplay : t.mul;
+      }),
+      terms: info.terms.map(function (t) {
+        return {
+          text: t.text,
+          mul: t.mulDisplay != null ? t.mulDisplay : t.mul,
+          den: t.den,
+          side: t.side,
+        };
+      }),
+      leftN: info.leftTerms.length,
+    };
+  }
+
+  function lastStepHasLcdMarks() {
+    return !!(state.lcdMarks && state.lcdMarks[state.history.length - 1]);
+  }
+
+  /** If LCD is needed and hats not shown yet — show multipliers as the next solved step. */
+  function maybeApplyLcdMarksOneStep() {
+    if (!DoctematicaTeach || typeof DoctematicaTeach.analyzeLcdNeed !== "function") return false;
+    if (lastStepHasLcdMarks()) return false;
+    var info;
+    try {
+      info = DoctematicaTeach.analyzeLcdNeed(lastHistoryEq());
+    } catch (err) {
+      return false;
+    }
+    if (!info) return false;
+    clearLcdAssist();
+    pushLcdMarksStep(markFromLcdInfo(info), {
+      message:
+        "<strong>צעד.</strong> מכנה משותף " +
+        info.lcd +
+        " — המכפילים מעל כל איבר (כמו במחברת). הצעד הבא: כפלו והורידו מכנים.",
+    });
+    return true;
+  }
+
   function renderFactorGuide() {
     if (factorGuideEl) {
       factorGuideEl.classList.add("hidden");
@@ -235,6 +1237,8 @@
     }
     updateSplitBtn();
     updateFormulaBtn();
+    renderLcdGuide();
+    renderDomainGuide();
   }
 
   function doFactorSplit() {
@@ -243,7 +1247,69 @@
       return;
     }
     var Q = DoctematicaQuadratic;
-    var prod = Q.parseProductEq(lastHistoryEq());
+    var pack = state.problem.factor;
+    state.factor = state.factor || emptyFactorState();
+
+    if (pack.high && state.factor.split) {
+      var which = -1;
+      var prod2 = null;
+      var bi;
+      for (bi = 0; bi < 2; bi++) {
+        if (state.factor.solved && state.factor.solved[bi]) continue;
+        var beq = (state.factor.eqs && state.factor.eqs[bi]) || "";
+        var bp = Q.parseProductEq(beq) || Q.parseHighProductEq(beq);
+        if (bp && (bp.e2Kind === "linear" || (bp.f1 && bp.f2))) {
+          which = bi;
+          prod2 = bp;
+          break;
+        }
+      }
+      if (which < 0 || !prod2) {
+        showFeedback(false, "<strong>עוד לא.</strong> אין מכפלה לפיצול בענף.");
+        return;
+      }
+      var zEq = null;
+      var otherEq = prod2.e2;
+      var e1z =
+        /^x\s*=\s*0$/i.test(String(prod2.e1 || "").replace(/\s+/g, "")) ||
+        (Q.linearSolved(prod2.e1) && /x\s*=\s*0/i.test(prod2.e1));
+      var e2z =
+        /^x\s*=\s*0$/i.test(String(prod2.e2 || "").replace(/\s+/g, "")) ||
+        (Q.linearSolved(prod2.e2) && /x\s*=\s*0/i.test(prod2.e2));
+      if (e1z) {
+        zEq = prod2.e1;
+        otherEq = prod2.e2;
+      } else if (e2z) {
+        zEq = prod2.e2;
+        otherEq = prod2.e1;
+      } else if (prod2.e2Kind === "linear") {
+        otherEq = prod2.e2;
+        var e1raw = String(prod2.e1 || "").replace(/\s+/g, "");
+        if (/^x=0$/i.test(e1raw) || /^x$/i.test(e1raw.replace(/=0$/, ""))) {
+          zEq = prod2.e1.indexOf("=") >= 0 ? prod2.e1 : "x=0";
+        }
+      }
+      // מציגים שוב את שני הגורמים אחרי הפיצול השני
+      if (zEq) appendFactorTrail(which, zEq);
+      appendFactorTrail(which, otherEq);
+      state.factor.eqs[which] = otherEq;
+      state.factor.solved[which] = false;
+      renderFactorGuide();
+      renderSteps();
+      showFeedback(
+        true,
+        "<strong>חילקנו שוב.</strong> שוב קיבלתם x = 0 (כבר מהענף הראשון) ואת המשוואה " +
+          otherEq +
+          " — בודדו את x עד הסוף.",
+        "tip"
+      );
+      mathField.focus();
+      return;
+    }
+
+    var prod = pack.high
+      ? Q.parseHighProductEq(lastHistoryEq())
+      : Q.parseProductEq(lastHistoryEq());
     startFactorTrails(prod.e1, prod.e2);
     renderFactorGuide();
     renderSteps();
@@ -256,12 +1322,29 @@
       showFeedback(true, "<strong>כל הכבוד.</strong> " + (state.problem.factor.answer || ""));
       return;
     }
-    showFeedback(
-      true,
-      "<strong>חילקנו.</strong> מכפלה שווה אפס רק אם אחד הגורמים אפס. פתרו כל משוואה בנפרד.",
-      "tip"
-    );
+    var tip =
+      pack.high && prod && prod.e2Kind === "axbx"
+        ? "חילקנו. בענף השני אפשר להוציא שוב גורם x ואז לפצל פעם נוספת."
+        : "מכפלה שווה אפס רק אם אחד הגורמים אפס. פתרו כל משוואה בנפרד.";
+    showFeedback(true, "<strong>חילקנו.</strong> " + tip, "tip");
     mathField.focus();
+  }
+
+  function highBranchDone(eq, pack, which) {
+    if (which === 0) {
+      return /^x\s*=\s*0$/i.test(String(eq || "").replace(/\s+/g, ""));
+    }
+    if (pack && pack.e2Kind === "linear" && pack.linRoot != null) {
+      // רק x = מספר נחשב סיום — לא x−2=0
+      if (!DoctematicaQuadratic.linearSolved(eq)) return false;
+      try {
+        var sol = DoctematicaAlgebra.solutionOf(DoctematicaAlgebra.parseEquation(eq));
+        return sol != null && Math.abs(sol - pack.linRoot) < 1e-6;
+      } catch (err) {
+        return false;
+      }
+    }
+    return false;
   }
 
   function applyFactorTyped(typed) {
@@ -284,9 +1367,13 @@
     var wasSplit = !!state.factor.split;
     if (res.factored) {
       if (state.history[state.history.length - 1] !== typed) state.history.push(typed);
+    } else if (res.rearrange) {
+      if (state.history[state.history.length - 1] !== typed) state.history.push(typed);
     } else if (res.split && !wasSplit) {
       var startEqs = res.eqs;
-      var p0 = Q.parseProductEq(prev);
+      var p0 = pack.high
+        ? Q.parseHighProductEq(prev)
+        : Q.parseProductEq(prev);
       if (p0) startEqs = [p0.e1, p0.e2];
       if (startEqs && startEqs.length >= 2) startFactorTrails(startEqs[0], startEqs[1]);
     }
@@ -295,14 +1382,24 @@
     else if (Array.isArray(res.solved)) state.factor.solved = res.solved;
     if (res.split) state.factor.split = true;
     if (res.progress) state.factor.progress = res.progress;
+    if (res.sqrtProg) state.factor.sqrtProg = res.sqrtProg;
     if (typeof res.which === "number") {
+      if (res.trailAlso) appendFactorTrail(res.which, res.trailAlso);
       appendFactorTrail(res.which, typed);
     } else if (res.solved === true && res.progress) {
       if (res.progress.z) appendFactorTrail(0, "x = 0");
-      if (res.progress.o) appendFactorTrail(1, "x = " + Q.fmtDisp(pack.otherF));
+      if (pack.high && pack.quadRoot && res.progress.o && res.progress.n) {
+        appendFactorTrail(1, "x = ±" + Q.fmtDisp(pack.quadRoot));
+      } else if (pack.high && pack.e2Kind === "linear" && res.progress.o) {
+        appendFactorTrail(1, "x = " + Q.fmtDisp(pack.linRootF || pack.otherF));
+      } else if (pack.high && pack.quadKind === "none" && res.progress.n) {
+        appendFactorTrail(1, "אין פתרון ממשי");
+      } else if (res.progress.o) {
+        appendFactorTrail(1, "x = " + Q.fmtDisp(pack.otherF));
+      }
     } else if (res.progress) {
       if (res.progress.z && !wasSplit) appendFactorTrail(0, typed);
-      if (res.progress.o) appendFactorTrail(1, typed);
+      if (res.progress.o || res.progress.n) appendFactorTrail(1, typed);
     }
     renderSteps();
     renderFactorGuide();
@@ -324,7 +1421,13 @@
   }
 
   function isGuidedMode() {
-    return isStepMode() || isSystemMode() || isQuadraticTopic() || state.topic === "equations";
+    return (
+      isStepMode() ||
+      isSystemMode() ||
+      isQuadraticTopic() ||
+      isHighPowerTopic() ||
+      state.topic === "equations"
+    );
   }
 
   function topicLevels() {
@@ -975,16 +2078,24 @@
     if (formulaWorkActive() && state.quad && state.quad.trail && state.quad.trail.length) {
       stepsEl.classList.remove("hidden");
       if (isMixedEqMode() && state.history.length) {
+        var stepNumF = { n: 0 };
         state.history.forEach(function (eq, index) {
           var li0 = document.createElement("li");
           var n0 = document.createElement("span");
           n0.className = "n";
-          n0.textContent = index === 0 ? "נתון" : String(index);
+          n0.textContent = index === 0 ? "נתון" : String(++stepNumF.n);
           var body0 = document.createElement("span");
-          body0.innerHTML = DoctematicaMath.toHTML(eq);
+          var mark0 = state.lcdMarks && state.lcdMarks[index];
+          if (mark0) {
+            body0.appendChild(buildLcdEqView(mark0));
+            refitLcdMuls(body0);
+          } else {
+            body0.innerHTML = DoctematicaMath.toHTML(eq);
+          }
           li0.appendChild(n0);
           li0.appendChild(body0);
           stepsEl.appendChild(li0);
+          if (index === 0) appendDomainHistorySteps(stepsEl, stepNumF);
         });
       }
       state.quad.trail.forEach(function (item, index) {
@@ -1008,7 +2119,7 @@
     }
     stepsEl.classList.remove("hidden");
     var givenAt = (state.sys && state.sys.givenAt) || (isSystemMode() ? [0] : null);
-    var stepNum = 0;
+    var stepNum = { n: 0 };
     var factorSplit =
       factorWorkActive() &&
       state.factor &&
@@ -1020,9 +2131,15 @@
       var n = document.createElement("span");
       n.className = "n";
       var isGiven = givenAt ? givenAt.indexOf(index) !== -1 : index === 0;
-      n.textContent = isGiven ? "נתון" : String(++stepNum);
+      n.textContent = isGiven ? "נתון" : String(++stepNum.n);
       var body = document.createElement("span");
-      body.innerHTML = DoctematicaMath.toHTML(eq);
+      var mark = state.lcdMarks && state.lcdMarks[index];
+      if (mark) {
+        body.appendChild(buildLcdEqView(mark));
+        refitLcdMuls(body);
+      } else {
+        body.innerHTML = DoctematicaMath.toHTML(eq);
+      }
       li.appendChild(n);
       li.appendChild(body);
       var isKeep = state.sys && state.sys.keepAt && state.sys.keepAt.indexOf(index) !== -1;
@@ -1037,11 +2154,13 @@
         li.classList.add("solved-row");
       }
       stepsEl.appendChild(li);
+      if (index === 0) appendDomainHistorySteps(stepsEl, stepNum);
     });
     if (factorSplit) {
-      stepsEl.appendChild(renderFactorFork(stepNum + 1));
+      stepsEl.appendChild(renderFactorFork(stepNum.n + 1));
     }
     renderFactorGuide();
+    renderDomainGuide();
   }
 
   function renderFactorFork(baseNum) {
@@ -1945,6 +3064,116 @@
     applySqrtEqTyped(typedAnswer().trim());
   }
 
+  function applyHighRootTyped(typed) {
+    if (!typed) {
+      showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
+      return false;
+    }
+    var Q = DoctematicaQuadratic;
+    var pack = state.problem.highRoot;
+    if (!pack) {
+      showFeedback(false, "<strong>עוד לא.</strong> אין תרגיל טעון.");
+      return false;
+    }
+    if (
+      DoctematicaAlgebra.missingEqualsSign(typed) &&
+      !Q.isRootAnswerText(typed) &&
+      !/אין/.test(typed)
+    ) {
+      state.stats.try += 1;
+      saveStats();
+      renderStats();
+      showFeedback(false, "<strong>עוד לא.</strong> חסר סימן שווה");
+      return false;
+    }
+    state.stats.try += 1;
+    saveStats();
+    renderStats();
+    var prev = state.history[state.history.length - 1];
+    var both = Q.checkHighRootBothSides(prev, typed, pack);
+    if (both) {
+      if (!both.ok) {
+        showFeedback(false, "<strong>עוד לא.</strong> " + both.message);
+        return false;
+      }
+      state.history.push(typed);
+      renderSteps();
+      mathField.clear();
+      showFeedback(true, "<strong>נכון.</strong> " + both.message);
+      mathField.focus();
+      return true;
+    }
+    var res = Q.checkHighRootTyped(prev, typed, pack);
+    if (!res.ok) {
+      var isolated = false;
+      var h;
+      for (h = 0; h < state.history.length; h++) {
+        if (normLike(state.history[h]) === normLike(pack.isolated)) isolated = true;
+        if (/√\[|∛|∜|√\(/.test(state.history[h])) isolated = true;
+      }
+      if (isolated) {
+        var fin = Q.checkHighRootFinish(typed, pack, state.sqrtProg || { pos: false, neg: false });
+        if (fin.ok) {
+          if (fin.progress) state.sqrtProg = fin.progress;
+          state.history.push(typed);
+          renderSteps();
+          if (fin.solved) {
+            markSolved();
+            mathField.setDisabled(true);
+            checkBtn.disabled = true;
+            renderSteps();
+            nextAfterSolveBtn.classList.remove("hidden");
+            showFeedback(true, "<strong>כל הכבוד.</strong> " + fin.message);
+            return true;
+          }
+          mathField.clear();
+          showFeedback(true, "<strong>נכון.</strong> " + fin.message);
+          mathField.focus();
+          return true;
+        }
+        showFeedback(false, "<strong>עוד לא.</strong> " + (fin.message || res.message));
+        return false;
+      }
+      showFeedback(false, "<strong>עוד לא.</strong> " + res.message);
+      return false;
+    }
+    state.history.push(typed);
+    renderSteps();
+    if (res.solved) {
+      markSolved();
+      mathField.setDisabled(true);
+      checkBtn.disabled = true;
+      renderSteps();
+      nextAfterSolveBtn.classList.remove("hidden");
+      showFeedback(true, "<strong>כל הכבוד.</strong> " + res.message);
+      return true;
+    }
+    mathField.clear();
+    showFeedback(true, "<strong>נכון.</strong> " + res.message);
+    mathField.focus();
+    return true;
+  }
+
+  function normLike(s) {
+    return String(s || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "");
+  }
+
+  function highRootHint() {
+    var act = DoctematicaQuadratic.nextHighRootStep(lastHistoryEq(), state.problem.highRoot);
+    showFeedback(true, "<strong>רמז.</strong> " + ((act && act.hint) || "בודדו ואז שורש n."), "tip");
+  }
+
+  function highRootOneStep() {
+    var act = DoctematicaQuadratic.nextHighRootStep(lastHistoryEq(), state.problem.highRoot);
+    if (!act || !act.eq) {
+      showFeedback(true, "<strong>רמז.</strong> " + ((act && act.hint) || "התרגיל כבר פתור."), "tip");
+      return;
+    }
+    applyHighRootTyped(act.eq);
+  }
+
   function applySqrtEqTyped(typed) {
     if (!typed) {
       showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
@@ -2122,6 +3351,10 @@
       return true;
     }
     if (!typed) {
+      if (state.lcd && state.lcd.phase) {
+        handleLcdSubmit();
+        return true;
+      }
       showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
       return false;
     }
@@ -2195,6 +3428,7 @@
     state.stats.try += 1;
     saveStats();
     renderStats();
+    clearLcdAssist();
     state.history.push(typed);
     renderSteps();
     mathField.clear();
@@ -2204,6 +3438,7 @@
   }
 
   function mixedHint() {
+    if (domainPending()) return stepHint();
     var pack = state.problem.mixed;
     var path = mixedPath();
     if (path === "sqrt") return sqrtHint();
@@ -2215,12 +3450,14 @@
   }
 
   function mixedOneStep() {
+    if (domainPending()) return stepOneStep();
     var pack = state.problem.mixed;
     var path = mixedPath();
     if (path === "sqrt") return sqrtOneStep();
     if (path === "factor") return factorOneStep();
     if (path === "formula") return fillQuadStep();
     if (path === "linear") return stepOneStep();
+    if (maybeApplyLcdMarksOneStep()) return;
     var act = DoctematicaQuadratic.nextMixedStep(lastHistoryEq(), pack);
     if (!act) return;
     if (act.path === "formula") {
@@ -2249,15 +3486,60 @@
     var steps = state.problem.solutionSteps || [];
     if (!opts.always && !steps.length) return false;
     var notes = opts.withNotes ? state.problem.solutionNotes || [] : [];
-    var lines = steps
-      .map(function (step, i) {
-        var body = opts.plain
-          ? String(step).replace(/-/g, "−")
-          : DoctematicaMath.toHTML(step);
-        var why = notes[i] ? "<div class=\"why\">" + notes[i] + "</div>" : "";
-        return "<li" + (opts.plain ? " dir=\"ltr\"" : "") + ">" + body + why + "</li>";
-      })
-      .join("");
+    var mixed = state.problem.mixed;
+    var lcdInfo = mixed && mixed.lcdInfo;
+    var cleared = mixed && mixed.cleared;
+    var lines = "";
+    var domainInfo =
+      (state.domain && state.domain.info) ||
+      state.problem.domain ||
+      (DoctematicaTeach && typeof DoctematicaTeach.analyzeDomain === "function"
+        ? DoctematicaTeach.analyzeDomain(state.problem.startEquation || "")
+        : null);
+    if (domainInfo && domainInfo.display) {
+      var domHtml;
+      if (domainInfo.parts && domainInfo.parts.length > 1) {
+        domHtml = domainInfo.parts
+          .map(function (p) {
+            return '<span class="domain-chip">' + DoctematicaMath.toHTML(p) + "</span>";
+          })
+          .join('<span class="domain-sep">, </span>');
+      } else {
+        domHtml = DoctematicaMath.toHTML(domainInfo.display);
+      }
+      lines +=
+        "<li class=\"domain-row\"><span class=\"domain-body\">" +
+        domHtml +
+        '</span><div class="why">תחום הצבה' +
+        (domainInfo.count > 1 ? " (" + domainInfo.count + " ערכים אסורים)" : "") +
+        ".</div></li>";
+    }
+    var i;
+    for (i = 0; i < steps.length; i++) {
+      var step = steps[i];
+      var body = opts.plain
+        ? String(step).replace(/-/g, "−")
+        : DoctematicaMath.toHTML(step);
+      var why = notes[i] ? "<div class=\"why\">" + notes[i] + "</div>" : "";
+      lines += "<li" + (opts.plain ? " dir=\"ltr\"" : "") + ">" + body + why + "</li>";
+      if (
+        !opts.plain &&
+        i === 0 &&
+        lcdInfo &&
+        cleared &&
+        steps.length > 1 &&
+        DoctematicaMath &&
+        typeof buildLcdEqView === "function"
+      ) {
+        var hats = buildLcdEqView(lcdInfo);
+        lines +=
+          "<li><div class=\"sol-lcd\">" +
+          hats.outerHTML +
+          '</div><div class="why">מכנה משותף ' +
+          lcdInfo.lcd +
+          " — מכפילים מעל כל איבר.</div></li>";
+      }
+    }
     var extra = opts.note
       ? " <span class=\"muted-note\">" + opts.note + "</span>"
       : "";
@@ -2338,24 +3620,108 @@
     applyFactorTyped(act.eq);
   }
 
+  function currentDomainWorkIndex() {
+    if (!state.domain) return 0;
+    if (state.domain.split) return state.domain.activeBranch || 0;
+    var n = nextUnsolvedDomainBranch();
+    return n >= 0 ? n : 0;
+  }
+
+  function domainItemForSlot(slot) {
+    var items = domainItems();
+    var prog = domainProgressItems();
+    var p = prog[slot];
+    if (p && p.itemIndex != null && items[p.itemIndex]) return items[p.itemIndex];
+    var taken = {};
+    var i;
+    for (i = 0; i < prog.length; i++) {
+      if (prog[i] && prog[i].itemIndex != null) taken[prog[i].itemIndex] = true;
+    }
+    for (i = 0; i < items.length; i++) {
+      if (!taken[i]) return items[i];
+    }
+    return items[0] || null;
+  }
+
+  function currentDomainConstraint() {
+    var items = domainItems();
+    if (!items.length) return "";
+    if (domainMulti()) {
+      var idx = currentDomainWorkIndex();
+      var prog = domainProgressItems()[idx];
+      if (prog && prog.trail && prog.trail.length) return prog.trail[prog.trail.length - 1].display;
+      var bound = domainItemForSlot(idx);
+      return bound ? bound.rawPart : "";
+    }
+    var trail = (state.domain && state.domain.trail) || [];
+    if (trail.length) return trail[trail.length - 1].display;
+    return items[0].rawPart;
+  }
+
+  function currentDomainStarted() {
+    if (domainMulti()) {
+      var prog = domainProgressItems()[currentDomainWorkIndex()];
+      return !!(prog && prog.trail && prog.trail.length);
+    }
+    return !!(state.domain && state.domain.trail && state.domain.trail.length);
+  }
+
   function stepHint() {
+    if (domainPending()) {
+      var items = domainItems();
+      if (!items.length) return;
+      if (!currentDomainStarted()) {
+        showFeedback(
+          true,
+          "<strong>רמז.</strong> רשמו באחד התאים מכנה≠0 או x≠… — איזה מכנה שתרצו. התא השני יהיה למכנה שנשאר.",
+          "tip"
+        );
+        return;
+      }
+      var nxt = DoctematicaTeach.domainNextStep(currentDomainConstraint());
+      showFeedback(true, "<strong>רמז.</strong> " + (nxt.hint || nxt.display), "tip");
+      return;
+    }
     var act = DoctematicaTeach.nextAction(lastHistoryEq());
     showFeedback(true, "<strong>רמז.</strong> " + act.hint, act.done ? undefined : "tip");
   }
 
   function stepOneStep() {
-    var cur = lastHistoryEq();
-    var act = DoctematicaTeach.nextAction(cur);
-    if (act.done || !act.eq) {
-      showFeedback(true, "<strong>רמז.</strong> " + (act.hint || "המשוואה כבר פתורה."));
+    if (domainPending()) {
+      var items = domainItems();
+      if (!currentDomainStarted()) {
+        var first = domainItemForSlot(currentDomainWorkIndex());
+        tryApplyDomainTyped((first && first.rawPart) || items[0].rawPart);
+        return;
+      }
+      var nxt = DoctematicaTeach.domainNextStep(currentDomainConstraint());
+      tryApplyDomainTyped(nxt.display);
       return;
     }
-    var result = DoctematicaAlgebra.checkStep(cur, act.eq);
+    if (maybeApplyLcdMarksOneStep()) return;
+    var cur = lastHistoryEq();
+    var actEq = null;
+    var actHint = null;
+    if (lastStepHasLcdMarks() && typeof DoctematicaTeach.clearEqDens === "function") {
+      actEq = DoctematicaTeach.clearEqDens(cur);
+      actHint = "כפלו כל איבר במכפיל והורידו את המכנים.";
+    }
+    if (!actEq) {
+      var act = DoctematicaTeach.nextAction(cur);
+      if (act.done || !act.eq) {
+        showFeedback(true, "<strong>רמז.</strong> " + (act.hint || "המשוואה כבר פתורה."));
+        return;
+      }
+      actEq = act.eq;
+      actHint = act.hint;
+    }
+    clearLcdAssist();
+    var result = DoctematicaAlgebra.checkStep(cur, actEq);
     if (!result.ok) {
       showFeedback(false, "<strong>לא הצלחתי לבצע את הצעד.</strong> " + result.message);
       return;
     }
-    state.history.push(act.eq);
+    state.history.push(actEq);
     renderSteps();
     mathField.clear();
     if (result.solved) {
@@ -2363,10 +3729,10 @@
       mathField.setDisabled(true);
       checkBtn.disabled = true;
       nextAfterSolveBtn.classList.remove("hidden");
-      showFeedback(true, "<strong>צעד של האתר.</strong> " + (act.explain || result.message));
+      showFeedback(true, "<strong>צעד של האתר.</strong> " + (actHint || result.message));
       renderSteps();
     } else {
-      showFeedback(true, "<strong>צעד של האתר.</strong> " + (act.explain || result.message), "tip");
+      showFeedback(true, "<strong>צעד של האתר.</strong> " + (actHint || result.message), "tip");
       mathField.focus();
     }
   }
@@ -2416,16 +3782,34 @@
         },
       };
     }
-    if (isFactorEqMode()) {
+    if (isHighRootEqMode()) {
       return {
         work: true,
         buttons: true,
         hintText:
-          "הוציאו גורם משותף x, למשל x²−5x=0 → x(x−5)=0. אפשר גם 2x(x−4). אחרי הפירוק לחצו «חילוק למשוואות» ופתרו כל גורם = 0.",
+          "בודדו xⁿ = מספר. אחר כך הוציאו שורש ממעלה n משני האגפים (כפתור «שורש n»). בחזקה זוגית: x = ±… או אין פתרון ממשי; באי־זוגית: פתרון ממשי אחד.",
+        hint: highRootHint,
+        oneStep: highRootOneStep,
+        showSolution: function () {
+          showEqSolution("פתרון מלא — שורש ממעלה גבוהה", { always: true });
+        },
+      };
+    }
+    if (isFactorEqMode()) {
+      var high = state.problem && state.problem.factor && state.problem.factor.high;
+      return {
+        work: true,
+        buttons: true,
+        hintText: high
+          ? "העבירו לאגף אחד אם צריך, הוציאו חזקה משותפת של x (ואפשר גם מספר), למשל x³−9x → x(x²−9)=0 או x³−4x² → x²(x−4)=0. אחר כך «חילוק למשוואות»: מ־xⁿ=0 מקבלים x=0; הענף השני לינארי או ריבועי (בידוד ואז שורש / ±)."
+          : "הוציאו גורם משותף x, למשל x²−5x=0 → x(x−5)=0. אפשר גם 2x(x−4). אחרי הפירוק לחצו «חילוק למשוואות» ופתרו כל גורם = 0.",
         hint: factorHint,
         oneStep: factorOneStep,
         showSolution: function () {
-          showEqSolution("פתרון מלא — הוצאת גורם משותף", { always: true });
+          showEqSolution(
+            high ? "פתרון מלא — משוואה בחזקה גבוהה" : "פתרון מלא — הוצאת גורם משותף",
+            { always: true }
+          );
         },
       };
     }
@@ -2433,7 +3817,11 @@
       var mixedLevel = currentLevel();
       var mixedId = mixedLevel && mixedLevel.id;
       var hintText =
-        mixedId === "quad-mixed-5"
+        mixedId === "quad-mixed-7"
+          ? "קודם תחום הצבה (המכנים עם נעלם ≠ 0). אחר כך מכנה משותף — סמנו מכפילים מעל האיברים, כפלו והורידו מכנים, פתחו סוגריים, ואספו ל־ax²+bx+c=0. אחר כך md53 או נוסחת שורשים (גם אם b=0 או c=0)."
+          : mixedId === "quad-mixed-6"
+          ? "קודם מכנה משותף — סמנו מכפילים מעל האיברים כמו במחברת, כפלו, ואז המשיכו: סוגריים / כפל מקוצר / איסוף ל־ax²+bx+c=0. אחר כך md53 או נוסחת שורשים (גם אם b=0 או c=0)."
+          : mixedId === "quad-mixed-5"
           ? "פתחו (a±b)² בכפל מקוצר, למשל (x−3)²=x²−6x+9. אם יש עוד סוגריים או גורם מימין כמו (x+1)2 — פתחו גם אותם באותו צעד. אחר כך סדרו ax²+bx+c=0 ולחצו md53 (גם אם b=0 או c=0) או נוסחת שורשים."
           : mixedId === "quad-mixed-4"
           ? "אם יש מקדם מחוץ לכפל שני סוגריים — קודם סוגר בסוגר (המקדם נשאר בחוץ), ואז כופלים את המקדם בכל איבר. בלי לאחד. אחר כך סדרו ax²+bx+c=0: md53 או נוסחת שורשים (גם אם b=0 או c=0)."
@@ -2459,6 +3847,7 @@
         hint: stepHint,
         oneStep: stepOneStep,
         showSolution: function () {
+          if (domainPending()) fillDomainFromButton();
           showEqSolution("פתרון מלא לפי הדרך הנלמדת", {
             withNotes: true,
             note: "(אפשר גם לדלג על שלבי ביניים, כל עוד המשוואה שקולה)",
@@ -2472,14 +3861,39 @@
 
   function setModeUi() {
     var g = currentGuide();
-    if (g && g.work) {
+    if (domainPending()) {
+      answerLabelEl.textContent = "תחום הצבה";
+      answerLabelEl.classList.add("is-domain");
+      var dInfo = state.domain.info;
+      var items = domainItems();
+      if (items.length > 1) {
+        hintEl.textContent =
+          "מלאו איזה תא שתרצו — האתר מזהה איזה מכנה זה. התא השני למכנה שנשאר. אנטר בודק.";
+      } else if (state.domain.phase === "raw") {
+        hintEl.textContent =
+          "המשיכו לפתור כמו משוואה (העברת אגף, חילוק במקדם) עד " +
+          (dInfo && dInfo.display) +
+          ".";
+      } else {
+        hintEl.textContent =
+          "אפשר קודם " +
+          ((dInfo && dInfo.rawDisplay) || "x+2≠0") +
+          ", ואז " +
+          ((dInfo && dInfo.display) || "x≠−2") +
+          " — או ישר את הצורה הסופית.";
+      }
+    } else if (g && g.work) {
       answerLabelEl.textContent = "הצעד הבא";
+      answerLabelEl.classList.remove("is-domain");
       hintEl.textContent = g.hintText || MATH_FIELD_HINT;
     } else {
       answerLabelEl.textContent = "התשובה שלך";
+      answerLabelEl.classList.remove("is-domain");
       hintEl.textContent = "אפשר לכתוב מספר שלם, שבר כמו 3/4, או עשרוני כמו 0.75";
       answerEl.placeholder = "למשל 5 או 3/4";
     }
+    updateDomainBtn();
+    renderDomainGuide();
   }
 
   function markSolved() {
@@ -2502,6 +3916,7 @@
       state.quad = null;
       state.factor = emptyFactorState();
       state.mixed = emptyMixedState();
+      state.lcdMarks = {};
       if (quadGuideEl) {
         quadGuideEl.classList.add("hidden");
         quadGuideEl.innerHTML = "";
@@ -2509,6 +3924,8 @@
       if (splitEqsBtn) splitEqsBtn.classList.add("hidden");
       if (useFormulaBtn) useFormulaBtn.classList.add("hidden");
       if (md53Btn) md53Btn.classList.add("hidden");
+      if (lcdBtn) lcdBtn.classList.add("hidden");
+      clearLcdAssist();
       topicLabelEl.textContent = currentTopicLabel() + " · " + currentLevel().title;
       setModeUi();
       hintBtn.classList.add("hidden");
@@ -2551,10 +3968,14 @@
     if (isSystemMode()) {
       startSystemSession(state.problem);
       state.history = [];
+      state.lcdMarks = {};
+      state.domain = null;
       state.quad = null;
     } else if (isQuadMode()) {
       state.sys = null;
       state.history = [];
+      state.lcdMarks = {};
+      state.domain = null;
       startQuadSession();
     } else {
       state.sys = null;
@@ -2563,9 +3984,14 @@
       state.mixed = emptyMixedState();
       state.sqrtProg = { pos: false, neg: false };
       state.history = isEqWorkMode() ? [state.problem.startEquation] : [];
+      state.lcdMarks = {};
+      clearLcdAssist();
+      resetDomainState(state.problem && state.problem.startEquation);
     }
     topicLabelEl.textContent = isWorksheet()
-      ? (state.topic === "equations" || isQuadraticTopic() ? currentTopicLabel() + " · " : "") +
+      ? (state.topic === "equations" || isQuadraticTopic() || isHighPowerTopic()
+          ? currentTopicLabel() + " · "
+          : "") +
         currentLevel().title +
         " · תרגיל " +
         state.problem.n
@@ -2608,7 +4034,7 @@
     mathWrap.classList.remove("hidden");
     checkBtn.classList.remove("hidden");
     answerLabelEl.classList.remove("hidden");
-    if (isStepMode() || isSqrtEqMode() || isFactorEqMode() || isMixedEqMode()) {
+    if (isStepMode() || isSqrtEqMode() || isHighRootEqMode() || isFactorEqMode() || isMixedEqMode()) {
       promptEl.innerHTML = DoctematicaMath.toHTML(state.problem.startEquation);
       mathKeysEl.classList.remove("hidden");
     } else {
@@ -2616,6 +4042,7 @@
       mathKeysEl.classList.add("hidden");
     }
     renderSteps();
+    renderLcdGuide();
     mathField.focus();
   }
 
@@ -2645,6 +4072,23 @@
     });
   }
 
+  if (lcdBtn) {
+    lcdBtn.addEventListener("click", function () {
+      if (!canUseLcdAssist()) {
+        showFeedback(false, "<strong>עוד לא.</strong> כרגע אין צורך במכנה משותף, או שכבר התחלתם את השלב.");
+        return;
+      }
+      startLcdAssist();
+    });
+  }
+
+  if (domainBtn) {
+    domainBtn.addEventListener("click", function () {
+      if (!domainPending()) return;
+      fillDomainFromButton();
+    });
+  }
+
   formEl.addEventListener("submit", function (event) {
     event.preventDefault();
     if (state.locked || !state.problem) return;
@@ -2660,6 +4104,10 @@
     }
 
     if (isMixedEqMode()) {
+      if (domainPending()) {
+        tryApplyDomainTyped(typedAnswer());
+        return;
+      }
       applyMixedTyped(typedAnswer());
       return;
     }
@@ -2669,12 +4117,28 @@
       return;
     }
 
+    if (isHighRootEqMode()) {
+      applyHighRootTyped(typedAnswer().trim());
+      return;
+    }
+
     if (isFactorEqMode()) {
       applyFactorTyped(typedAnswer());
       return;
     }
 
     if (isStepMode()) {
+      if (domainPending()) {
+        tryApplyDomainTyped(typedAnswer());
+        return;
+      }
+      if (state.lcd && state.lcd.phase) {
+        var typedLcd = typedAnswer().trim();
+        if (!typedLcd) {
+          handleLcdSubmit();
+          return;
+        }
+      }
       var result = DoctematicaAlgebra.checkStep(
         state.history[state.history.length - 1],
         typedAnswer()
@@ -2686,6 +4150,7 @@
         showFeedback(false, "<strong>עוד לא.</strong> " + result.message);
         return;
       }
+      clearLcdAssist();
       state.history.push(typedAnswer().trim());
       renderSteps();
       if (result.solved) {

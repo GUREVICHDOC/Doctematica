@@ -58,6 +58,16 @@
   margin: 0 1px;
 }
 
+.m-nroot {
+  align-items: flex-end;
+}
+
+.m-nroot-idx {
+  font-size: 0.65em;
+  line-height: 1;
+  margin: 0 1px 0.45em 0;
+}
+
 .m-rad-sign {
   font-size: 1.35em;
   line-height: 0.85;
@@ -240,8 +250,42 @@
   min-width: 1.4em;
 }
 
-.ml-rad .ml-slot {
-  min-width: 1.2em;
+.ml-rad .ml-pow {
+  align-self: center;
+}
+
+.ml-rad .ml-base,
+.ml-rad .ml-exp {
+  border-bottom-color: #a89880;
+}
+
+.ml-nroot {
+  align-items: flex-end;
+}
+
+.ml-nroot-idx {
+  width: 1.1em;
+  min-width: 0.75em;
+  margin: 0 -0.05em 0.55em 0;
+  border: 0;
+  border-bottom: 1px dashed #c8bba8;
+  padding: 0;
+  text-align: center;
+  font: inherit;
+  font-size: 0.72em;
+  line-height: 1;
+  background: transparent;
+}
+
+.nroot-icon {
+  font-family: "Times New Roman", serif;
+  font-size: 1.05em;
+  line-height: 1;
+}
+
+.nroot-icon sup {
+  font-size: 0.55em;
+  margin-right: 1px;
 }
 
 .ml-pow {
@@ -276,6 +320,7 @@
 }
 
 .pm-icon,
+.neq-icon,
 .pow-icon {
   font-family: "Times New Roman", serif;
   font-size: 1.15em;
@@ -469,6 +514,374 @@
 
 .sys-guide .sys-continue-row {
   margin-top: 10px;
+}
+
+.lcd-guide {
+  margin: 6px 0 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fffdf8;
+}
+
+.lcd-guide.hidden {
+  display: none !important;
+}
+
+.lcd-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  direction: rtl;
+}
+
+.lcd-offer-btn {
+  flex: 0 0 auto;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: #1f3a5f;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lcd-offer-btn:hover {
+  background: #2a4d7a;
+}
+
+.lcd-guide-title {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  color: var(--muted, #5c5346);
+}
+
+.domain-row .n {
+  min-width: 3.2em;
+}
+
+.domain-body {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  direction: ltr;
+}
+
+.domain-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(42, 77, 122, 0.1);
+  font-weight: 700;
+  direction: ltr;
+}
+
+.domain-sep {
+  color: var(--muted, #5c5346);
+  direction: ltr;
+}
+
+.domain-guide {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
+.domain-guide.hidden {
+  display: none;
+}
+
+.domain-guide-title {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.domain-guide-more {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.domain-fork {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.domain-fork-empty {
+  color: var(--muted, #5c5346);
+  font-weight: 600;
+}
+
+.domain-cells {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  direction: rtl;
+}
+
+.domain-cell-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+  cursor: pointer;
+}
+
+.domain-cell-wrap.is-active {
+  border-color: rgba(42, 77, 122, 0.45);
+  box-shadow: 0 0 0 2px rgba(42, 77, 122, 0.12);
+}
+
+.domain-cell-wrap.is-done {
+  background: #eef6ef;
+  border-color: rgba(47, 107, 69, 0.28);
+  cursor: default;
+}
+
+.domain-cell-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.domain-cell-tag {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.domain-cell-chip {
+  font-weight: 700;
+  direction: ltr;
+  text-align: left;
+  font-family: "Times New Roman", "Frank Ruhl Libre", serif;
+  font-size: 1.15rem;
+}
+
+.domain-cell-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #c8bba8;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 700;
+  direction: ltr;
+  text-align: left;
+  background: #fff;
+}
+
+.domain-cell-input:focus {
+  outline: none;
+  border-color: rgba(42, 77, 122, 0.45);
+  box-shadow: 0 0 0 2px rgba(42, 77, 122, 0.12);
+}
+
+.domain-cell-ok {
+  color: var(--ok);
+  font-weight: 800;
+}
+
+.steps li.domain-step-row .n {
+  color: var(--muted);
+}
+
+.domain-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+  cursor: pointer;
+}
+
+.domain-branch.is-active {
+  border-color: rgba(42, 77, 122, 0.45);
+  box-shadow: 0 0 0 2px rgba(42, 77, 122, 0.12);
+}
+
+.domain-branch.is-done {
+  background: #eef6ef;
+  border-color: rgba(47, 107, 69, 0.28);
+  cursor: default;
+}
+
+.domain-branch-head {
+  font-weight: 700;
+  font-size: 1.02rem;
+  direction: ltr;
+}
+
+.domain-branch-tag {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.domain-branch-step {
+  padding: 4px 2px;
+  font-weight: 700;
+  direction: ltr;
+}
+
+.domain-branch-done {
+  color: var(--ok);
+  font-weight: 800;
+  align-self: flex-end;
+}
+
+.lcd-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  direction: rtl;
+}
+
+.lcd-ask label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.lcd-ask input {
+  width: 4.2em;
+  padding: 6px 8px;
+  border: 1px solid #c8bba8;
+  border-radius: 8px;
+  font: inherit;
+  text-align: center;
+  direction: ltr;
+}
+
+.lcd-eq {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 6px;
+  direction: ltr;
+  justify-content: flex-start;
+  padding: 8px 4px 2px;
+  font-family: "Times New Roman", "Frank Ruhl Libre", serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.lcd-term {
+  position: relative;
+  display: inline-grid;
+  grid-template-rows: auto auto;
+  justify-items: start;
+  align-items: center;
+  margin: 0 2px;
+  padding-top: 0;
+}
+
+.lcd-mul {
+  position: static;
+  grid-row: 1;
+  box-sizing: content-box;
+  width: 1.4em;
+  min-width: 1.4em;
+  height: auto;
+  min-height: 1.15em;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 1.5px solid #7a6a52;
+  background: transparent;
+  font-family: "Segoe Print", "Comic Sans MS", "Frank Ruhl Libre", cursive;
+  font-size: 0.72em;
+  font-weight: 700;
+  color: #2f4f7a;
+  text-align: center;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: visible;
+  transform: rotate(-4deg);
+  transform-origin: center bottom;
+  field-sizing: content;
+}
+
+.lcd-mul:focus {
+  outline: none;
+  border-bottom-color: #1d6fb8;
+  background: rgba(29, 111, 184, 0.06);
+}
+
+.lcd-mul.is-ok {
+  color: #2f6b45;
+  border-bottom-color: #2f6b45;
+}
+
+.lcd-mul:disabled {
+  opacity: 0.9;
+}
+
+.lcd-mul-view {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: content-box;
+  width: auto;
+  min-width: 1.4em;
+  max-width: none;
+  padding: 0 3px;
+  white-space: nowrap;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.lcd-eq-step {
+  padding: 4px 0 0;
+  font-size: 1.2rem;
+}
+
+.lcd-term-body {
+  grid-row: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 3em;
+}
+
+.lcd-term-body .m-expr {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.lcd-op {
+  align-self: end;
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0;
+  min-height: 3em;
+  padding: 0 1px;
+  color: #333;
+  line-height: 1;
+}
+
+.lcd-hint-line {
+  margin: 8px 0 0;
+  font-size: 0.9rem;
+  color: var(--muted, #5c5346);
 }
 
 .quad-guide {

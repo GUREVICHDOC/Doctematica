@@ -24,6 +24,7 @@
   var topics = [
     { id: "equations", label: "משוואות בנעלם אחד" },
     { id: "quadratic", label: "משוואות ריבועיות" },
+    { id: "high-power", label: "משוואות בחזקה גבוהה" },
     { id: "systems-sub", label: "מערכת משוואות" },
   ];
 

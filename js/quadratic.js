@@ -692,6 +692,20 @@
     return false;
   }
 
+  function sqrtProgFromText(text) {
+    var prog = { pos: false, neg: false };
+    var parsed = parseSqrtTyped(text);
+    if (!parsed || parsed.none || parsed.ok === false) return prog;
+    if (parsed.pm) return { pos: true, neg: true };
+    var vals = parsed.vals || [];
+    var i;
+    for (i = 0; i < vals.length; i++) {
+      if (vals[i] > EPS) prog.pos = true;
+      else if (vals[i] < -EPS) prog.neg = true;
+    }
+    return prog;
+  }
+
   function isolatedK(eqText) {
     var kind = global.DoctematicaAlgebra.isolatedRhsKind(eqText, "x2");
     if (kind !== "value" && kind !== "unreduced") return { kind: kind, k: null };
@@ -872,6 +886,28 @@
       .replace(/\s+/g, "")
       .replace(/sqrt/gi, "√");
     var hadSqrt = false;
+    function applyNth(v, n) {
+      if (v == null || !isFinite(v)) return "NaN";
+      if (v < 0 && n % 2 === 0) return "NaN";
+      if (near0(v)) return "0";
+      var abs = Math.abs(v);
+      var r = Math.pow(abs, 1 / n);
+      var rounded = Math.round(r);
+      if (Math.abs(Math.pow(rounded, n) - abs) < 1e-6) r = rounded;
+      return String(v < 0 ? -r : r);
+    }
+    t = t.replace(/√\[(\d+)\]\(([^()]*)\)/g, function (_, n, inner) {
+      hadSqrt = true;
+      return applyNth(evalExpr(inner), parseInt(n, 10));
+    });
+    t = t.replace(/∛\(([^()]*)\)/g, function (_, inner) {
+      hadSqrt = true;
+      return applyNth(evalExpr(inner), 3);
+    });
+    t = t.replace(/∜\(([^()]*)\)/g, function (_, inner) {
+      hadSqrt = true;
+      return applyNth(evalExpr(inner), 4);
+    });
     t = t.replace(/√\(([^()]*)\)/g, function (_, inner) {
       hadSqrt = true;
       var n = evalExpr(inner);
@@ -1032,10 +1068,18 @@
 
   function normFactorText(s) {
     return String(s || "")
+      .replace(/⁶/g, "^6")
+      .replace(/⁵/g, "^5")
+      .replace(/⁴/g, "^4")
+      .replace(/³/g, "^3")
       .replace(/²/g, "^2")
       .replace(/[−–—]/g, "-")
       .replace(/[×·]/g, "*")
       .replace(/\s+/g, "");
+  }
+
+  function normHighUnknown(s) {
+    return normFactorText(s).replace(/[ty]/gi, "x");
   }
 
   function unwrapParens(s) {
@@ -1153,6 +1197,7 @@
   function parseLinearFactor(text) {
     var raw = unwrapParens(normFactorText(text));
     if (!raw) return null;
+    if (/x\^[2-9]|x²|x³|x⁴|x⁵/i.test(raw)) return null;
     try {
       var eq = global.DoctematicaAlgebra.parseEquation(raw + "=0");
       var a = eq.left.a - eq.right.a;
@@ -1186,8 +1231,15 @@
         if (depth === 0 && (n === "(" || n === "x" || n === "X" || (n >= "0" && n <= "9"))) {
           return [s.slice(0, i + 1), s.slice(i + 1)];
         }
-      } else if (depth === 0 && (c === "x" || c === "X") && n === "(") {
-        return [s.slice(0, i + 1), s.slice(i + 1)];
+      } else if (depth === 0 && (c === "x" || c === "X")) {
+        var k = i + 1;
+        if (s.charAt(k) === "^") {
+          k += 1;
+          while (k < s.length && s.charAt(k) >= "0" && s.charAt(k) <= "9") k += 1;
+        }
+        if (s.charAt(k) === "(") {
+          return [s.slice(0, k), s.slice(k)];
+        }
       }
     }
     return null;
@@ -1284,30 +1336,848 @@
     };
   }
 
-  function parseRootVals(text) {
-    var parsed = parseSqrtTyped(text);
-    if (!parsed || parsed.ok === false || parsed.none) return null;
-    if (parsed.pm) return [parsed.abs, -parsed.abs];
-    return parsed.vals;
+  function emptyHighPoly() {
+    return { a6: 0, a5: 0, a4: 0, a3: 0, a2: 0, a1: 0, a0: 0 };
   }
 
-  function checkFactorRoots(typed, pack, progress) {
-    progress = progress || { z: false, o: false };
+  function polyHighSide(side) {
+    var t = normHighUnknown(side);
+    if (!t || t === "0") return emptyHighPoly();
+    if (t.charAt(0) !== "+" && t.charAt(0) !== "-") t = "+" + t;
+    var out = emptyHighPoly();
+    var i = 0;
+    while (i < t.length) {
+      var sign = t.charAt(i) === "-" ? -1 : 1;
+      if (t.charAt(i) === "+" || t.charAt(i) === "-") i += 1;
+      var num = readPolyNum(t, i);
+      if (!num) return null;
+      i = num.i;
+      var coef = sign * (num.had ? num.v : 1);
+      if (t.slice(i, i + 3) === "x^6") {
+        out.a6 += coef;
+        i += 3;
+      } else if (t.slice(i, i + 3) === "x^5") {
+        out.a5 += coef;
+        i += 3;
+      } else if (t.slice(i, i + 3) === "x^4") {
+        out.a4 += coef;
+        i += 3;
+      } else if (t.slice(i, i + 3) === "x^3") {
+        out.a3 += coef;
+        i += 3;
+      } else if (t.slice(i, i + 3) === "x^2") {
+        out.a2 += coef;
+        i += 3;
+      } else if (t.charAt(i) === "x" || t.charAt(i) === "X") {
+        out.a1 += coef;
+        i += 1;
+      } else {
+        if (!num.had) return null;
+        out.a0 += sign * num.v;
+      }
+    }
+    return out;
+  }
+
+  function parseHighPolyEq(text) {
+    var s = normHighUnknown(text);
+    var parts = s.split("=");
+    if (parts.length !== 2) return null;
+    var L = polyHighSide(parts[0]);
+    var R = polyHighSide(parts[1]);
+    if (!L || !R) return null;
+    return {
+      a6: L.a6 - R.a6,
+      a5: L.a5 - R.a5,
+      a4: L.a4 - R.a4,
+      a3: L.a3 - R.a3,
+      a2: L.a2 - R.a2,
+      a1: L.a1 - R.a1,
+      a0: L.a0 - R.a0,
+    };
+  }
+
+  function highPolyDegs(poly) {
+    var degs = [];
+    var d;
+    for (d = 6; d >= 0; d--) {
+      if (!near0(poly["a" + d])) degs.push(d);
+    }
+    return degs;
+  }
+
+  function formatHighPowTerm(coef, exp) {
+    if (near0(coef)) return "";
+    var body;
+    if (exp === 0) return fmtLinNum(coef);
+    if (exp === 1) body = "x";
+    else body = "x^" + exp;
+    if (nearNum(coef, 1)) return body;
+    if (nearNum(coef, -1)) return "-" + body;
+    return fmtLinNum(coef) + body;
+  }
+
+  function formatHighPoly(poly) {
+    var bits = [];
+    var d;
+    for (d = 6; d >= 0; d--) {
+      var c = poly["a" + d];
+      if (near0(c)) continue;
+      var term = formatHighPowTerm(c, d);
+      if (!bits.length) bits.push(term);
+      else if (c > 0) bits.push("+" + term.replace(/^\+/, ""));
+      else bits.push(term);
+    }
+    if (!bits.length) return "0";
+    return bits.join("");
+  }
+
+  function formatAx2C(a, c) {
+    var bits = [];
+    if (!near0(a)) {
+      if (nearNum(a, 1)) bits.push("x^2");
+      else if (nearNum(a, -1)) bits.push("-x^2");
+      else bits.push(fmtLinNum(a) + "x^2");
+    }
+    if (!near0(c)) {
+      if (!bits.length) bits.push(fmtLinNum(c));
+      else if (c > 0) bits.push("+" + fmtLinNum(c));
+      else bits.push(fmtLinNum(c));
+    }
+    if (!bits.length) return "0";
+    return bits.join("");
+  }
+
+  function formatLinAxB(a, b) {
+    var bits = [];
+    if (!near0(a)) {
+      if (nearNum(a, 1)) bits.push("x");
+      else if (nearNum(a, -1)) bits.push("-x");
+      else bits.push(fmtLinNum(a) + "x");
+    }
+    if (!near0(b)) {
+      if (!bits.length) bits.push(fmtLinNum(b));
+      else if (b > 0) bits.push("+" + fmtLinNum(b));
+      else bits.push(fmtLinNum(b));
+    }
+    if (!bits.length) return "0";
+    return bits.join("");
+  }
+
+  function formatPowerFactor(coef, exp) {
+    return formatHighPowTerm(coef, exp);
+  }
+
+  function preferredHighFactorFromPoly(poly) {
+    var degs = highPolyDegs(poly);
+    if (degs.length !== 2 || degs[1] < 1 || !near0(poly.a0)) {
+      throw new Error("ברמה זו מצפים לשני איברים עם חזקות של x (בלי מספר חופשי).");
+    }
+    var p = degs[0];
+    var q = degs[1];
+    var ap = poly["a" + p];
+    var aq = poly["a" + q];
+    var g = 1;
+    if (isIntNum(ap) && isIntNum(aq)) {
+      g = gcd(Math.round(Math.abs(ap)), Math.round(Math.abs(aq))) || 1;
+      if (ap < 0) g = -g;
+    }
+    var innerA = ap / g;
+    var innerB = aq / g;
+    var outerExp = q;
+    var innerExp = p - q;
+    if (innerExp !== 1 && innerExp !== 2) {
+      throw new Error("אחרי הוצאת חזקה משותפת נשארת חזקה שאינה נתמכת ברמה זו.");
+    }
+    var outer = formatPowerFactor(g, outerExp);
+    var inner = innerExp === 1 ? formatLinAxB(innerA, innerB) : formatAx2C(innerA, innerB);
+    return {
+      factored: outer + "(" + inner + ")=0",
+      outerCoef: g,
+      outerExp: outerExp,
+      innerExp: innerExp,
+      innerA: innerA,
+      innerB: innerB,
+      e2Kind: innerExp === 1 ? "linear" : "quad",
+    };
+  }
+
+  function parsePowerFactor(text) {
+    var raw = unwrapParens(normHighUnknown(text));
+    if (!raw) return null;
+    var m = raw.match(/^([+-])?(?:(\d+(?:\.\d+)?(?:\/\d+)?))?x(?:\^([2-9]))?$/i);
+    if (!m) return null;
+    var sign = m[1] === "-" ? -1 : 1;
+    var coef = 1;
+    if (m[2]) {
+      if (m[2].indexOf("/") !== -1) {
+        var bits = m[2].split("/");
+        coef = parseFloat(bits[0], 10) / parseFloat(bits[1], 10);
+      } else coef = parseFloat(m[2], 10);
+    }
+    var exp = m[3] ? parseInt(m[3], 10) : 1;
+    if (!isFinite(coef) || exp < 1) return null;
+    return { kind: "power", coef: sign * coef, exp: exp, src: raw };
+  }
+
+  function parseQuadFactor(text) {
+    var raw = unwrapParens(normHighUnknown(text));
+    if (!raw) return null;
+    var p = polySide(raw);
+    if (!p || near0(p.a) || !near0(p.b)) return null;
+    return { a: p.a, b: 0, c: p.c, src: raw };
+  }
+
+  /** ax²+bx+c with a≠0 (כולל x²−4x וגם x²−9). */
+  function parseGeneralQuadFactor(text) {
+    var raw = unwrapParens(normHighUnknown(text));
+    if (!raw) return null;
+    var p = polySide(raw);
+    if (!p || near0(p.a)) return null;
+    return { a: p.a, b: p.b, c: p.c, src: raw };
+  }
+
+  function expandHighProduct(power, inner, e2Kind) {
+    var poly = emptyHighPoly();
+    if (e2Kind === "linear") {
+      poly["a" + (power.exp + 1)] = power.coef * inner.a;
+      poly["a" + power.exp] = power.coef * inner.b;
+      return poly;
+    }
+    var b = inner.b || 0;
+    var c = inner.c || 0;
+    poly["a" + (power.exp + 2)] = power.coef * inner.a;
+    if (!near0(b)) poly["a" + (power.exp + 1)] = power.coef * b;
+    if (!near0(c)) poly["a" + power.exp] = power.coef * c;
+    return poly;
+  }
+
+  function innerE2Kind(inner) {
+    if (inner.b != null && !near0(inner.b) && near0(inner.c || 0)) return "axbx";
+    if (near0(inner.b || 0)) return "quad";
+    return "quad";
+  }
+
+  function parseHighProductEq(text) {
+    var s = normHighUnknown(text);
+    var parts = s.split("=");
+    if (parts.length !== 2) return null;
+    var left = parts[0];
+    var right = parts[1];
+    if (right === "0" || right === "+0" || right === "-0") {
+      /* keep */
+    } else if (left === "0" || left === "+0" || left === "-0") {
+      left = right;
+    } else return null;
+    if (hasDepth0PlusMinus(left)) return null;
+    var bits = splitProductLeft(left);
+    if (!bits) return null;
+
+    function tryPair(a, b) {
+      var power = parsePowerFactor(a);
+      if (!power) return null;
+      var lin = parseLinearFactor(b);
+      if (lin) {
+        return {
+          power: power,
+          inner: lin,
+          e2Kind: "linear",
+          e1: unwrapParens(a) + "=0",
+          e2: unwrapParens(b) + "=0",
+          kind: "high",
+          poly: expandHighProduct(power, lin, "linear"),
+        };
+      }
+      var gen = parseGeneralQuadFactor(b);
+      if (gen) {
+        var kind2 = innerE2Kind(gen);
+        return {
+          power: power,
+          inner: gen,
+          e2Kind: kind2,
+          e1: unwrapParens(a) + "=0",
+          e2: unwrapParens(b) + "=0",
+          kind: "high",
+          poly: expandHighProduct(power, gen, "quad"),
+        };
+      }
+      return null;
+    }
+
+    return tryPair(bits[0], bits[1]) || tryPair(bits[1], bits[0]);
+  }
+
+  function highProductMatches(pack, prod) {
+    if (!prod || !pack || !pack.poly || !prod.poly) return false;
+    return highPolyEquivalent(prod.poly, pack.poly);
+  }
+
+  function isPartialHighFactor(pack, prod) {
+    if (!pack || !prod || !prod.power) return false;
+    var maxExp = pack.outerExp || 1;
+    return prod.power.exp < maxExp || prod.e2Kind === "axbx";
+  }
+
+  function partialHighFactorMessage(pack, prod) {
+    var tip = "";
+    if (pack && pack.outerExp > 1 && prod && prod.power && prod.power.exp < pack.outerExp) {
+      tip =
+        " אפשר גם להוציא חזקה גבוהה יותר (למשל " +
+        formatPowerFactor(pack.outerCoef || 1, pack.outerExp) +
+        "), ואז נשאר גורם פשוט יותר.";
+    } else if (prod && prod.e2Kind === "axbx") {
+      tip = " אפשר להמשיך ולהוציא x גם מתוך הסוגריים.";
+    }
+    return (
+      "נכון. הוצאתם גורם משותף." +
+      tip +
+      " אפשר לפצל עכשיו («חילוק למשוואות») ולהמשיך לפרק בענף, או לשפר את הפירוק קודם."
+    );
+  }
+
+  function highPolyEquivalent(p, q) {
+    if (!p || !q) return false;
+    var scale = null;
+    function match(u, v) {
+      if (near0(u) && near0(v)) return true;
+      if (near0(u) || near0(v)) return false;
+      var r = u / v;
+      if (scale == null) {
+        scale = r;
+        return true;
+      }
+      return Math.abs(r - scale) < 1e-5;
+    }
+    return (
+      match(p.a6 || 0, q.a6 || 0) &&
+      match(p.a5 || 0, q.a5 || 0) &&
+      match(p.a4 || 0, q.a4 || 0) &&
+      match(p.a3 || 0, q.a3 || 0) &&
+      match(p.a2 || 0, q.a2 || 0) &&
+      match(p.a1 || 0, q.a1 || 0) &&
+      match(p.a0 || 0, q.a0 || 0)
+    );
+  }
+
+  function formatHighRootsAnswer(roots) {
+    if (!roots || !roots.length) return "אין פתרון ממשי";
+    return roots
+      .map(function (r) {
+        return "x = " + fmtDisp(fracFromNumber(r) || frac(Math.round(r * 1000), 1000));
+      })
+      .join(", ");
+  }
+
+  function isPowerZeroEq(text) {
+    var s = normHighUnknown(text);
+    var parts = s.split("=");
+    if (parts.length !== 2) return false;
+    if (parts[1] !== "0" && parts[1] !== "+0" && parts[1] !== "-0") return false;
+    return !!parsePowerFactor(parts[0]);
+  }
+
+  function powerZeroSolved(eq) {
+    if (!linearSolved(eq)) return false;
+    try {
+      var sol = global.DoctematicaAlgebra.solutionOf(global.DoctematicaAlgebra.parseEquation(eq));
+      return sol != null && nearNum(sol, 0);
+    } catch (err) {
+      return /x\s*=\s*0/i.test(String(eq || ""));
+    }
+  }
+
+  function checkPowerZeroStep(prev, typed) {
+    var t = normHighUnknown(typed);
+    if (powerZeroSolved(t)) {
+      return { ok: true, solved: true, message: "אם חזקה של x שווה לאפס, אז x = 0." };
+    }
+    if (isPowerZeroEq(t) && isPowerZeroEq(prev)) {
+      var a = parsePowerFactor(normHighUnknown(prev).split("=")[0]);
+      var b = parsePowerFactor(t.split("=")[0]);
+      if (a && b && a.exp === b.exp && !near0(a.coef) && !near0(b.coef)) {
+        return {
+          ok: true,
+          solved: false,
+          message: "אפשר לפשט את המקדם. בסוף מ־xⁿ = 0 מקבלים x = 0.",
+        };
+      }
+    }
+    return null;
+  }
+
+  function analyzeHighFactorStart(start) {
+    var raw = normHighUnknown(start);
+    var poly = parseHighPolyEq(raw);
+    if (!poly) throw new Error("לא הצלחתי לקרוא את המשוואה.");
+    if (!near0(poly.a0)) {
+      throw new Error("ברמה זו מצפים למשוואה בלי מספר חופשי אחרי האיסוף.");
+    }
+    var plan = preferredHighFactorFromPoly(poly);
+    var standard = formatHighPoly(poly) + "=0";
+    var factored = plan.factored;
+    var prod = parseHighProductEq(factored);
+    var e1 = prod ? prod.e1 : formatPowerFactor(plan.outerCoef, plan.outerExp) + "=0";
+    var e2 =
+      prod
+        ? prod.e2
+        : plan.e2Kind === "linear"
+          ? formatLinAxB(plan.innerA, plan.innerB) + "=0"
+          : formatAx2C(plan.innerA, plan.innerB) + "=0";
+    var sqrtPack = null;
+    var linRoot = null;
+    var linRootF = frac(0, 1);
+    var roots = [0];
+    if (plan.e2Kind === "quad") {
+      try {
+        sqrtPack = analyzeSqrtStart(e2);
+      } catch (err) {
+        sqrtPack = null;
+      }
+      if (sqrtPack && sqrtPack.kind === "two" && sqrtPack.root) {
+        var rv = sqrtPack.root.n / sqrtPack.root.d;
+        roots.push(rv, -rv);
+      }
+    } else {
+      linRoot = near0(plan.innerA) ? null : -plan.innerB / plan.innerA;
+      linRootF = fracFromNumber(linRoot) || frac(Math.round(linRoot * 1000), 1000);
+      roots.push(linRoot);
+    }
+    var steps = [raw];
+    if (normFactorText(raw) !== normFactorText(standard)) steps.push(standard);
+    steps.push(factored);
+    steps.push(e1);
+    steps.push(e2);
+    steps.push("x = 0");
+    if (plan.e2Kind === "linear") {
+      steps.push("x = " + fmtDisp(linRootF));
+    } else if (sqrtPack && sqrtPack.kind === "two" && sqrtPack.root) {
+      if (sqrtPack.steps) {
+        sqrtPack.steps.forEach(function (s) {
+          if (steps.indexOf(s) === -1) steps.push(s);
+        });
+      }
+      steps.push("x = ±" + fmtDisp(sqrtPack.root));
+    } else if (sqrtPack && sqrtPack.kind === "none") {
+      steps.push("אין פתרון ממשי");
+    }
+    return {
+      high: true,
+      poly: poly,
+      a5: poly.a5,
+      a4: poly.a4,
+      a3: poly.a3,
+      a2: poly.a2,
+      a1: poly.a1,
+      a0: poly.a0,
+      start: raw,
+      standard: standard,
+      factored: factored,
+      e1: e1,
+      e2: e2,
+      e2Kind: plan.e2Kind,
+      outerExp: plan.outerExp,
+      sqrt: sqrtPack,
+      quadKind: sqrtPack ? sqrtPack.kind : plan.e2Kind === "quad" ? "none" : null,
+      quadRoot: sqrtPack ? sqrtPack.root : null,
+      linRoot: linRoot,
+      linRootF: linRootF,
+      roots: roots,
+      steps: steps,
+      answer: formatHighRootsAnswer(roots),
+      other: plan.e2Kind === "linear" ? linRoot : roots.length > 1 ? roots[1] : 0,
+      otherF:
+        plan.e2Kind === "linear"
+          ? linRootF
+          : roots.length > 1
+            ? fracFromNumber(roots[1]) || frac(Math.round(roots[1] * 1000), 1000)
+            : frac(0, 1),
+    };
+  }
+
+  function highBranchQuadSolved(eq, pack) {
+    if (!pack) return false;
+    if (pack.quadKind === "none") return isNoRealText(eq);
+    if (pack.quadKind === "one") return linearSolved(eq) && /x\s*=\s*0/i.test(eq);
+    var vals = parseRootVals(eq);
+    if (!vals || !vals.length || !pack.quadRoot) return false;
+    var r = pack.quadRoot.n / pack.quadRoot.d;
+    var pos = false;
+    var neg = false;
+    var i;
+    for (i = 0; i < vals.length; i++) {
+      if (nearNum(vals[i], r)) pos = true;
+      if (nearNum(vals[i], -r)) neg = true;
+    }
+    return pos && neg;
+  }
+
+  function highBranchE2Solved(eq, pack) {
+    if (!pack) return false;
+    if (pack.e2Kind === "linear") {
+      if (!linearSolved(eq) || pack.linRoot == null) return false;
+      try {
+        var sol = global.DoctematicaAlgebra.solutionOf(global.DoctematicaAlgebra.parseEquation(eq));
+        return sol != null && nearNum(sol, pack.linRoot);
+      } catch (err) {
+        return false;
+      }
+    }
+    return highBranchQuadSolved(eq, pack);
+  }
+
+  function highBranchE1Solved(eq) {
+    return powerZeroSolved(eq);
+  }
+
+  function matchHighBranchStep(st, typed, pack) {
+    var tryEqs = st && st.eqs;
+    if (!tryEqs || !tryEqs.length) return null;
+    var t = normHighUnknown(typed);
+    var lastFail = null;
+    var j;
+    for (j = 0; j < tryEqs.length; j++) {
+      if (st.solved && st.solved[j]) continue;
+      var cur = tryEqs[j];
+      var solvedFlags = (st.solved || [false, false]).slice();
+      var eqs = tryEqs.slice();
+
+      if (j === 0) {
+        var pz = checkPowerZeroStep(cur, t);
+        if (pz && pz.ok) {
+          eqs[0] = t;
+          if (pz.solved || highBranchE1Solved(t)) solvedFlags[0] = true;
+          return {
+            ok: true,
+            which: 0,
+            result: pz,
+            eqs: eqs,
+            solvedFlags: solvedFlags,
+            solvedAll: !!(solvedFlags[0] && solvedFlags[1]),
+          };
+        }
+        try {
+          var lin0 = global.DoctematicaAlgebra.checkStep(cur, t);
+          if (lin0.ok) {
+            eqs[0] = t;
+            if (lin0.solved || highBranchE1Solved(t) || linearSolved(t)) solvedFlags[0] = true;
+            return {
+              ok: true,
+              which: 0,
+              result: lin0,
+              eqs: eqs,
+              solvedFlags: solvedFlags,
+              solvedAll: !!(solvedFlags[0] && solvedFlags[1]),
+            };
+          }
+          if (!lastFail) lastFail = lin0;
+        } catch (err0) {
+          /* continue */
+        }
+        continue;
+      }
+
+      // j === 1 — ענף שני: לינארי / ax²+bx (פירוק נוסף) / ריבועי בשורש
+      var axbxCur = parseAxBxZero(cur);
+      if (axbxCur) {
+        var localProd = parseProductEq(t);
+        if (localProd && productMatches({ a: axbxCur.a, b: axbxCur.b }, localProd)) {
+          eqs[1] = t;
+          return {
+            ok: true,
+            which: 1,
+            result: {
+              ok: true,
+              solved: false,
+              message:
+                "נכון. הוצאתם גורם משותף בענף. לחצו שוב «חילוק למשוואות», או פתרו את הגורם שנשאר (x = " +
+                fmtDisp(pack.linRootF || pack.otherF) +
+                ").",
+            },
+            eqs: eqs,
+            solvedFlags: solvedFlags,
+            solvedAll: false,
+            resplit: true,
+          };
+        }
+        var localHigh = parseHighProductEq(t);
+        if (
+          localHigh &&
+          localHigh.e2Kind === "linear" &&
+          highPolyEquivalent(localHigh.poly, {
+            a5: 0,
+            a4: 0,
+            a3: 0,
+            a2: axbxCur.a,
+            a1: axbxCur.b,
+            a0: 0,
+          })
+        ) {
+          eqs[1] = t;
+          return {
+            ok: true,
+            which: 1,
+            result: {
+              ok: true,
+              solved: false,
+              message:
+                "נכון. הוצאתם גורם. לחצו שוב «חילוק למשוואות», או רשמו x = " +
+                fmtDisp(pack.linRootF || pack.otherF) +
+                ".",
+            },
+            eqs: eqs,
+            solvedFlags: solvedFlags,
+            solvedAll: false,
+            resplit: true,
+          };
+        }
+      }
+
+      var prodOnBranch = parseProductEq(cur) || parseHighProductEq(cur);
+      if (prodOnBranch && pack.e2Kind === "linear" && pack.linRoot != null) {
+        var pe1 = normFactorText(prodOnBranch.e1 || "");
+        var pe2 = normFactorText(prodOnBranch.e2 || "");
+        var tn = normFactorText(t);
+        // בחירת אחד הגורמים אחרי פירוק מקומי (עדיין לא פתרון סופי)
+        if (tn === pe1 || tn === pe2) {
+          eqs[1] = t;
+          var pickedSolved = highBranchE2Solved(t, pack);
+          solvedFlags[1] = pickedSolved;
+          var otherFactor = tn === pe1 ? prodOnBranch.e2 : prodOnBranch.e1;
+          var showZeroFirst =
+            !pickedSolved &&
+            !/x\s*=\s*0/i.test(t) &&
+            (/x\s*=\s*0/i.test(otherFactor) || /^x=0$/i.test(normFactorText(otherFactor)));
+          return {
+            ok: true,
+            which: 1,
+            result: {
+              ok: true,
+              solved: pickedSolved,
+              message: pickedSolved
+                ? "הפתרון מהענף: x = " + fmtDisp(pack.linRootF || pack.otherF) + "."
+                : /x\s*=\s*0/i.test(t)
+                  ? "נכון, שוב x = 0. עכשיו פתרו גם את הגורם השני עד x = מספר."
+                  : "נכון. עכשיו בודדו את x עד הסוף (למשל x−2=0 → x=2).",
+            },
+            eqs: eqs,
+            solvedFlags: solvedFlags,
+            solvedAll: !!(solvedFlags[0] && solvedFlags[1]),
+            trailAlso: showZeroFirst ? otherFactor : null,
+          };
+        }
+        var workLin =
+          /^x=0$/i.test(pe1.replace(/\s+/g, "")) || (linearSolved(prodOnBranch.e1) && /x\s*=\s*0/i.test(prodOnBranch.e1))
+            ? prodOnBranch.e2
+            : /^x=0$/i.test(pe2.replace(/\s+/g, "")) || (linearSolved(prodOnBranch.e2) && /x\s*=\s*0/i.test(prodOnBranch.e2))
+              ? prodOnBranch.e1
+              : prodOnBranch.e2;
+        try {
+          var linFromProd = global.DoctematicaAlgebra.checkStep(workLin, t);
+          if (linFromProd.ok) {
+            eqs[1] = t;
+            if (linFromProd.solved || highBranchE2Solved(t, pack)) solvedFlags[1] = true;
+            return {
+              ok: true,
+              which: 1,
+              result: {
+                ok: true,
+                solved: !!solvedFlags[1],
+                message: solvedFlags[1]
+                  ? linFromProd.message
+                  : linFromProd.message + " המשיכו עד x = מספר.",
+              },
+              eqs: eqs,
+              solvedFlags: solvedFlags,
+              solvedAll: !!(solvedFlags[0] && solvedFlags[1]),
+            };
+          }
+        } catch (errProd) {
+          /* continue */
+        }
+      }
+
+      if (pack.e2Kind === "linear") {
+        try {
+          var lin1 = global.DoctematicaAlgebra.checkStep(cur, t);
+          if (lin1.ok) {
+            eqs[1] = t;
+            if (lin1.solved || highBranchE2Solved(t, pack)) solvedFlags[1] = true;
+            return {
+              ok: true,
+              which: 1,
+              result: lin1,
+              eqs: eqs,
+              solvedFlags: solvedFlags,
+              solvedAll: !!(solvedFlags[0] && solvedFlags[1]),
+            };
+          }
+          if (!lastFail) lastFail = lin1;
+        } catch (err1) {
+          /* continue */
+        }
+        if (highBranchE2Solved(t, pack) || (isRootAnswerText(t) && pack.linRoot != null)) {
+          var valsLin = parseRootVals(t);
+          var hitLin =
+            highBranchE2Solved(t, pack) ||
+            (valsLin && valsLin.length && valsLin.every(function (v) {
+              return nearNum(v, pack.linRoot);
+            }));
+          if (hitLin) {
+            eqs[1] = t;
+            solvedFlags[1] = true;
+            return {
+              ok: true,
+              which: 1,
+              result: {
+                ok: true,
+                solved: true,
+                message: "הפתרון מהענף: x = " + fmtDisp(pack.linRootF || pack.otherF) + ".",
+              },
+              eqs: eqs,
+              solvedFlags: solvedFlags,
+              solvedAll: !!(solvedFlags[0] && solvedFlags[1]),
+            };
+          }
+        }
+        if (axbxCur || (prodOnBranch && prodOnBranch.e2Kind !== "quad")) {
+          /* already tried factoring above */
+        } else {
+          continue;
+        }
+      }
+
+      if (pack.e2Kind === "linear") continue;
+
+      try {
+        var x2res = global.DoctematicaAlgebra.checkStep(cur, t, { unknown: "x2" });
+        if (x2res.ok) {
+          eqs[1] = t;
+          if (highBranchE2Solved(t, pack)) solvedFlags[1] = true;
+          return {
+            ok: true,
+            which: 1,
+            result: x2res,
+            eqs: eqs,
+            solvedFlags: solvedFlags,
+            solvedAll: !!(solvedFlags[0] && solvedFlags[1]),
+          };
+        }
+        if (!lastFail) lastFail = x2res;
+      } catch (errX2) {
+        /* continue */
+      }
+      if (pack && pack.sqrt) {
+        var isoCur = isolatedK(cur);
+        var isolatedNow =
+          isoCur && (isoCur.kind === "value" || isoCur.kind === "unreduced");
+        var bothCur = parseBothSides(cur);
+        var partialRoot = isRootAnswerText(cur) && !hasX2(cur);
+        var readyForSqrt = !!(isolatedNow || bothCur || partialRoot);
+        if (!readyForSqrt && (isRootAnswerText(t) || isNoRealText(t) || parseBothSides(t))) {
+          lastFail = {
+            ok: false,
+            message: "קודם העבירו את המספר לאגף השני ובודדו את x², ורק אז הוציאו שורש.",
+          };
+        } else if (readyForSqrt) {
+          if (isolatedNow) {
+            var both = checkSqrtBothSides(cur, t);
+            if (both && both.ok) {
+              eqs[1] = t;
+              return {
+                ok: true,
+                which: 1,
+                result: both,
+                eqs: eqs,
+                solvedFlags: solvedFlags,
+                solvedAll: false,
+              };
+            }
+          }
+          var priorProg = partialRoot ? sqrtProgFromText(cur) : { pos: false, neg: false };
+          if (st.sqrtProg) {
+            priorProg = {
+              pos: !!(priorProg.pos || st.sqrtProg.pos),
+              neg: !!(priorProg.neg || st.sqrtProg.neg),
+            };
+          }
+          var fin = checkSqrtFinish(t, pack.sqrt, priorProg);
+          if (fin && fin.ok) {
+            eqs[1] = t;
+            if (fin.solved || highBranchE2Solved(t, pack)) solvedFlags[1] = true;
+            return {
+              ok: true,
+              which: 1,
+              result: fin,
+              eqs: eqs,
+              solvedFlags: solvedFlags,
+              solvedAll: !!(solvedFlags[0] && solvedFlags[1]),
+              sqrtProg: fin.progress || priorProg,
+            };
+          }
+          if (pack.quadKind === "none" && isNoRealText(t)) {
+            eqs[1] = t;
+            solvedFlags[1] = true;
+            return {
+              ok: true,
+              which: 1,
+              result: { ok: true, solved: true, message: "אין פתרון ממשי מהענף הריבועי." },
+              eqs: eqs,
+              solvedFlags: solvedFlags,
+              solvedAll: !!(solvedFlags[0] && solvedFlags[1]),
+            };
+          }
+        }
+      }
+    }
+    if (lastFail) return { ok: false, result: lastFail };
+    return null;
+  }
+
+  function checkHighFactorRoots(typed, pack, progress) {
+    progress = progress || { z: false, o: false, n: false };
+    var next = { z: !!progress.z, o: !!progress.o, n: !!progress.n };
+    if (isNoRealText(typed) && pack.e2Kind === "quad" && pack.quadKind === "none") {
+      next.n = true;
+      if (next.z) {
+        return {
+          ok: true,
+          solved: true,
+          progress: next,
+          message: "הפתרון: " + pack.answer + ".",
+        };
+      }
+      return {
+        ok: true,
+        more: true,
+        progress: next,
+        message: "נכון לגבי הענף הריבועי. יש גם את הפתרון x = 0.",
+      };
+    }
     var vals = parseRootVals(typed);
     if (!vals || !vals.length) return null;
-    var next = { z: progress.z, o: progress.o };
     var i;
     for (i = 0; i < vals.length; i++) {
       if (nearNum(vals[i], 0)) next.z = true;
-      else if (nearNum(vals[i], pack.other)) next.o = true;
+      else if (pack.e2Kind === "linear" && pack.linRoot != null && nearNum(vals[i], pack.linRoot)) {
+        next.o = true;
+      } else if (pack.quadRoot && nearNum(vals[i], pack.quadRoot.n / pack.quadRoot.d)) next.o = true;
+      else if (pack.quadRoot && nearNum(vals[i], -pack.quadRoot.n / pack.quadRoot.d)) next.n = true;
       else return { ok: false, message: "זה לא אחד הפתרונות של המשוואה הזו." };
     }
-    if (next.z && next.o) {
+    var otherDone =
+      pack.e2Kind === "linear"
+        ? next.o
+        : pack.quadKind === "none"
+          ? next.n
+          : pack.quadKind === "two"
+            ? next.o && next.n
+            : true;
+    if (next.z && otherDone) {
       return {
         ok: true,
         solved: true,
         progress: next,
-        message: "שני הפתרונות: x = 0, x = " + fmtDisp(pack.otherF) + ".",
+        message: "כל הפתרונות: " + pack.answer + ".",
       };
     }
     return {
@@ -1316,84 +2186,698 @@
       solved: false,
       progress: next,
       message: next.z
-        ? "נכון, x = 0. יש עוד משוואה מהסוגריים — פתרו אותה, או לחצו «חילוק למשוואות»."
-        : "נכון. יש גם את הפתרון x = 0, כי הוצאתם x כגורם משותף.",
+        ? pack.e2Kind === "linear"
+          ? "נכון, x = 0. יש עוד פתרון מהענף השני."
+          : "נכון, x = 0. יש עוד פתרונות מהענף הריבועי."
+        : "נכון. יש גם את הפתרון x = 0 מהגורם המשותף.",
     };
   }
 
-  function nextFactorStep(eqText, pack, st) {
+  function checkHighFactorTyped(prev, typed, pack, st) {
+    st = st || { split: false, eqs: [], solved: [false, false], progress: { z: false, o: false, n: false } };
+    var t = String(typed || "").trim().replace(/t/gi, "x");
+    if (!t) return { ok: false, message: "כתבו את הצעד הבא." };
+    if (global.DoctematicaAlgebra && global.DoctematicaAlgebra.missingEqualsSign(t)) {
+      return { ok: false, message: "חסר סימן שווה" };
+    }
+
+    var gotPoly = parseHighPolyEq(t);
+    var wantPoly = pack.poly || {
+      a5: pack.a5 || 0,
+      a4: pack.a4 || 0,
+      a3: pack.a3 || 0,
+      a2: pack.a2 || 0,
+      a1: pack.a1 || 0,
+      a0: pack.a0 || 0,
+    };
+    if (gotPoly && !parseHighProductEq(t) && highPolyEquivalent(gotPoly, wantPoly)) {
+      if (normFactorText(t) === normFactorText(prev)) {
+        return { ok: false, message: "זו אותה משוואה. כתבו צעד חדש." };
+      }
+      return {
+        ok: true,
+        rearrange: true,
+        message: "צעד חוקי. עכשיו הוציאו חזקה משותפת של x (ואפשר גם מספר).",
+      };
+    }
+
+    var prodTyped = parseHighProductEq(t);
+    if (prodTyped && highProductMatches(pack, prodTyped)) {
+      var partial = isPartialHighFactor(pack, prodTyped);
+      return {
+        ok: true,
+        factored: true,
+        partial: partial,
+        eqs: [prodTyped.e1, prodTyped.e2],
+        solved: [highBranchE1Solved(prodTyped.e1), highBranchE2Solved(prodTyped.e2, pack)],
+        solvedFlags: [highBranchE1Solved(prodTyped.e1), highBranchE2Solved(prodTyped.e2, pack)],
+        message: partial
+          ? partialHighFactorMessage(pack, prodTyped)
+          : "נכון. הוצאתם גורם משותף. עכשיו לחצו «חילוק למשוואות», או פתרו כל גורם בנפרד.",
+      };
+    }
+    if (prodTyped) {
+      // מכפלה שלא מתאימה לכלל המשוואה — בפיצול ייתכן פירוק מקומי בענף (x²−4x → x(x−4))
+      if (!(st.split && st.eqs && st.eqs.length)) {
+        return {
+          ok: false,
+          message: "המכפלה לא מתאימה למשוואה המקורית. בדקו מה מוציאים מחוץ לסוגריים ומה נשאר בפנים.",
+        };
+      }
+    }
+
+    var roots = checkHighFactorRoots(t, pack, st.progress);
+    var tryEqs = [];
+    if (st.split && st.eqs && st.eqs.length) tryEqs = st.eqs;
+    else {
+      var p0 = parseHighProductEq(prev);
+      if (p0 && highProductMatches(pack, p0)) tryEqs = [p0.e1, p0.e2];
+    }
+
+    if (tryEqs.length) {
+      var hit = matchHighBranchStep(
+        { eqs: tryEqs, solved: st.solved, sqrtProg: st.sqrtProg },
+        t,
+        pack
+      );
+      if (hit && hit.ok) {
+        return {
+          ok: true,
+          split: true,
+          eqs: hit.eqs,
+          solvedFlags: hit.solvedFlags,
+          which: hit.which,
+          solvedOne: hit.result.solved,
+          solvedAll: hit.solvedAll,
+          sqrtProg: hit.sqrtProg || st.sqrtProg,
+          resplit: !!hit.resplit,
+          trailAlso: hit.trailAlso || null,
+          message: hit.solvedAll
+            ? "כל הפתרונות: " + pack.answer + "."
+            : hit.result.solved
+              ? hit.result.message + " יש עוד משוואה מהפיצול — פתרו גם אותה."
+              : hit.result.message,
+        };
+      }
+      if (hit && !hit.ok) {
+        return { ok: false, message: hit.result.message };
+      }
+      if (roots && (st.split || st.progress.z || st.progress.o || st.progress.n)) {
+        return roots;
+      }
+      return {
+        ok: false,
+        message: "פתרו אחת משתי המשוואות שקיבלתם אחרי הוצאת הגורם (ייתכן שענף אחד ריבועי).",
+      };
+    }
+
+    if (roots && (st.split || st.progress.z || st.progress.o || st.progress.n)) {
+      return roots;
+    }
+    return {
+      ok: false,
+      message: "העבירו הכל לאגף אחד אם צריך, ואז הוציאו חזקה משותפת של x, למשל x²(x−4)=0 או x(x²−9)=0.",
+    };
+  }
+
+  function nextHighFactorStep(eqText, pack, st) {
     st = st || {};
+    var cur = normHighUnknown(eqText);
     if (st.split) {
       var k;
       for (k = 0; k < 2; k++) {
         if (st.solved && st.solved[k]) continue;
-        var cur = (st.eqs && st.eqs[k]) || "";
-        if (linearSolved(cur)) continue;
-        var act = global.DoctematicaTeach.nextAction(cur);
-        if (act && act.eq) {
-          return { eq: act.eq, hint: act.hint, explain: act.explain, which: k };
+        var branch = (st.eqs && st.eqs[k]) || "";
+        if (k === 0) {
+          if (highBranchE1Solved(branch)) continue;
+          if (isPowerZeroEq(branch) || /x\^[2-9]\s*=\s*0/i.test(normHighUnknown(branch))) {
+            return {
+              eq: "x = 0",
+              hint: "אם חזקה של x שווה לאפס, אז x = 0.",
+              which: k,
+            };
+          }
+          var act0 = global.DoctematicaTeach.nextAction(branch);
+          if (act0 && act0.eq) return { eq: act0.eq, hint: act0.hint, which: k };
+          return { eq: "x = 0", hint: "בודדו את x — כאן הפתרון הוא x = 0.", which: k };
         }
-        var lin = parseLinearFactor(String(cur).replace(/=.*$/, ""));
-        var val = "0";
-        if (lin && Math.abs(lin.b) >= EPS) val = fmtLinNum(-lin.b / lin.a);
-        return { eq: "x = " + val, hint: "בודדו את x.", which: k };
+        if (highBranchE2Solved(branch, pack)) continue;
+        var axbxBr = parseAxBxZero(branch);
+        if (axbxBr && pack.e2Kind === "linear") {
+          return {
+            eq: preferredFactorEq(axbxBr.a, axbxBr.b),
+            hint:
+              "הוציאו גורם משותף x בענף הזה, למשל x²−4x=0 → x(x−4)=0. אחר כך אפשר לפצל שוב.",
+            which: k,
+          };
+        }
+        var prodBr = parseProductEq(branch) || parseHighProductEq(branch);
+        if (prodBr && (prodBr.e2Kind === "linear" || (prodBr.f1 && prodBr.f2))) {
+          return {
+            split: true,
+            resplit: true,
+            which: k,
+            hint: "לחצו «חילוק למשוואות» שוב, או פתרו את הגורם הלינארי שנשאר.",
+          };
+        }
+        if (pack.e2Kind === "linear") {
+          if (linearSolved(branch)) continue;
+          var actLin = global.DoctematicaTeach.nextAction(branch);
+          if (actLin && actLin.eq) return { eq: actLin.eq, hint: actLin.hint, which: k };
+          return {
+            eq: "x = " + fmtDisp(pack.linRootF || pack.otherF),
+            hint: "בודדו את x.",
+            which: k,
+          };
+        }
+        if (isRootAnswerText(branch) && pack.quadRoot && !hasX2(branch)) {
+          var pg = sqrtProgFromText(branch);
+          if (st.sqrtProg) {
+            pg = {
+              pos: !!(pg.pos || st.sqrtProg.pos),
+              neg: !!(pg.neg || st.sqrtProg.neg),
+            };
+          }
+          var rShow = fmtDisp(pack.quadRoot);
+          if (pg.pos && pg.neg) continue;
+          if (pg.pos && !pg.neg) {
+            return {
+              eq: "x = −" + rShow,
+              hint: "יש גם פתרון שלילי. רשמו גם x = −" + rShow + ", או x = ±" + rShow + ".",
+              which: k,
+            };
+          }
+          if (pg.neg && !pg.pos) {
+            return {
+              eq: "x = " + rShow,
+              hint: "יש גם פתרון חיובי. רשמו גם x = " + rShow + ", או x = ±" + rShow + ".",
+              which: k,
+            };
+          }
+        }
+        // כמו במשוואות ריבועיות בשורשים: קודם מבודדים x² = k, ורק אז שורש / ±
+        var actX2 = global.DoctematicaTeach.nextAction(branch, { unknown: "x2" });
+        if (actX2 && actX2.eq && !actX2.isolated && !actX2.done) {
+          return { eq: actX2.eq, hint: actX2.hint, explain: actX2.explain, which: k };
+        }
+        if (pack.sqrt) {
+          var nxt = nextSqrtStep(branch, pack.sqrt);
+          if (nxt && nxt.eq) return { eq: nxt.eq, hint: nxt.hint, which: k };
+        }
+        if (pack.quadKind === "none") {
+          return { eq: "אין פתרון ממשי", hint: "x² שלילי — אין פתרון ממשי לענף הזה.", which: k };
+        }
+        if (pack.quadRoot) {
+          return {
+            eq: "x = ±" + fmtDisp(pack.quadRoot),
+            hint: "הוציאו שורש ורשמו x = ± …",
+            which: k,
+          };
+        }
       }
-      return {
-        eq: "x = 0, x = " + fmt(pack.otherF),
-        hint: "רשמו את שני הפתרונות.",
-        solved: true,
-      };
+      return { eq: pack.answer, hint: "רשמו את כל הפתרונות.", solved: true };
     }
-    if (isProductEq(eqText) && productMatches(pack, parseProductEq(eqText))) {
+    var prod = parseHighProductEq(cur);
+    if (prod && highProductMatches(pack, prod)) {
       return {
         split: true,
         hint: "אחרי הוצאת הגורם המשותף מחלקים לשתי משוואות: כל גורם שווה לאפס.",
-        explain: "מכפלה שווה אפס רק אם אחד הגורמים אפס.",
+      };
+    }
+    if (normFactorText(cur) !== normFactorText(pack.standard)) {
+      return {
+        eq: pack.standard,
+        hint: "העבירו את כל האיברים לאגף אחד והשאירו 0 באגף השני.",
       };
     }
     return {
       eq: pack.factored,
-      hint: "הוציאו גורם משותף x (ואפשר גם מספר). למשל x²−5x=0 הופך ל־x(x−5)=0.",
-      explain: "מוציאים x מחוץ לסוגריים.",
+      hint:
+        pack.e2Kind === "linear"
+          ? "הוציאו חזקה משותפת של x (ואפשר גם מספר), למשל x³−4x²=0 → x²(x−4)=0."
+          : "הוציאו חזקה משותפת של x (ואפשר גם מספר), למשל x⁴−4x²=0 → x²(x²−4)=0.",
     };
   }
 
-  function matchBranchStep(st, typed) {
-    var tryEqs = st && st.eqs;
-    if (!tryEqs || !tryEqs.length) return null;
-    var t = String(typed || "").trim();
-    var lastFail = null;
-    var j;
-    for (j = 0; j < tryEqs.length; j++) {
-      if (st.solved && st.solved[j]) continue;
-      var result;
-      try {
-        result = global.DoctematicaAlgebra.checkStep(tryEqs[j], t);
-      } catch (err) {
-        continue;
+  function formatNroot(n, inner) {
+    if (n === 2) return "√(" + inner + ")";
+    if (n === 3) return "∛(" + inner + ")";
+    if (n === 4) return "∜(" + inner + ")";
+    return "√[" + n + "](" + inner + ")";
+  }
+
+  function parseNrootSide(side) {
+    var t = String(side || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "");
+    var m =
+      t.match(/^√\[(\d+)\]\((.+)\)$/) ||
+      t.match(/^∛\((.+)\)$/) ||
+      t.match(/^∜\((.+)\)$/) ||
+      t.match(/^√\((.+)\)$/);
+    if (!m) return null;
+    if (m[2] != null) return { n: parseInt(m[1], 10), inner: m[2] };
+    if (t.charAt(0) === "∛") return { n: 3, inner: m[1] };
+    if (t.charAt(0) === "∜") return { n: 4, inner: m[1] };
+    return { n: 2, inner: m[1] };
+  }
+
+  function parseNrootBothSides(text) {
+    var raw = String(text || "").replace(/[−–—]/g, "-");
+    var i = raw.indexOf("=");
+    if (i < 0) return null;
+    var L = parseNrootSide(raw.slice(0, i));
+    var R = parseNrootSide(raw.slice(i + 1));
+    if (!L || !R || L.n !== R.n) return null;
+    return { n: L.n, left: L.inner, right: R.inner };
+  }
+
+  function perfectNthRoot(k, n) {
+    if (n < 1) return null;
+    if (near0(k)) return frac(0, 1);
+    if (k < 0 && n % 2 === 0) return null;
+    var abs = Math.abs(k);
+    var r = Math.round(Math.pow(abs, 1 / n));
+    var i;
+    for (i = Math.max(0, r - 2); i <= r + 2; i++) {
+      var p = 1;
+      var j;
+      for (j = 0; j < n; j++) p *= i;
+      if (nearNum(p, abs)) {
+        return frac(k < 0 ? -i : i, 1);
       }
-      if (!result.ok) {
-        if (!lastFail) lastFail = result;
-        continue;
-      }
-      var eqs = tryEqs.slice();
-      eqs[j] = t;
-      var solvedFlags = (st.solved || [false, false]).slice();
-      if (result.solved || linearSolved(t)) solvedFlags[j] = true;
-      return {
-        ok: true,
-        which: j,
-        result: result,
-        eqs: eqs,
-        solvedFlags: solvedFlags,
-        solvedAll: !!(solvedFlags[0] && solvedFlags[1]),
-      };
     }
-    if (lastFail) return { ok: false, result: lastFail };
     return null;
   }
 
+  function analyzeHighRootStart(start) {
+    var raw = normHighUnknown(start);
+    var poly = parseHighPolyEq(raw);
+    if (!poly) throw new Error("לא הצלחתי לקרוא את המשוואה.");
+    var degs = highPolyDegs(poly);
+    if (!degs.length) throw new Error("זו לא משוואה בחזקה.");
+    if (degs.length > 2 || (degs.length === 2 && degs[1] !== 0)) {
+      throw new Error("ברמה זו מצפים למשוואה מהצורה xⁿ = מספר או xⁿ ± מספר = 0.");
+    }
+    var n = degs[0];
+    if (n < 2) throw new Error("ברמה זו מצפים לחזקה לפחות 2.");
+    var a = poly["a" + n];
+    var c = poly.a0;
+    if (near0(a)) throw new Error("חסרה חזקה של x.");
+    var k = -c / a;
+    var isolated = "x^" + n + "=" + fmtLinNum(k);
+    var root = perfectNthRoot(k, n);
+    var kind;
+    if (near0(k)) kind = "one";
+    else if (k < 0 && n % 2 === 0) kind = "none";
+    else if (n % 2 === 0) kind = "two";
+    else kind = "one";
+
+    var steps = [raw];
+    var gathered = formatHighPoly(poly) + "=0";
+    if (normFactorText(raw) !== normFactorText(gathered) && normFactorText(raw) !== normFactorText(isolated)) {
+      steps.push(gathered);
+    }
+    if (normFactorText(raw) !== normFactorText(isolated)) steps.push(isolated);
+    var both = formatNroot(n, "x^" + n) + "=" + formatNroot(n, fmtLinNum(k));
+    steps.push(both);
+    var answer;
+    if (kind === "none") {
+      steps.push("אין פתרון ממשי");
+      answer = "אין פתרון ממשי";
+    } else if (kind === "one") {
+      var one =
+        root != null
+          ? "x = " + fmtDisp(root)
+          : "x = " + formatNroot(n, fmtLinNum(k));
+      steps.push(one);
+      answer = one;
+    } else {
+      var two = root != null ? "x = ±" + fmtDisp(root) : "x = ±" + formatNroot(n, fmtLinNum(k));
+      steps.push(two);
+      answer =
+        root != null
+          ? "x = " + fmtDisp(root) + ", x = −" + fmtDisp(root)
+          : "x = ±" + formatNroot(n, fmtLinNum(k));
+    }
+    return {
+      highRoot: true,
+      n: n,
+      k: k,
+      start: raw,
+      standard: gathered,
+      isolated: isolated,
+      both: both,
+      kind: kind,
+      root: root,
+      steps: steps,
+      answer: answer,
+    };
+  }
+
+  function isolatedXn(eqText, n) {
+    var s = normHighUnknown(eqText);
+    var re = n <= 1 ? /^x=(.+)$/i : new RegExp("^x\\^" + n + "=(.+)$", "i");
+    var m = s.match(re);
+    if (!m) return null;
+    var rhs = m[1];
+    if (/x/i.test(rhs)) return null;
+    var v = evalExpr(rhs);
+    if (v == null || !isFinite(v)) return null;
+    return v;
+  }
+
+  function highRootPolyOf(pack) {
+    var poly = emptyHighPoly();
+    poly["a" + pack.n] = 1;
+    poly.a0 = -pack.k;
+    return poly;
+  }
+
+  function checkHighRootBothSides(prev, typed, pack) {
+    var sides = parseNrootBothSides(typed);
+    if (!sides) return null;
+    if (sides.n !== pack.n) {
+      return { ok: false, message: "כאן צריך שורש ממעלה " + pack.n + "." };
+    }
+    var wantInner = "x^" + pack.n;
+    var leftOk =
+      normFactorText(sides.left) === normFactorText(wantInner) ||
+      normFactorText(sides.left) === "x^" + pack.n;
+    var rightVal = evalExpr(sides.right);
+    if (!leftOk) {
+      return { ok: false, message: "באגף שמאל צריך " + formatNroot(pack.n, "x^" + pack.n) + "." };
+    }
+    if (rightVal == null || !nearNum(rightVal, pack.k)) {
+      var iso = isolatedXn(prev, pack.n);
+      if (iso == null || !nearNum(iso, pack.k)) {
+        return { ok: false, message: "בתוך השורש מימין צריך להיות " + fmtLinNum(pack.k) + "." };
+      }
+      if (!nearNum(rightVal, iso)) {
+        return { ok: false, message: "בתוך השורש מימין צריך להיות האגף אחרי הבידוד." };
+      }
+    }
+    if (pack.kind === "none") {
+      return {
+        ok: true,
+        message: "הוצאתם שורש, אבל לשלילי אין שורש ממשי ממעלה זוגית. רשמו שאין פתרון ממשי.",
+      };
+    }
+    return {
+      ok: true,
+      message:
+        "הוצאתם שורש ממעלה " +
+        pack.n +
+        " משני האגפים. עכשיו רשמו x = " +
+        formatNroot(pack.n, fmtLinNum(pack.k)) +
+        ", ואז חשבו את השורש.",
+    };
+  }
+
+  function checkHighRootFinish(typed, pack, progress) {
+    progress = progress || { pos: false, neg: false };
+    if (isNoRealText(typed)) {
+      if (pack.kind === "none") {
+        return { ok: true, solved: true, message: "אין פתרון ממשי, כי אחרי הבידוד יצא מספר שלילי בחזקה זוגית." };
+      }
+      return { ok: false, message: "יש פתרון ממשי. אל תרשמו שאין פתרון." };
+    }
+
+    // x = ∛(27) / x = ±∜(81) — צעד ביניים; אם יש מספר פשוט, ממשיכים לחשב
+    var radical = parseHighRootRadicalAnswer(typed, pack);
+    if (radical) {
+      if (!radical.ok) return radical;
+      if (pack.kind === "two" && radical.pm) {
+        if (pack.root) {
+          return {
+            ok: true,
+            solved: false,
+            message: "עכשיו חשבו את השורש: x = ±" + fmtDisp(pack.root) + ".",
+          };
+        }
+        return {
+          ok: true,
+          solved: true,
+          message: "הפתרון: x = ±" + formatNroot(pack.n, fmtLinNum(pack.k)) + ".",
+        };
+      }
+      if (pack.kind === "one" && !radical.pm) {
+        if (pack.root) {
+          return {
+            ok: true,
+            solved: false,
+            message: "עכשיו חשבו את השורש: x = " + fmtDisp(pack.root) + ".",
+          };
+        }
+        return {
+          ok: true,
+          solved: true,
+          message: "הפתרון: " + radical.show + ".",
+        };
+      }
+      if (pack.kind === "two" && !radical.pm) {
+        return {
+          ok: true,
+          more: true,
+          solved: false,
+          progress: radical.sign < 0 ? { pos: false, neg: true } : { pos: true, neg: false },
+          message:
+            "נכון לסימן אחד. רשמו גם את הסימן השני, או x = ±" +
+            formatNroot(pack.n, fmtLinNum(pack.k)) +
+            (pack.root ? ", ואז חשבו x = ±" + fmtDisp(pack.root) + "." : "."),
+        };
+      }
+    }
+
+    var parsed = parseSqrtTyped(typed);
+    if (parsed.ok === false) {
+      return {
+        ok: false,
+        message:
+          "רשמו את הפתרון, למשל x = " +
+          formatNroot(pack.n, fmtLinNum(pack.k)) +
+          " או x = 3 או x = ±3.",
+      };
+    }
+    if (pack.kind === "none") {
+      return { ok: false, message: "אין פתרון ממשי. רשמו זאת." };
+    }
+    if (pack.kind === "one") {
+      var want = pack.root ? pack.root.n / pack.root.d : null;
+      if (parsed.pm) {
+        if (want != null && near0(want) && near0(parsed.abs)) {
+          return { ok: true, solved: true, message: "הפתרון הוא x = 0." };
+        }
+        return { ok: false, message: "כאן יש פתרון ממשי אחד (חזקה אי־זוגית או אפס)." };
+      }
+      if (!parsed.vals || !parsed.vals.length) {
+        return {
+          ok: false,
+          message: "רשמו x = " + formatNroot(pack.n, fmtLinNum(pack.k)) + " או x = מספר.",
+        };
+      }
+      if (want != null) {
+        if (parsed.vals.every(function (v) { return nearNum(v, want); })) {
+          return { ok: true, solved: true, message: "הפתרון: x = " + fmtDisp(pack.root) + "." };
+        }
+        return { ok: false, message: "הערך לא מדויק. הפתרון הוא x = " + fmtDisp(pack.root) + "." };
+      }
+      return { ok: false, message: "חשבו את השורש ממעלה " + pack.n + "." };
+    }
+    // two real roots ±
+    var r = pack.root ? pack.root.n / pack.root.d : null;
+    var rShow = pack.root ? fmtDisp(pack.root) : formatNroot(pack.n, fmtLinNum(pack.k));
+    function nearWantAbs(v, w) {
+      return Math.abs(Math.abs(v) - Math.abs(w)) < 1e-6;
+    }
+    if (parsed.pm) {
+      if (r != null && !nearWantAbs(parsed.abs, r)) {
+        return { ok: false, message: "הערך לא מדויק. הפתרונות הם x = ±" + rShow + "." };
+      }
+      if (r == null && !parsed.hadSqrt) {
+        return { ok: false, message: "כאן השורש לא מספר פשוט. רשמו x = ±" + rShow + "." };
+      }
+      return {
+        ok: true,
+        solved: true,
+        message: "שני הפתרונות: x = " + rShow + ", x = −" + rShow + ".",
+      };
+    }
+    var nextProg = { pos: !!progress.pos, neg: !!progress.neg };
+    var j;
+    for (j = 0; j < (parsed.vals || []).length; j++) {
+      if (r != null && !nearWantAbs(parsed.vals[j], r)) {
+        return { ok: false, message: "הערך לא מדויק. הפתרונות הם x = ±" + rShow + "." };
+      }
+      if (parsed.vals[j] > EPS) nextProg.pos = true;
+      else if (parsed.vals[j] < -EPS) nextProg.neg = true;
+    }
+    if (nextProg.pos && nextProg.neg) {
+      return {
+        ok: true,
+        solved: true,
+        progress: nextProg,
+        message: "שני הפתרונות: x = " + rShow + ", x = −" + rShow + ".",
+      };
+    }
+    return {
+      ok: true,
+      more: true,
+      solved: false,
+      progress: nextProg,
+      message: nextProg.pos
+        ? "יש גם פתרון שלילי. רשמו גם x = −" + rShow + ", או x = ±" + rShow + "."
+        : "יש גם פתרון חיובי. רשמו גם x = " + rShow + ", או x = ±" + rShow + ".",
+    };
+  }
+
+  function parseHighRootRadicalAnswer(typed, pack) {
+    var s = String(typed || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "")
+      .replace(/^x=/i, "");
+    if (!s) return null;
+    var pm = false;
+    if (s.indexOf("±") === 0 || s.indexOf("+-") === 0) {
+      pm = true;
+      s = s.replace(/^±/, "").replace(/^\+-/, "");
+    }
+    var sign = 1;
+    if (!pm && s.charAt(0) === "-") {
+      sign = -1;
+      s = s.slice(1);
+    }
+    var nr = parseNrootSide(s);
+    if (!nr) return null;
+    if (nr.n !== pack.n) {
+      return { ok: false, message: "כאן צריך שורש ממעלה " + pack.n + "." };
+    }
+    var inner = evalExpr(nr.inner);
+    if (inner == null) {
+      return { ok: false, message: "לא הצלחתי לקרוא מה שבתוך השורש." };
+    }
+    // מתאים ל־k, או ל־|k| עם מינוס בחוץ (למשל −∛(125) כש־k=−125)
+    var matchesK = nearNum(inner, pack.k) || (sign < 0 && nearNum(inner, -pack.k));
+    if (!matchesK) {
+      return {
+        ok: false,
+        message: "בתוך השורש צריך להיות " + fmtLinNum(pack.k) + ".",
+      };
+    }
+    if (pack.kind === "none") {
+      return { ok: false, message: "אין פתרון ממשי. רשמו זאת." };
+    }
+    if (pack.kind === "one" && pm) {
+      return { ok: false, message: "כאן יש פתרון ממשי אחד — בלי ±." };
+    }
+    var showInner = nearNum(inner, pack.k) ? pack.k : -pack.k;
+    return {
+      ok: true,
+      pm: pm,
+      sign: sign,
+      show:
+        "x = " +
+        (pm ? "±" : sign < 0 ? "−" : "") +
+        formatNroot(pack.n, fmtLinNum(showInner)),
+    };
+  }
+
+  function nextHighRootStep(eqText, pack) {
+    var cur = normHighUnknown(eqText);
+    if (parseNrootBothSides(cur) || (isRootAnswerText(cur) && /√|∛|∜|sqrt/i.test(cur))) {
+      if (pack.kind === "none") {
+        return { eq: "אין פתרון ממשי", hint: "חזקה זוגית של מספר שלילי — אין פתרון ממשי.", solved: true };
+      }
+      if (pack.kind === "one") {
+        return {
+          eq: pack.root ? "x = " + fmtDisp(pack.root) : "x = " + formatNroot(pack.n, fmtLinNum(pack.k)),
+          hint: "חשבו את השורש ממעלה " + pack.n + ".",
+          solved: true,
+        };
+      }
+      return {
+        eq: pack.root ? "x = ±" + fmtDisp(pack.root) : "x = ±" + formatNroot(pack.n, fmtLinNum(pack.k)),
+        hint: "חזקה זוגית — שני פתרונות ±.",
+        solved: true,
+      };
+    }
+    var iso = isolatedXn(cur, pack.n);
+    if (iso != null && nearNum(iso, pack.k)) {
+      if (pack.kind === "none") {
+        return {
+          eq: "אין פתרון ממשי",
+          hint: "אחרי הבידוד יצא שלילי בחזקה זוגית — אין שורש ממשי.",
+          solved: true,
+        };
+      }
+      return {
+        eq: pack.both,
+        hint: "הוציאו שורש ממעלה " + pack.n + " משני האגפים. השתמשו בכפתור «שורש n».",
+        solved: false,
+      };
+    }
+    if (normFactorText(cur) !== normFactorText(pack.isolated)) {
+      return {
+        eq: pack.isolated,
+        hint: "העבירו כך שישאר x^" + pack.n + " באגף אחד ומספר באגף השני.",
+      };
+    }
+    return {
+      eq: pack.both,
+      hint: "הוציאו שורש ממעלה " + pack.n + " משני האגפים.",
+    };
+  }
+
+  function checkHighRootTyped(prev, typed, pack) {
+    var t = normHighUnknown(typed);
+    if (!t) return { ok: false, message: "כתבו את הצעד הבא." };
+    if (global.DoctematicaAlgebra && global.DoctematicaAlgebra.missingEqualsSign(t) && !isNoRealText(t) && !isRootAnswerText(t)) {
+      return { ok: false, message: "חסר סימן שווה" };
+    }
+    if (normFactorText(prev) === normFactorText(t)) {
+      return { ok: false, message: "זו אותה משוואה. כתבו צעד חדש." };
+    }
+
+    var isoT = isolatedXn(t, pack.n);
+    if (isoT != null && nearNum(isoT, pack.k)) {
+      return {
+        ok: true,
+        isolated: true,
+        message:
+          pack.kind === "none"
+            ? "x^" + pack.n + " מבודד, אבל האגף שלילי בחזקה זוגית — רשמו שאין פתרון ממשי."
+            : "x^" + pack.n + " מבודד. עכשיו הוציאו שורש ממעלה " + pack.n + " משני האגפים.",
+      };
+    }
+
+    var got = parseHighPolyEq(t);
+    var want = highRootPolyOf(pack);
+    if (got && highPolyEquivalent(got, want)) {
+      return {
+        ok: true,
+        rearrange: true,
+        message: "צעד חוקי. עכשיו בודדו את x^" + pack.n + " באגף אחד.",
+      };
+    }
+
+    var both = checkHighRootBothSides(prev, t, pack);
+    if (both) return both;
+
+    var histIsolated =
+      isolatedXn(prev, pack.n) != null ||
+      parseNrootBothSides(prev) != null;
+    if (!histIsolated && !isRootAnswerText(t) && !isNoRealText(t)) {
+      return {
+        ok: false,
+        message: "קודם בודדו את x^" + pack.n + " = מספר, ורק אז הוציאו שורש.",
+      };
+    }
+
+    return checkHighRootFinish(t, pack, { pos: false, neg: false });
+  }
+
   function checkFactorTyped(prev, typed, pack, st) {
+    if (pack && pack.high) return checkHighFactorTyped(prev, typed, pack, st);
     st = st || { split: false, eqs: [], solved: [false, false], progress: { z: false, o: false } };
     var t = String(typed || "").trim();
     if (!t) return { ok: false, message: "כתבו את הצעד הבא." };
@@ -1464,6 +2948,116 @@
       ok: false,
       message: "הוציאו גורם משותף x (ואפשר גם מספר), למשל x(x−5)=0.",
     };
+  }
+
+  function nextFactorStep(eqText, pack, st) {
+    if (pack && pack.high) return nextHighFactorStep(eqText, pack, st);
+    st = st || {};
+    if (st.split) {
+      var k;
+      for (k = 0; k < 2; k++) {
+        if (st.solved && st.solved[k]) continue;
+        var cur = (st.eqs && st.eqs[k]) || "";
+        if (linearSolved(cur)) continue;
+        var act = global.DoctematicaTeach.nextAction(cur);
+        if (act && act.eq) {
+          return { eq: act.eq, hint: act.hint, explain: act.explain, which: k };
+        }
+        var lin = parseLinearFactor(String(cur).replace(/=.*$/, ""));
+        var val = "0";
+        if (lin && Math.abs(lin.b) >= EPS) val = fmtLinNum(-lin.b / lin.a);
+        return { eq: "x = " + val, hint: "בודדו את x.", which: k };
+      }
+      return {
+        eq: "x = 0, x = " + fmt(pack.otherF),
+        hint: "רשמו את שני הפתרונות.",
+        solved: true,
+      };
+    }
+    if (isProductEq(eqText) && productMatches(pack, parseProductEq(eqText))) {
+      return {
+        split: true,
+        hint: "אחרי הוצאת הגורם המשותף מחלקים לשתי משוואות: כל גורם שווה לאפס.",
+        explain: "מכפלה שווה אפס רק אם אחד הגורמים אפס.",
+      };
+    }
+    return {
+      eq: pack.factored,
+      hint: "הוציאו גורם משותף x (ואפשר גם מספר). למשל x²−5x=0 הופך ל־x(x−5)=0.",
+      explain: "מוציאים x מחוץ לסוגריים.",
+    };
+  }
+
+  function parseRootVals(text) {
+    var parsed = parseSqrtTyped(text);
+    if (!parsed || parsed.ok === false || parsed.none) return null;
+    if (parsed.pm) return [parsed.abs, -parsed.abs];
+    return parsed.vals;
+  }
+
+  function checkFactorRoots(typed, pack, progress) {
+    progress = progress || { z: false, o: false };
+    var vals = parseRootVals(typed);
+    if (!vals || !vals.length) return null;
+    var next = { z: progress.z, o: progress.o };
+    var i;
+    for (i = 0; i < vals.length; i++) {
+      if (nearNum(vals[i], 0)) next.z = true;
+      else if (nearNum(vals[i], pack.other)) next.o = true;
+      else return { ok: false, message: "זה לא אחד הפתרונות של המשוואה הזו." };
+    }
+    if (next.z && next.o) {
+      return {
+        ok: true,
+        solved: true,
+        progress: next,
+        message: "שני הפתרונות: x = 0, x = " + fmtDisp(pack.otherF) + ".",
+      };
+    }
+    return {
+      ok: true,
+      more: true,
+      solved: false,
+      progress: next,
+      message: next.z
+        ? "נכון, x = 0. יש עוד משוואה מהסוגריים — פתרו אותה, או לחצו «חילוק למשוואות»."
+        : "נכון. יש גם את הפתרון x = 0, כי הוצאתם x כגורם משותף.",
+    };
+  }
+
+  function matchBranchStep(st, typed) {
+    var tryEqs = st && st.eqs;
+    if (!tryEqs || !tryEqs.length) return null;
+    var t = String(typed || "").trim();
+    var lastFail = null;
+    var j;
+    for (j = 0; j < tryEqs.length; j++) {
+      if (st.solved && st.solved[j]) continue;
+      var result;
+      try {
+        result = global.DoctematicaAlgebra.checkStep(tryEqs[j], t);
+      } catch (err) {
+        continue;
+      }
+      if (!result.ok) {
+        if (!lastFail) lastFail = result;
+        continue;
+      }
+      var eqs = tryEqs.slice();
+      eqs[j] = t;
+      var solvedFlags = (st.solved || [false, false]).slice();
+      if (result.solved || linearSolved(t)) solvedFlags[j] = true;
+      return {
+        ok: true,
+        which: j,
+        result: result,
+        eqs: eqs,
+        solvedFlags: solvedFlags,
+        solvedAll: !!(solvedFlags[0] && solvedFlags[1]),
+      };
+    }
+    if (lastFail) return { ok: false, result: lastFail };
+    return null;
   }
 
   function polyAdd(p, q) {
@@ -2265,19 +3859,63 @@
     return !!parseProductEq(text);
   }
 
+  function needsLcd(eqText) {
+    var Teach = global.DoctematicaTeach;
+    if (!Teach || typeof Teach.analyzeLcdNeed !== "function") return null;
+    try {
+      return Teach.analyzeLcdNeed(eqText);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function clearDensIfNeeded(eqText) {
+    var Teach = global.DoctematicaTeach;
+    if (!Teach || typeof Teach.clearEqDens !== "function") return null;
+    try {
+      return Teach.clearEqDens(eqText);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function expandUntilStable(eqText) {
+    var expanded = eqText;
+    var guard = 0;
+    while (
+      guard < 10 &&
+      (hasSquaredParens(expanded) ||
+        hasFoilParens(expanded) ||
+        hasXAfterParens(expanded) ||
+        hasExpandableParens(expanded))
+    ) {
+      guard += 1;
+      var nxt;
+      if (hasSquaredParens(expanded) || hasFoilParens(expanded)) nxt = expandParensEq(expanded);
+      else if (hasXAfterParens(expanded)) nxt = moveXBeforeParensEq(expanded);
+      else nxt = expandParensEq(expanded);
+      if (normFactorText(nxt) === normFactorText(expanded)) break;
+      expanded = nxt;
+    }
+    return expanded;
+  }
+
   function analyzeMixedStart(start) {
-    var raw = parseABC(start);
-    if (!raw) throw new Error("לא הצלחתי לקרוא את המשוואה הריבועית.");
-    var xMoved =
-      hasSquaredParens(start) || hasFoilParens(start)
-        ? start
-        : hasXAfterParens(start)
-          ? moveXBeforeParensEq(start)
-          : start;
-    var expandFrom = xMoved;
-    var expanded = expandFrom;
     var steps = [start];
-    if (normFactorText(xMoved) !== normFactorText(start)) steps.push(xMoved);
+    var cleared = clearDensIfNeeded(start);
+    var seed = start;
+    if (cleared && normFactorText(cleared) !== normFactorText(start)) {
+      steps.push(cleared);
+      seed = cleared;
+    }
+    var xMoved =
+      hasSquaredParens(seed) || hasFoilParens(seed)
+        ? seed
+        : hasXAfterParens(seed)
+          ? moveXBeforeParensEq(seed)
+          : seed;
+    var expanded = xMoved;
+    if (normFactorText(xMoved) !== normFactorText(seed)) steps.push(xMoved);
     var guard = 0;
     while (
       guard < 10 &&
@@ -2296,6 +3934,8 @@
       expanded = nxt;
     }
     var body = expanded;
+    var raw = parseABC(body) || parseABC(seed) || parseABC(start);
+    if (!raw) throw new Error("לא הצלחתי לקרוא את המשוואה הריבועית.");
     var canon = canonicalABC(raw.a, raw.b, raw.c);
     var cls = classifyABC(canon);
     var standard = formatPolyEq(canon.a, canon.b, canon.c);
@@ -2321,13 +3961,13 @@
     } else {
       moved = bothSidesLive(body) ? moveAllToLeft(body) : body;
       if (normFactorText(moved) !== normFactorText(body)) steps.push(moved);
-      var shown = formatPolyEq(raw.a, raw.b, raw.c);
       if (
-        normFactorText(shown) !== normFactorText(moved) &&
-        normFactorText(shown) !== normFactorText(start) &&
-        normFactorText(shown) !== normFactorText(body)
+        normFactorText(standard) !== normFactorText(moved) &&
+        normFactorText(standard) !== normFactorText(start) &&
+        normFactorText(standard) !== normFactorText(body) &&
+        normFactorText(standard) !== normFactorText(seed)
       ) {
-        steps.push(shown);
+        steps.push(standard);
       }
     }
     var sqrt = null;
@@ -2342,7 +3982,7 @@
       steps.push("אין פתרון");
       answer = "אין פתרון";
     } else if (cls.kind === "linear") {
-      var linSeed = formatPolyEq(raw.a, raw.b, raw.c);
+      var linSeed = standard;
       var linPath = global.DoctematicaTeach.fullPath(linSeed);
       (linPath.steps || []).forEach(function (s) {
         if (s.eq && steps.indexOf(s.eq) === -1) steps.push(s.eq);
@@ -2358,13 +3998,9 @@
       }
       if (cls.methods.factor) {
         try {
-          factor = analyzeFactorStart(formatPolyEq(raw.a, raw.b, raw.c));
+          factor = analyzeFactorStart(standard);
         } catch (err2) {
-          try {
-            factor = analyzeFactorStart(standard);
-          } catch (err2b) {
-            factor = null;
-          }
+          factor = null;
         }
       }
       quad = analyze(canon.a, canon.b, canon.c, standard);
@@ -2385,6 +4021,20 @@
         answer = quad.answer;
       }
     }
+    var lcdNeed = needsLcd(start);
+    var lcdInfo = null;
+    if (lcdNeed) {
+      lcdInfo = {
+        lcd: lcdNeed.lcd,
+        muls: lcdNeed.terms.map(function (t) {
+          return t.mul;
+        }),
+        terms: lcdNeed.terms.map(function (t) {
+          return { text: t.text, mul: t.mul, den: t.den, side: t.side };
+        }),
+        leftN: lcdNeed.leftTerms.length,
+      };
+    }
     return {
       a: canon.a,
       b: canon.b,
@@ -2396,6 +4046,8 @@
       gathered: gathered,
       combinedSides: combinedSides,
       standard: standard,
+      cleared: cleared || null,
+      lcdInfo: lcdInfo,
       unreduced: formatPolyEq(raw.a, raw.b, raw.c),
       classify: cls,
       natural: nat,
@@ -2408,6 +4060,18 @@
   }
 
   function mixedHintFor(pack, eqText) {
+    var lcdInfo = needsLcd(eqText);
+    if (lcdInfo) {
+      return (
+        "קודם הביאו למכנה משותף " +
+        lcdInfo.lcd +
+        " — סמנו מעל כל איבר בכמה מכפילים (כמו במחברת), ואז כפלו והמשיכו בלי מכנים."
+      );
+    }
+    var dropped = clearDensIfNeeded(eqText);
+    if (dropped) {
+      return "כל המכנים זהים. כופלו את שני האגפים במכנה והורידו את המכנים.";
+    }
     var cls = pack.classify;
     if (hasSquaredParens(eqText)) {
       if (hasXAfterParens(eqText) || hasOtherParensBesideSquares(eqText)) {
@@ -2466,6 +4130,21 @@
 
   function nextMixedStep(eqText, pack) {
     pack = pack || {};
+    var densNext = clearDensIfNeeded(eqText);
+    if (densNext) {
+      var lcdInfo = needsLcd(eqText);
+      return {
+        eq: densNext,
+        hint: lcdInfo
+          ? mixedHintFor(pack, eqText)
+          : "כל המכנים זהים. כופלו את שני האגפים במכנה והורידו את המכנים — בלי מכנה משותף נוסף.",
+        explain: lcdInfo
+          ? "מביאים למכנה משותף " +
+            lcdInfo.lcd +
+            ", כופלים כל איבר במכפיל המתאים, וממשיכים בלי מכנים."
+          : "המכנים כבר משותפים. מורידים אותם בכפל שני האגפים במכנה.",
+      };
+    }
     if (hasSquaredParens(eqText)) {
       return {
         eq: expandParensEq(eqText),
@@ -2556,7 +4235,7 @@
     }
     if (hasUncombined(eqText)) {
       return {
-        eq: pack.unreduced || pack.standard,
+        eq: pack.standard,
         hint: mixedHintFor(pack, eqText),
         explain: "אוספים איברים דומים.",
       };
@@ -2618,6 +4297,33 @@
     }
     pack = pack || {};
     var cls = pack.classify || classifyABC(pack);
+
+    var Teach = global.DoctematicaTeach;
+    if (
+      Teach &&
+      typeof Teach.eqHasVarDenom === "function" &&
+      (Teach.eqHasVarDenom(prev) || Teach.eqHasVarDenom(t) || needsLcd(prev))
+    ) {
+      var clearedPrev = clearDensIfNeeded(prev);
+      if (clearedPrev && normFactorText(clearedPrev) === normFactorText(t)) {
+        return {
+          ok: true,
+          rearrange: true,
+          message: "צעד חוקי. הורדתם מכנים. עכשיו פתחו סוגריים והמשיכו לפי המקדמים.",
+        };
+      }
+      var expPrev = expandUntilStable(clearedPrev || prev);
+      var expNext = expandUntilStable(clearDensIfNeeded(t) || t);
+      var pExp = parseABC(expPrev);
+      var nExp = parseABC(expNext);
+      if (pExp && nExp && abcEquivalent(pExp, nExp)) {
+        return {
+          ok: true,
+          rearrange: true,
+          message: "צעד חוקי. המשיכו לאסוף ל־ax²+bx+c=0.",
+        };
+      }
+    }
 
     if (looksLikeProduct(t) && !hasFoilParens(prev) && !hasSquaredParens(prev)) {
       if (!cls.methods || !cls.methods.factor) {
@@ -2779,12 +4485,20 @@
     checkSqrtBothSides: checkSqrtBothSides,
     checkSqrtFinish: checkSqrtFinish,
     analyzeFactorStart: analyzeFactorStart,
+    analyzeHighFactorStart: analyzeHighFactorStart,
+    analyzeHighRootStart: analyzeHighRootStart,
+    checkHighRootTyped: checkHighRootTyped,
+    nextHighRootStep: nextHighRootStep,
+    checkHighRootFinish: checkHighRootFinish,
+    checkHighRootBothSides: checkHighRootBothSides,
     parseProductEq: parseProductEq,
+    parseHighProductEq: parseHighProductEq,
     isProductEq: isProductEq,
     preferredFactorEq: preferredFactorEq,
     nextFactorStep: nextFactorStep,
     checkFactorTyped: checkFactorTyped,
     linearSolved: linearSolved,
     productMatches: productMatches,
+    highProductMatches: highProductMatches,
   };
 })(window);

@@ -25,10 +25,13 @@
         explain: "בודדו משתנה, הציבו במשוואה השנייה, ואז מצאו את המשתנה השני.",
       };
     }
-    if (level.mode === "quad-factor") {
-      var fa = DoctematicaQuadratic.analyzeFactorStart(ex.start);
+    if (level.mode === "quad-factor" || level.mode === "high-factor") {
+      var fa =
+        level.mode === "high-factor"
+          ? DoctematicaQuadratic.analyzeHighFactorStart(ex.start)
+          : DoctematicaQuadratic.analyzeFactorStart(ex.start);
       return {
-        mode: "quad-factor",
+        mode: level.mode,
         source: "worksheet",
         levelId: level.id,
         n: ex.n,
@@ -39,7 +42,27 @@
         factor: fa,
         solutionSteps: fa.steps,
         answer: fa.answer,
-        explain: "הוציאו גורם משותף x (ואפשר גם מספר), ואז פתרו כל גורם כמשוואה ששווה לאפס.",
+        explain: fa.high
+          ? "העבירו לאגף אחד אם צריך, הוציאו חזקה משותפת של x, פצלו לשתי משוואות, ופתרו — ייתכן שענף אחד ריבועי."
+          : "הוציאו גורם משותף x (ואפשר גם מספר), ואז פתרו כל גורם כמשוואה ששווה לאפס.",
+      };
+    }
+    if (level.mode === "high-root") {
+      var hr = DoctematicaQuadratic.analyzeHighRootStart(ex.start);
+      return {
+        mode: "high-root",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction,
+        prompt: ex.start,
+        startEquation: ex.start,
+        highRoot: hr,
+        solutionSteps: hr.steps,
+        answer: hr.answer,
+        explain:
+          "בודדו xⁿ = מספר. הוציאו שורש ממעלה n (כפתור «שורש n»), למשל x = ∛(27), ואז חשבו את המספר. זוגית: ± או אין ממשי; אי־זוגית: פתרון אחד.",
       };
     }
     if (level.mode === "quad-sqrt") {
@@ -61,6 +84,10 @@
     }
     if (level.mode === "quad-mixed") {
       var mx = DoctematicaQuadratic.analyzeMixedStart(ex.start);
+      var mixedDomain =
+        DoctematicaTeach && typeof DoctematicaTeach.analyzeDomain === "function"
+          ? DoctematicaTeach.analyzeDomain(ex.start)
+          : null;
       return {
         mode: "quad-mixed",
         source: "worksheet",
@@ -76,8 +103,10 @@
         quad: mx.quad,
         solutionSteps: mx.steps,
         answer: mx.answer,
-        explain:
-          "אם יש סוגריים — פתחו אותם. אם b=0 מעבירים x² לשמאל ומספרים לימין; אם c=0 מוציאים גורם; אם x² מתאפס — משוואה רגילה; אחרת נוסחת שורשים.",
+        domain: mixedDomain,
+        explain: mixedDomain
+          ? "קודם תחום הצבה, אחר כך מכנה משותף, פתיחת סוגריים, ואיסוף ל־ax²+bx+c=0. לפי המקדמים: שורש / גורם משותף / נוסחת שורשים / משוואה רגילה."
+          : "אם יש סוגריים — פתחו אותם. אם b=0 מעבירים x² לשמאל ומספרים לימין; אם c=0 מוציאים גורם; אם x² מתאפס — משוואה רגילה; אחרת נוסחת שורשים.",
       };
     }
     if (level.mode === "quad-formula" || (ex.start && /x\^2|x²/.test(ex.start))) {
@@ -98,6 +127,10 @@
       };
     }
     var one = DoctematicaBank.solutionForEquation(ex.start);
+    var domain =
+      DoctematicaTeach && typeof DoctematicaTeach.analyzeDomain === "function"
+        ? DoctematicaTeach.analyzeDomain(ex.start)
+        : null;
     return {
       mode: "steps",
       source: "worksheet",
@@ -111,7 +144,10 @@
       solutionNotes: one.notes,
       answer: one.answer,
       value: one.value,
-      explain: "בודדו את x בצעדים שקולים עד שמתקבלת משוואה מהצורה x = מספר.",
+      domain: domain,
+      explain: domain
+        ? "קודם תחום הצבה, אחר כך בודדו את x בצעדים שקולים."
+        : "בודדו את x בצעדים שקולים עד שמתקבלת משוואה מהצורה x = מספר.",
     };
   }
 

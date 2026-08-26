@@ -196,20 +196,1186 @@
     return simpleX && isPlainNumberSide(sides.right);
   }
 
-  function termDen(term) {
-    var cf = parseCompoundFrac(term);
-    if (cf) return cf.den;
-    var t = String(term || "")
+  function canonExpr(s) {
+    return String(s || "")
       .replace(/[−–—]/g, "-")
       .replace(/\s+/g, "")
-      .replace(/^[+-]/, "");
-    var m = t.match(/^\((\d+)\/(\d+)\)x$/i);
-    if (m) return parseInt(m[2], 10);
-    m = t.match(/^(?:\d*)x\/(\d+)$/i);
-    if (m) return parseInt(m[1], 10);
-    m = t.match(/^(\d+)\/(\d+)$/);
-    if (m) return parseInt(m[2], 10);
-    return 1;
+      .replace(/×|·/g, "*")
+      .replace(/²/g, "^2")
+      .toLowerCase();
+  }
+
+  function unwrapOuterParens(s) {
+    var t = String(s || "");
+    while (t.charAt(0) === "(" && t.charAt(t.length - 1) === ")") {
+      var depth = 0;
+      var ok = true;
+      var i;
+      for (i = 0; i < t.length; i++) {
+        if (t.charAt(i) === "(") depth += 1;
+        else if (t.charAt(i) === ")") {
+          depth -= 1;
+          if (depth === 0 && i < t.length - 1) {
+            ok = false;
+            break;
+          }
+        }
+      }
+      if (!ok || depth !== 0) break;
+      t = t.slice(1, -1);
+    }
+    return t;
+  }
+
+  /** Split a term into numerator body + denominator expression (may include x). */
+  function splitTermDenExpr(term) {
+    var cf = parseCompoundFrac(term);
+    if (cf) {
+      return {
+        sign: cf.sign === "-" ? "-" : "",
+        body: (cf.k === 1 ? "" : String(cf.k)) + "(" + cf.inner + ")",
+        denExpr: String(cf.den),
+        numeric: cf.den,
+        hasVar: false,
+      };
+    }
+    var raw = String(term || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "");
+    var sign = "";
+    if (raw.charAt(0) === "+") raw = raw.slice(1);
+    if (raw.charAt(0) === "-") {
+      sign = "-";
+      raw = raw.slice(1);
+    }
+    var wrapped = raw.match(/^\((\d+)\/(\d+)\)x$/i);
+    if (wrapped) {
+      return {
+        sign: sign,
+        body: wrapped[1] + "x",
+        denExpr: wrapped[2],
+        numeric: parseInt(wrapped[2], 10),
+        hasVar: false,
+      };
+    }
+    var depth = 0;
+    var slash = -1;
+    var i;
+    for (i = 0; i < raw.length; i++) {
+      var ch = raw.charAt(i);
+      if (ch === "(") depth += 1;
+      else if (ch === ")") depth -= 1;
+      else if (depth === 0 && ch === "/") slash = i;
+    }
+    if (slash < 0) {
+      return { sign: sign, body: raw, denExpr: "1", numeric: 1, hasVar: false };
+    }
+    var body = raw.slice(0, slash);
+    var denExpr = unwrapOuterParens(raw.slice(slash + 1));
+    if (!denExpr) denExpr = "1";
+    var hasVar = /x/i.test(denExpr);
+    var numeric = 1;
+    if (/^\d+$/.test(denExpr)) numeric = parseInt(denExpr, 10);
+    return { sign: sign, body: body, denExpr: denExpr, numeric: numeric, hasVar: hasVar };
+  }
+
+  /** Numeric denominator only (legacy). Algebraic dens count as 1 here. */
+  function termDen(term) {
+    var info = splitTermDenExpr(term);
+    if (info.hasVar) return 1;
+    return info.numeric > 0 ? info.numeric : 1;
+  }
+
+  function denHasVar(term) {
+    return splitTermDenExpr(term).hasVar;
+  }
+
+  function eqHasVarDenom(eqText) {
+    var sides = splitEq(eqText);
+    if (!sides) return false;
+    var terms = splitRawTerms(sides.left).concat(splitRawTerms(sides.right));
+    var i;
+    for (i = 0; i < terms.length; i++) {
+      if (denHasVar(terms[i])) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Parse a linear expression into coefficients of ax+b.
+   * Supports: x+2, x-3, 4-x, 6-2x, 3x+2, -4x+6, 1-x, …
+   */
+  function parseAxPlusB(expr) {
+    var s = canonExpr(unwrapOuterParens(expr));
+    if (!s || !/x/i.test(s)) return null;
+    if (/x\^|x²|\*|\/|\(/.test(s)) return null;
+    if (s.charAt(0) !== "+" && s.charAt(0) !== "-") s = "+" + s;
+    var a = 0;
+    var b = 0;
+    var re = /([+-])(\d+(?:\.\d+)?)?(x)?/gi;
+    var m;
+    var consumed = 0;
+    while ((m = re.exec(s))) {
+      if (m.index !== consumed) return null;
+      consumed = m.index + m[0].length;
+      var sign = m[1] === "-" ? -1 : 1;
+      var hasX = !!m[3];
+      var coef = m[2] != null && m[2] !== "" ? parseFloat(m[2]) : hasX ? 1 : 0;
+      if (!hasX && (m[2] == null || m[2] === "")) return null;
+      if (hasX) a += sign * coef;
+      else b += sign * coef;
+    }
+    if (consumed !== s.length) return null;
+    return { a: a, b: b };
+  }
+
+  function formatAxPlusB(a, b) {
+    if (near0(a) && near0(b)) return "0";
+    if (near0(a)) return fmt(b);
+    if (Math.abs(a + 1) < EPS && b > 0) return fmt(b) + "-x";
+    var xs;
+    if (Math.abs(a - 1) < EPS) xs = "x";
+    else if (Math.abs(a + 1) < EPS) xs = "-x";
+    else xs = fmt(a) + "x";
+    if (near0(b)) return xs;
+    if (b > 0) return xs + "+" + fmt(b);
+    return xs + "-" + fmt(-b);
+  }
+
+  function peelNumericFactor(denExpr) {
+    var d = unwrapOuterParens(denExpr);
+    var m = String(d).match(/^(\d+)\((.+)\)$/);
+    if (m) return { numeric: parseInt(m[1], 10), inner: m[2] };
+    m = String(d).match(/^(\d+)\*(.+)$/);
+    if (m) return { numeric: parseInt(m[1], 10), inner: m[2] };
+    return null;
+  }
+
+  /**
+   * Forbidden values from a denominator expression.
+   * Handles x, k(x±a), linear ax+b, and x²−n².
+   */
+  function forbiddenFromDen(denExpr) {
+    var raw = unwrapOuterParens(denExpr);
+    var peel = peelNumericFactor(raw);
+    if (peel) return forbiddenFromDen(peel.inner);
+    var d = canonExpr(raw);
+    if (!d || d === "1") return [];
+    if (/^\d+(?:\.\d+)?$/.test(d)) return [];
+    if (d === "x") return [{ value: 0, text: "0" }];
+    var m = d.match(/^x(?:\^2|²)-(\d+(?:\.\d+)?)$/);
+    if (m) {
+      var n = parseFloat(m[1]);
+      var r = Math.sqrt(n);
+      if (Math.abs(r * r - n) < EPS && Math.abs(r - Math.round(r)) < EPS) {
+        var rr = Math.round(r);
+        return [
+          { value: rr, text: fmt(rr) },
+          { value: -rr, text: fmt(-rr) },
+        ];
+      }
+      return [{ expr: "x^2", text: "±√" + fmt(n), symbolic: true }];
+    }
+    var lin = parseAxPlusB(raw);
+    if (lin && !near0(lin.a)) {
+      var v = -lin.b / lin.a;
+      return [{ value: v, text: fmt(v) }];
+    }
+    return [{ expr: denExpr, text: unwrapOuterParens(denExpr) + "≠0", symbolic: true }];
+  }
+
+  function formatDomainDisplay(forbidden) {
+    var parts = forbidden.map(function (f) {
+      return "x≠" + f.text;
+    });
+    if (!parts.length) return "";
+    if (parts.length === 1) return parts[0];
+    if (parts.length === 2) return parts[0] + ", " + parts[1];
+    return parts.join(", ");
+  }
+
+  function formatRawDomainDisplay(uniqueDens) {
+    return uniqueDens
+      .map(function (d) {
+        return unwrapOuterParens(d) + "≠0";
+      })
+      .join(", ");
+  }
+
+  function densEquivalent(a, b) {
+    var ca = canonExpr(unwrapOuterParens(a));
+    var cb = canonExpr(unwrapOuterParens(b));
+    if (ca === cb) return true;
+    var peelA = peelNumericFactor(ca);
+    var peelB = peelNumericFactor(cb);
+    if (peelA) return densEquivalent(peelA.inner, b);
+    if (peelB) return densEquivalent(a, peelB.inner);
+    var la = parseAxPlusB(ca);
+    var lb = parseAxPlusB(cb);
+    if (la && lb) {
+      if (near0(la.a - lb.a) && near0(la.b - lb.b)) return true;
+      // Same line up to nonzero scalar (e.g. 2x-6 ~ x-3, or 2-x ~ x-2 with sign flip)
+      if (!near0(la.a) && !near0(lb.a) && near0(la.a * lb.b - lb.a * la.b)) return true;
+    }
+    return false;
+  }
+
+  function analyzeDomain(eqText) {
+    var sides = splitEq(eqText);
+    if (!sides) return null;
+    var terms = splitRawTerms(sides.left).concat(splitRawTerms(sides.right));
+    var forbidden = [];
+    var seen = {};
+    var densVar = [];
+    var uniqueKeys = {};
+    var uniqueDens = [];
+    var i;
+    for (i = 0; i < terms.length; i++) {
+      var info = splitTermDenExpr(terms[i]);
+      if (!info.hasVar) continue;
+      densVar.push(info.denExpr);
+      var peel = peelNumericFactor(info.denExpr);
+      var core = peel ? unwrapOuterParens(peel.inner) : info.denExpr;
+      var uk = canonExpr(core);
+      if (!uniqueKeys[uk]) {
+        uniqueKeys[uk] = true;
+        uniqueDens.push(core);
+      }
+      var fors = forbiddenFromDen(info.denExpr);
+      var j;
+      for (j = 0; j < fors.length; j++) {
+        var f = fors[j];
+        var k = f.symbolic ? "s:" + f.text : "v:" + String(f.value);
+        if (seen[k]) continue;
+        seen[k] = true;
+        forbidden.push(f);
+      }
+    }
+    if (!densVar.length) return null;
+    forbidden.sort(function (a, b) {
+      if (a.symbolic && !b.symbolic) return 1;
+      if (!a.symbolic && b.symbolic) return -1;
+      if (a.symbolic) return String(a.text).localeCompare(String(b.text));
+      return a.value - b.value;
+    });
+    var display = formatDomainDisplay(forbidden);
+    var parts = forbidden.map(function (f) {
+      return "x≠" + f.text;
+    });
+    var rawParts = uniqueDens.map(function (d) {
+      return unwrapOuterParens(d) + "≠0";
+    });
+    var rawDisplay = formatRawDomainDisplay(uniqueDens);
+    var alts = [display, parts.join("; "), parts.join(",")];
+    if (parts.length === 2) {
+      alts.push(parts[0] + "ו" + parts[1]);
+      alts.push(parts[0] + "ו־" + parts[1]);
+      alts.push(parts[0] + " ו " + parts[1]);
+    }
+    if (forbidden.length === 1 && !forbidden[0].symbolic && near0(forbidden[0].value)) {
+      alts.push("x≠0");
+    }
+    alts.push(rawDisplay);
+    alts.push(rawParts.join(";"));
+    var items = uniqueDens.map(domainItemFromDen);
+    return {
+      dens: densVar,
+      uniqueDens: uniqueDens,
+      count: forbidden.length,
+      densCount: uniqueDens.length,
+      forbidden: forbidden,
+      display: display,
+      parts: parts,
+      rawParts: rawParts,
+      rawDisplay: rawDisplay,
+      items: items,
+      alts: alts.filter(Boolean),
+    };
+  }
+
+  function domainItemFromDen(denExpr) {
+    var core = unwrapOuterParens(denExpr);
+    var peel = peelNumericFactor(core);
+    if (peel) core = unwrapOuterParens(peel.inner);
+    var rawPart = core + "≠0";
+    var fors = forbiddenFromDen(denExpr);
+    var solvedParts = fors
+      .filter(function (f) {
+        return !f.symbolic;
+      })
+      .map(function (f) {
+        return "x≠" + f.text;
+      });
+    var solvedPart =
+      solvedParts.length === 1
+        ? solvedParts[0]
+        : solvedParts.length > 1
+          ? solvedParts.join(", ")
+          : rawPart;
+    return {
+      den: core,
+      rawPart: rawPart,
+      solvedPart: solvedPart,
+      forbidden: fors[0] || null,
+    };
+  }
+
+  function normalizeDomainTyped(typed) {
+    return String(typed || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/≠|!=|<>|\\\\neq/gi, "≠")
+      .replace(/\s+/g, "")
+      .replace(/ו־|ו/g, ",")
+      .toLowerCase();
+  }
+
+  function prettyDomainTyped(typed) {
+    return String(typed || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/≠|!=|<>|\\\\neq/gi, "≠")
+      .replace(/\s+/g, "");
+  }
+
+  function domainConstraintToEq(text) {
+    return prettyDomainTyped(text).replace(/≠/g, "=");
+  }
+
+  function domainEqToConstraint(text) {
+    return prettyDomainTyped(text).replace(/=/g, "≠");
+  }
+
+  function parseDomainValues(raw) {
+    var vals = [];
+    var re = /(?:^|[,;])x≠([+\-]?\d+(?:\.\d+)?(?:\/\d+)?)/g;
+    var m;
+    while ((m = re.exec(raw))) {
+      var tok = m[1];
+      if (tok.indexOf("/") !== -1) {
+        var fr = tok.split("/");
+        var den = parseFloat(fr[1]);
+        if (!den) continue;
+        vals.push(parseFloat(fr[0]) / den);
+      } else {
+        vals.push(parseFloat(tok));
+      }
+    }
+    return vals;
+  }
+
+  /** Parse expressions written as den≠0 (before solving for x). */
+  function parseDomainRawExprs(raw) {
+    var exprs = [];
+    var re = /([^,;]+)≠0/g;
+    var m;
+    while ((m = re.exec(raw))) {
+      exprs.push(unwrapOuterParens(m[1]));
+    }
+    return exprs;
+  }
+
+  function checkDomainRaw(info, raw) {
+    var got = parseDomainRawExprs(raw);
+    if (!got.length) return { ok: false };
+    var need = info.uniqueDens || [];
+    if (got.length !== need.length) {
+      return {
+        ok: false,
+        message:
+          need.length > 1
+            ? "רשמו את כל המכנים ≠0, למשל " + info.rawDisplay + "."
+            : "רשמו את המכנה ≠0, למשל " + info.rawDisplay + ".",
+      };
+    }
+    var i;
+    for (i = 0; i < need.length; i++) {
+      var matched = got.some(function (g) {
+        return densEquivalent(g, need[i]);
+      });
+      if (!matched) {
+        return {
+          ok: false,
+          message: "בדקו את המכנים. אפשר לכתוב למשל " + info.rawDisplay + ", ואז לפתור ל־" + info.display + ".",
+        };
+      }
+    }
+    return { ok: true, display: info.rawDisplay, parts: info.rawParts };
+  }
+
+  function checkDomainSolved(info, raw) {
+    var expected = info.forbidden.slice();
+    if (!expected.length) {
+      return { ok: true, display: info.display, info: info };
+    }
+    var allSymbolic = expected.every(function (f) {
+      return f.symbolic;
+    });
+    if (allSymbolic) {
+      var want = normalizeDomainTyped(info.display);
+      if (raw === want || info.alts.some(function (a) { return normalizeDomainTyped(a) === raw; })) {
+        return { ok: true, display: info.display, info: info };
+      }
+      return { ok: false, message: "בדקו את תחום ההצבה: המכנים עם נעלם לא יכולים להתאפס." };
+    }
+    var gotVals = parseDomainValues(raw);
+    if (!gotVals.length) return { ok: false, emptyVals: true };
+    var need = expected.filter(function (f) {
+      return !f.symbolic;
+    });
+    if (gotVals.length !== need.length) {
+      return {
+        ok: false,
+        message:
+          "יש " +
+          need.length +
+          " ערכים אסורים" +
+          (info.densCount > 1 ? " (מכנים שונים)" : "") +
+          ". תחום ההצבה: " +
+          info.display +
+          ".",
+      };
+    }
+    var i;
+    for (i = 0; i < need.length; i++) {
+      var okOne = gotVals.some(function (g) {
+        return Math.abs(g - need[i].value) < EPS;
+      });
+      if (!okOne) {
+        return { ok: false, message: "תחום ההצבה אינו מדויק. צפוי: " + info.display + "." };
+      }
+    }
+    return { ok: true, display: info.display, info: info };
+  }
+
+  function checkDomainAlgebraStep(previous, typed) {
+    var Algebra = global.DoctematicaAlgebra;
+    if (!Algebra || typeof Algebra.checkStep !== "function") return { ok: false };
+    var prevEq = domainConstraintToEq(previous);
+    var nextEq = domainConstraintToEq(typed);
+    if (!prevEq || !nextEq || nextEq.indexOf("=") === -1) return { ok: false };
+    var res;
+    try {
+      res = Algebra.checkStep(prevEq, nextEq);
+    } catch (err) {
+      return { ok: false, message: err.message };
+    }
+    if (!res || !res.ok) {
+      return { ok: false, message: res && res.message };
+    }
+    var display = prettyDomainTyped(typed);
+    if (display.indexOf("≠") === -1 && display.indexOf("=") !== -1) {
+      display = domainEqToConstraint(display);
+    }
+    var isolated = false;
+    var isoVal = null;
+    try {
+      var parsed = Algebra.parseEquation(nextEq);
+      var leftX = Math.abs(parsed.left.a - 1) < EPS && Math.abs(parsed.left.b) < EPS;
+      var rightX = Math.abs(parsed.right.a - 1) < EPS && Math.abs(parsed.right.b) < EPS;
+      if (leftX && Math.abs(parsed.right.a) < EPS) {
+        isolated = true;
+        isoVal = parsed.right.b;
+      } else if (rightX && Math.abs(parsed.left.a) < EPS) {
+        isolated = true;
+        isoVal = parsed.left.b;
+      }
+    } catch (err2) {}
+    if (res.solved || isolated) {
+      if (isoVal != null && Algebra.formatNumber) {
+        display = "x≠" + Algebra.formatNumber(isoVal).split(" או ")[0];
+      }
+      return {
+        ok: true,
+        phase: "solved",
+        display: display,
+        message: "זהו הערך האסור.",
+      };
+    }
+    return {
+      ok: true,
+      phase: "work",
+      display: display,
+      message: "צעד חוקי. המשיכו לפתור כמו משוואה, עד x≠…",
+    };
+  }
+
+  function domainNextStep(constraint) {
+    var eq = domainConstraintToEq(constraint);
+    var act = nextAction(eq);
+    if (!act || act.done || !act.eq) {
+      return {
+        done: true,
+        hint: "זה כבר הצורה הסופית: x≠…",
+        display: domainEqToConstraint(eq),
+      };
+    }
+    return {
+      done: false,
+      hint: act.hint,
+      display: domainEqToConstraint(act.eq),
+    };
+  }
+
+  /**
+   * Domain check: start from den≠0, then solve like an equation (transfers, divide…).
+   * Jumping straight to x≠value is also OK.
+   */
+  function checkDomain(eqText, typed, opts) {
+    opts = opts || {};
+    var info = analyzeDomain(eqText);
+    if (!info) return { ok: true, skip: true, message: "אין תחום הצבה מיוחד (אין נעלם במכנה)." };
+    var raw = normalizeDomainTyped(typed);
+    if (!raw) {
+      return {
+        ok: false,
+        message:
+          info.count > 1
+            ? "רשמו תחום הצבה, למשל " + info.rawDisplay + " ואז " + info.display + "."
+            : "רשמו תחום הצבה, למשל " + info.rawDisplay + " או " + info.display + ".",
+      };
+    }
+
+    var solved = checkDomainSolved(info, raw);
+    if (solved.ok) {
+      return {
+        ok: true,
+        done: true,
+        phase: "solved",
+        display: solved.display,
+        info: info,
+        message: "תחום ההצבה נרשם.",
+      };
+    }
+
+    var rawRes = checkDomainRaw(info, raw);
+    if (rawRes.ok) {
+      return {
+        ok: true,
+        done: false,
+        phase: "raw",
+        display: rawRes.display,
+        parts: rawRes.parts,
+        info: info,
+        message: "נכון — המכנה לא יכול להיות 0. עכשיו פתרו כמו משוואה עד " + info.display + ".",
+      };
+    }
+
+    if (info.items && info.items.length === 1) {
+      var one = checkDomainOne(info.items[0].den, typed, {
+        previous: opts.previous || info.items[0].rawPart,
+        started: !!opts.started,
+      });
+      if (one.ok) {
+        return {
+          ok: true,
+          done: one.phase === "solved",
+          phase: one.phase,
+          display: one.display,
+          parts: [one.display],
+          info: info,
+          message: one.message,
+        };
+      }
+      return { ok: false, message: one.message };
+    }
+
+    if (solved.message && !solved.emptyVals) {
+      return { ok: false, message: solved.message };
+    }
+    if (rawRes.message) {
+      return { ok: false, message: rawRes.message };
+    }
+    return {
+      ok: false,
+      message:
+        info.densCount > 1
+          ? "אפשר קודם " + info.rawDisplay + ", ואז לפתור כל מכנה כמו משוואה עד " + info.display + "."
+          : "אפשר קודם " + info.rawDisplay + ", ואז לפתור עד " + info.display + ".",
+    };
+  }
+
+  function checkDomainOne(denExpr, typed, opts) {
+    opts = opts || {};
+    var item = domainItemFromDen(denExpr);
+    var raw = normalizeDomainTyped(typed);
+    if (!raw) return { ok: false, message: "רשמו את התנאי." };
+    var prev = opts.previous || item.rawPart;
+    var started = !!opts.started;
+
+    if (item.solvedPart && normalizeDomainTyped(item.solvedPart) === raw) {
+      return { ok: true, phase: "solved", display: item.solvedPart };
+    }
+
+    var vals = parseDomainValues(raw);
+    if (vals.length === 1 && item.forbidden && !item.forbidden.symbolic) {
+      if (Math.abs(vals[0] - item.forbidden.value) < EPS) {
+        return { ok: true, phase: "solved", display: item.solvedPart };
+      }
+    }
+
+    var got = parseDomainRawExprs(raw);
+    var isRawDen =
+      (got.length >= 1 && got.some(function (g) { return densEquivalent(g, item.den); })) ||
+      (densEquivalent(raw.replace(/≠0$/, ""), item.den) && /≠0$/.test(raw));
+    if (isRawDen) {
+      if (started && normalizeDomainTyped(prev) === raw) {
+        return { ok: false, message: "זו אותה כתיבה. המשיכו לפתור כמו משוואה עד " + item.solvedPart + "." };
+      }
+      return {
+        ok: true,
+        phase: "raw",
+        display: item.rawPart,
+        message: "נכון — המכנה ≠ 0. עכשיו פתרו כמו משוואה עד " + item.solvedPart + ".",
+      };
+    }
+
+    var alg = checkDomainAlgebraStep(prev, typed);
+    if (alg.ok) {
+      if (alg.phase === "solved") {
+        if (item.forbidden && !item.forbidden.symbolic) {
+          var gotSol = parseDomainValues(normalizeDomainTyped(alg.display));
+          if (gotSol.length === 1 && Math.abs(gotSol[0] - item.forbidden.value) < EPS) {
+            return { ok: true, phase: "solved", display: item.solvedPart, message: alg.message };
+          }
+        }
+        if (item.solvedPart && normalizeDomainTyped(item.solvedPart) === normalizeDomainTyped(alg.display)) {
+          return { ok: true, phase: "solved", display: item.solvedPart, message: alg.message };
+        }
+        return alg;
+      }
+      return alg;
+    }
+
+    return {
+      ok: false,
+      message: alg.message || ("למכנה " + item.den + " — פתרו כמו משוואה, מ-" + item.rawPart + " עד " + item.solvedPart + "."),
+    };
+  }
+
+  function nextUnsolvedDomainItem(prog, items) {
+    var i;
+    for (i = 0; i < items.length; i++) {
+      if (!prog[i] || prog[i].phase !== "solved") return i;
+    }
+    return -1;
+  }
+
+  function domainProgressDone(prog, items) {
+    var i;
+    var n = Math.max(prog.length, items.length);
+    for (i = 0; i < n; i++) {
+      if (!prog[i] || prog[i].phase !== "solved") return false;
+    }
+    return items.length > 0;
+  }
+
+  function domainItemTaken(prog, itemIdx, exceptSlot) {
+    var s;
+    for (s = 0; s < prog.length; s++) {
+      if (s === exceptSlot) continue;
+      if (prog[s] && prog[s].itemIndex === itemIdx && (prog[s].phase || (prog[s].trail && prog[s].trail.length))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function domainProgressDisplay(prog, items) {
+    return items
+      .map(function (it, i) {
+        return (prog[i] && prog[i].display) || it.solvedPart;
+      })
+      .join(", ");
+  }
+
+  /** Multi-den domain: one value at a time, or split by branch. Full line still OK. */
+  function checkDomainProgress(eqText, typed, progress, opts) {
+    opts = opts || {};
+    progress = progress || { items: [], split: false, activeBranch: 0 };
+
+    var full = checkDomain(eqText, typed, opts);
+    if (full.ok && full.done) return full;
+
+    var info = analyzeDomain(eqText);
+    if (!info || !info.items || info.items.length <= 1) {
+      return checkDomain(eqText, typed, opts);
+    }
+
+    var items = info.items;
+    var prog = progress.items || [];
+    while (prog.length < items.length) prog.push({ phase: null, trail: [], itemIndex: null });
+
+    var slot = progress.split ? progress.activeBranch || 0 : -1;
+    var indices = [];
+    if (progress.split) {
+      if (prog[slot] && prog[slot].itemIndex != null) {
+        indices = [prog[slot].itemIndex];
+      } else {
+        var u;
+        for (u = 0; u < items.length; u++) {
+          if (!domainItemTaken(prog, u, slot)) indices.push(u);
+        }
+      }
+    } else {
+      for (u = 0; u < items.length; u++) {
+        if (prog[u].phase !== "solved") indices.push(u);
+      }
+    }
+
+    var j;
+    for (j = 0; j < indices.length; j++) {
+      var denIdx = indices[j];
+      var slotIdx = progress.split ? slot : denIdx;
+      var prev =
+        prog[slotIdx].trail && prog[slotIdx].trail.length
+          ? prog[slotIdx].trail[prog[slotIdx].trail.length - 1].display
+          : items[denIdx].rawPart;
+      var one = checkDomainOne(items[denIdx].den, typed, {
+        previous: prev,
+        started: !!(prog[slotIdx].trail && prog[slotIdx].trail.length),
+      });
+      if (!one.ok) continue;
+
+      var progCopy = prog.slice();
+      progCopy[slotIdx] = {
+        phase: one.phase === "solved" ? "solved" : one.phase,
+        display: one.phase === "solved" ? one.display : progCopy[slotIdx] && progCopy[slotIdx].display,
+        itemIndex: denIdx,
+        trail: (progCopy[slotIdx] && progCopy[slotIdx].trail ? progCopy[slotIdx].trail.slice() : []).concat([
+          { display: one.display },
+        ]),
+      };
+
+      var allDone = domainProgressDone(progCopy, items);
+      if (one.phase === "raw" || one.phase === "work") {
+        return {
+          ok: true,
+          done: false,
+          partial: true,
+          itemIndex: slotIdx,
+          phase: one.phase,
+          display: one.display,
+          info: info,
+          progressItems: progCopy,
+          message: one.message || "צעד חוקי. המשיכו לפתור עד x≠…",
+        };
+      }
+
+      if (allDone) {
+        return {
+          ok: true,
+          done: true,
+          partial: true,
+          itemIndex: slotIdx,
+          phase: "solved",
+          display: info.display,
+          info: info,
+          progressItems: progCopy,
+          message: "תחום ההצבה נרשם.",
+        };
+      }
+
+      var nextIdx = nextUnsolvedDomainItem(progCopy, items);
+      return {
+        ok: true,
+        done: false,
+        partial: true,
+        itemIndex: slotIdx,
+        phase: "solved",
+        display: one.display,
+        info: info,
+        progressItems: progCopy,
+        nextBranch: nextIdx,
+        message: "נכון. עכשיו מלאו את התא השני (המכנה שעוד לא בדקתם).",
+      };
+    }
+
+    if (full.ok && !full.done) return full;
+
+    var gotVals = parseDomainValues(normalizeDomainTyped(typed));
+    if (gotVals.length === 1 && !progress.split) {
+      return {
+        ok: false,
+        message: "נכון חלקית — רשמו ערך אחד בכל פעם, או פצלו לשני עמודות.",
+      };
+    }
+
+    return {
+      ok: false,
+      message: progress.split
+        ? "רשמו תנאי לאחד המכנים שנותרו (מכנה≠0 או x≠…)."
+        : "רשמו ערך אחד בכל פעם (למשל " +
+          items[0].solvedPart +
+          "), או פצלו לימין ושמאל.",
+    };
+  }
+
+  /** Factor list for LCD: numeric part + algebraic factor strings. */
+  function denFactors(denExpr) {
+    var d = unwrapOuterParens(denExpr);
+    var c = canonExpr(d);
+    if (!c || c === "1") return { numeric: 1, factors: [] };
+    if (/^\d+$/.test(c)) return { numeric: parseInt(c, 10), factors: [] };
+    var peel = peelNumericFactor(d);
+    if (peel) {
+      var inner = denFactors(peel.inner);
+      return { numeric: peel.numeric * inner.numeric, factors: inner.factors };
+    }
+    var diff = c.match(/^x(?:\^2|²)-(\d+)$/);
+    if (diff) {
+      var n = parseInt(diff[1], 10);
+      var r = Math.round(Math.sqrt(n));
+      if (r * r === n && r > 0) {
+        return { numeric: 1, factors: ["x-" + r, "x+" + r] };
+      }
+    }
+    var lin = parseAxPlusB(d);
+    if (lin && !near0(lin.a)) {
+      var ai = Math.round(lin.a);
+      var bi = Math.round(lin.b);
+      if (Math.abs(ai - lin.a) < EPS && Math.abs(bi - lin.b) < EPS) {
+        var g = gcdInt(Math.abs(ai), Math.abs(bi));
+        if (g > 1) {
+          return { numeric: g, factors: [formatAxPlusB(ai / g, bi / g)] };
+        }
+      }
+    }
+    return { numeric: 1, factors: [d] };
+  }
+
+  function isSimpleLcdFactor(f) {
+    var t = unwrapOuterParens(String(f || ""));
+    return /^[a-z]$/i.test(t) || /^\d+$/.test(t);
+  }
+
+  /** Prefer bare letter/number left of parentheses: x(x-7), not (x-7)x. */
+  function sortLcdFactors(factors) {
+    return (factors || []).slice().sort(function (a, b) {
+      var sa = isSimpleLcdFactor(a) ? 0 : 1;
+      var sb = isSimpleLcdFactor(b) ? 0 : 1;
+      if (sa !== sb) return sa - sb;
+      return canonExpr(a).localeCompare(canonExpr(b));
+    });
+  }
+
+  function formatLcdFactors(num, factors) {
+    var s = "";
+    if (num > 1) s += String(num);
+    var ordered = sortLcdFactors(factors);
+    var i;
+    for (i = 0; i < ordered.length; i++) {
+      var f = ordered[i];
+      if (/^[a-z]$/i.test(f) || /^\d+$/.test(f)) s += f;
+      else s += "(" + unwrapOuterParens(f) + ")";
+    }
+    return s || "1";
+  }
+
+  /** Parse typed LCD / multiplier product into {numeric, factors}, order-agnostic. */
+  function parseLcdProduct(typed) {
+    var t = canonExpr(typed).replace(/\*/g, "");
+    if (!t || t === "0") return null;
+    if (t === "1") return { numeric: 1, factors: [] };
+    var num = 1;
+    var factors = [];
+    var i = 0;
+    while (i < t.length) {
+      if (/\d/.test(t.charAt(i))) {
+        var dig = t.slice(i).match(/^\d+/);
+        if (!dig) return null;
+        num *= parseInt(dig[0], 10);
+        i += dig[0].length;
+        continue;
+      }
+      if (t.charAt(i) === "(") {
+        var depth = 0;
+        var j = i;
+        for (; j < t.length; j++) {
+          if (t.charAt(j) === "(") depth += 1;
+          else if (t.charAt(j) === ")") {
+            depth -= 1;
+            if (depth === 0) {
+              j += 1;
+              break;
+            }
+          }
+        }
+        if (depth !== 0) return null;
+        var inner = unwrapOuterParens(t.slice(i, j));
+        if (!inner) return null;
+        var peeled = denFactors(inner);
+        num *= peeled.numeric;
+        factors = factors.concat(peeled.factors);
+        i = j;
+        continue;
+      }
+      if (/[a-z]/i.test(t.charAt(i))) {
+        if (t.slice(i, i + 3) === "x^2") {
+          factors.push("x^2");
+          i += 3;
+          continue;
+        }
+        factors.push(t.charAt(i));
+        i += 1;
+        continue;
+      }
+      return null;
+    }
+    return { numeric: num, factors: factors };
+  }
+
+  function lcdPackKey(pack) {
+    if (!pack) return "";
+    var fs = (pack.factors || [])
+      .map(function (f) {
+        return canonExpr(unwrapOuterParens(f));
+      })
+      .sort();
+    return String(pack.numeric || 1) + "|" + fs.join(",");
+  }
+
+  function lcdFromDenExprs(denExprs) {
+    var num = 1;
+    var factors = [];
+    var seen = {};
+    var i;
+    for (i = 0; i < denExprs.length; i++) {
+      var parts = denFactors(denExprs[i]);
+      num = lcmInt(num, parts.numeric);
+      var j;
+      for (j = 0; j < parts.factors.length; j++) {
+        var fk = canonExpr(parts.factors[j]);
+        if (seen[fk]) continue;
+        seen[fk] = true;
+        factors.push(parts.factors[j]);
+      }
+    }
+    factors = sortLcdFactors(factors);
+    var display = formatLcdFactors(num, factors);
+    return { numeric: num, factors: factors, display: display };
+  }
+
+  function mulDisplay(num, factors) {
+    return formatLcdFactors(num, factors);
+  }
+
+  /** Multiplier = LCD / termDen as {numeric, factors, display}. */
+  function mulForDen(lcdPack, denExpr) {
+    var den = denFactors(denExpr);
+    if (lcdPack.numeric % den.numeric !== 0) return null;
+    var num = lcdPack.numeric / den.numeric;
+    var left = [];
+    var need = {};
+    var i;
+    for (i = 0; i < den.factors.length; i++) {
+      var dk = canonExpr(den.factors[i]);
+      need[dk] = (need[dk] || 0) + 1;
+    }
+    var pool = {};
+    for (i = 0; i < lcdPack.factors.length; i++) {
+      var lk = canonExpr(lcdPack.factors[i]);
+      pool[lk] = (pool[lk] || 0) + 1;
+    }
+    for (i = 0; i < den.factors.length; i++) {
+      var k = canonExpr(den.factors[i]);
+      if (!pool[k]) return null;
+      pool[k] -= 1;
+    }
+    for (i = 0; i < lcdPack.factors.length; i++) {
+      var fk = canonExpr(lcdPack.factors[i]);
+      if (pool[fk] > 0) {
+        left.push(lcdPack.factors[i]);
+        pool[fk] -= 1;
+      }
+    }
+    return { numeric: num, factors: left, display: mulDisplay(num, left) };
+  }
+
+  function normalizeLcdTyped(typed) {
+    return unwrapOuterParens(canonExpr(typed).replace(/\*/g, ""));
+  }
+
+  function stripTermDen(term) {
+    var info = splitTermDenExpr(term);
+    return {
+      sign: info.sign,
+      body: info.body,
+      den: info.numeric,
+      denExpr: info.denExpr,
+      hasVar: info.hasVar,
+    };
+  }
+
+  function applyLeadingMul(body, mul) {
+    if (mul === 1 || mul === "1") return body;
+    if (typeof mul === "string" && !/^\d+$/.test(mul)) {
+      return applyExprMul(body, mul);
+    }
+    var nMul = typeof mul === "number" ? mul : parseFloat(mul);
+    if (!(nMul > 0) && nMul !== 0) return body;
+    if (nMul === 1) return body;
+    if (/^\d+(?:\.\d+)?/.test(body)) {
+      var nm = body.match(/^(\d+(?:\.\d+)?)(.*)$/);
+      if (nm) {
+        var n = parseFloat(nm[1], 10) * nMul;
+        var rest = nm[2] || "";
+        if (Math.abs(n - 1) < EPS && /^x/i.test(rest)) return rest;
+        if (Math.abs(n + 1) < EPS && /^x/i.test(rest)) return "-" + rest;
+        if (near0(n) && !rest) return "0";
+        return fmt(n) + rest;
+      }
+    }
+    if (/^x/i.test(body)) {
+      if (nMul === -1) return "-" + body;
+      return fmt(nMul) + body;
+    }
+    return fmt(nMul) + body;
+  }
+
+  /** Multiply numerator body by a multiplier that may include x (e.g. "5", "x", "5x", "(x+2)"). */
+  function applyExprMul(body, mulDisp) {
+    var rawMul = String(mulDisp == null ? "1" : mulDisp)
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "");
+    if (!rawMul || rawMul === "1") return body;
+    var b = String(body || "");
+    if (b === "0" || near0(parseFloat(b))) return "0";
+
+    if (/^\d+$/.test(rawMul)) {
+      return applyLeadingMul(b, parseInt(rawMul, 10));
+    }
+
+    var coef = 1;
+    var alg = rawMul;
+    var mCoef = rawMul.match(/^(\d+)(\(.*\)|[a-z].*)$/i);
+    if (mCoef) {
+      coef = parseInt(mCoef[1], 10);
+      alg = mCoef[2];
+    }
+
+    function wrapAlg(expr) {
+      var e = unwrapOuterParens(expr);
+      if (/^[a-z]$/i.test(e) || /^\d+$/.test(e)) return e;
+      if (/^[a-z]\^?\d*$/i.test(e)) return e;
+      return "(" + e + ")";
+    }
+
+    if (/^\d+(?:\.\d+)?$/.test(b)) {
+      var n = parseFloat(b) * coef;
+      var w = wrapAlg(alg);
+      if (Math.abs(n - 1) < EPS) return w.charAt(0) === "(" ? w : w;
+      if (Math.abs(n + 1) < EPS) return "-" + w;
+      if (w.charAt(0) === "(" || /^[a-z]/i.test(w)) return fmt(n) + w;
+      return fmt(n) + "(" + w + ")";
+    }
+
+    if (/^x$/i.test(b) && /^x$/i.test(unwrapOuterParens(alg)) && coef === 1) {
+      return "x^2";
+    }
+
+    var left = b;
+    if (!/^\(.*\)$/.test(left) && /[+\-]/.test(left)) left = "(" + left + ")";
+    if (coef !== 1) return fmt(coef) + left + wrapAlg(alg);
+    return left + wrapAlg(alg);
+  }
+
+  function applySign(sign, cleared) {
+    if (sign !== "-") return cleared;
+    if (cleared.charAt(0) === "-") return cleared.slice(1);
+    return "-" + cleared;
+  }
+
+  function clearTermDen(term, lcdOrMul) {
+    var parts = stripTermDen(term);
+    if (lcdOrMul && typeof lcdOrMul === "object" && lcdOrMul.display != null) {
+      var clearedObj = applyExprMul(parts.body, lcdOrMul.display);
+      return applySign(parts.sign, clearedObj);
+    }
+    if (typeof lcdOrMul === "string" && !/^\d+$/.test(lcdOrMul)) {
+      return applySign(parts.sign, applyExprMul(parts.body, lcdOrMul));
+    }
+    var lcd = typeof lcdOrMul === "number" ? lcdOrMul : parseInt(lcdOrMul, 10);
+    if (!(lcd > 0) || lcd % parts.den !== 0) return term;
+    var mul = lcd / parts.den;
+    return applySign(parts.sign, applyLeadingMul(parts.body, mul));
+  }
+
+  function clearEqDens(eqText) {
+    var info = analyzeLcdNeed(eqText);
+    if (info && info.terms && info.terms.length) {
+      var left = joinPrettyParts(
+        info.terms
+          .filter(function (t) {
+            return t.side === "L";
+          })
+          .map(function (t) {
+            return clearTermDen(t.text, { display: String(t.mul) });
+          })
+      );
+      var right = joinPrettyParts(
+        info.terms
+          .filter(function (t) {
+            return t.side === "R";
+          })
+          .map(function (t) {
+            return clearTermDen(t.text, { display: String(t.mul) });
+          })
+      );
+      var next = left + " = " + right;
+      if (key(next) === key(eqText)) return null;
+      return next;
+    }
+    return dropSharedDens(eqText);
+  }
+
+  /** When every term already shares one denominator — just cancel/drop it. */
+  function dropSharedDens(eqText) {
+    var lcd = sharedLcd(eqText);
+    if (!lcd || lcd === 0 || lcd === "1" || lcd <= 1 && typeof lcd === "number") return null;
+    var sides = splitEq(eqText);
+    if (!sides) return null;
+    if (
+      /^\s*x\s*$/i.test(sides.left) ||
+      /^\s*x\s*$/i.test(sides.right) ||
+      /^\s*(x\^2|x²)\s*$/i.test(sides.left) ||
+      /^\s*(x\^2|x²)\s*$/i.test(sides.right)
+    ) {
+      var isolatedDrop = /^\s*(x\^2|x²|x)\s*$/i.test(sides.left) ? sides.right : sides.left;
+      var otherHasVarDenDrop = splitRawTerms(isolatedDrop).some(function (term) {
+        return splitTermDenExpr(term).hasVar;
+      });
+      if (!otherHasVarDenDrop) return null;
+    }
+    var isAlg = typeof lcd === "string";
+    var left;
+    var right;
+    if (isAlg) {
+      left = joinPrettyParts(
+        splitRawTerms(sides.left).map(function (t) {
+          var p = stripTermDen(t);
+          return applySign(p.sign, p.body);
+        })
+      );
+      right = joinPrettyParts(
+        splitRawTerms(sides.right).map(function (t) {
+          var p = stripTermDen(t);
+          return applySign(p.sign, p.body);
+        })
+      );
+    } else {
+      left = joinPrettyParts(
+        splitRawTerms(sides.left).map(function (t) {
+          return clearTermDen(t, lcd);
+        })
+      );
+      right = joinPrettyParts(
+        splitRawTerms(sides.right).map(function (t) {
+          return clearTermDen(t, lcd);
+        })
+      );
+    }
+    var next = left + " = " + right;
+    if (key(next) === key(eqText)) return null;
+    return next;
   }
 
   function formatLcdPiece(nx, nb, lcd) {
@@ -249,6 +1415,42 @@
     return formatLcdPiece(nx, nb, lcd);
   }
 
+  /** Keep multipliers explicit (notebook style) — student computes the products next. */
+  function rewriteTermLcdKeepMul(term, lcd) {
+    var cf = parseCompoundFrac(term);
+    if (cf) {
+      var signed = (cf.sign === "-" ? -1 : 1) * cf.k * (lcd / cf.den);
+      return formatCompoundFrac(signed, cf.inner, lcd);
+    }
+    var raw = String(term || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "");
+    var neg = false;
+    if (raw.charAt(0) === "+") raw = raw.slice(1);
+    if (raw.charAt(0) === "-") {
+      neg = true;
+      raw = raw.slice(1);
+    }
+    var wrapped = raw.match(/^\((\d+)\/(\d+)\)x$/i);
+    var d;
+    var numBody;
+    if (wrapped) {
+      d = parseInt(wrapped[2], 10);
+      numBody = wrapped[1] + "x";
+    } else {
+      d = termDen(raw);
+      numBody = raw;
+      if (d > 1) {
+        var mFrac = raw.match(/^(.*)\/(\d+)$/);
+        if (mFrac && parseInt(mFrac[2], 10) === d) numBody = mFrac[1];
+      }
+    }
+    if (!(d > 0) || lcd % d !== 0) return term;
+    var mul = lcd / d;
+    if (mul === 1) return (neg ? "−" : "") + numBody + "/" + lcd;
+    return formatCompoundFrac(neg ? -mul : mul, numBody, lcd);
+  }
+
   function lcdOfDens(dens) {
     if (!dens.length) return 1;
     var L = dens[0];
@@ -257,15 +1459,101 @@
     return L;
   }
 
-  function lcdStep(eqText, decimals) {
+  function analyzeLcdNeed(eqText) {
     var sides = splitEq(eqText);
     if (!sides) return null;
-    if (/^\s*x\s*$/i.test(sides.left) || /^\s*x\s*$/i.test(sides.right)) return null;
-    if (/^\s*(x\^2|x²)\s*$/i.test(sides.left) || /^\s*(x\^2|x²)\s*$/i.test(sides.right)) return null;
+    if (
+      /^\s*x\s*$/i.test(sides.left) ||
+      /^\s*x\s*$/i.test(sides.right) ||
+      /^\s*(x\^2|x²)\s*$/i.test(sides.left) ||
+      /^\s*(x\^2|x²)\s*$/i.test(sides.right)
+    ) {
+      var isolated = /^\s*(x\^2|x²|x)\s*$/i.test(sides.left) ? sides.right : sides.left;
+      var otherHasVarDen = splitRawTerms(isolated).some(function (term) {
+        return splitTermDenExpr(term).hasVar;
+      });
+      if (!otherHasVarDen) return null;
+    }
     if (isSimpleCoeffFracEq(sides)) return null;
     var leftTerms = splitRawTerms(sides.left);
     var rightTerms = splitRawTerms(sides.right);
     var all = leftTerms.concat(rightTerms);
+    var denInfos = all.map(splitTermDenExpr);
+    var hasAlg = denInfos.some(function (d) {
+      return d.hasVar;
+    });
+
+    if (hasAlg) {
+      var denExprs = denInfos.map(function (d) {
+        return d.denExpr;
+      });
+      var uniqExpr = [];
+      denExprs.forEach(function (e) {
+        var k = canonExpr(e);
+        if (k === "1") return;
+        if (
+          !uniqExpr.some(function (u) {
+            return canonExpr(u) === k;
+          })
+        ) {
+          uniqExpr.push(e);
+        }
+      });
+      var hasDen1 = denExprs.some(function (e) {
+        return canonExpr(e) === "1";
+      });
+      var allSame =
+        uniqExpr.length === 1 &&
+        !hasDen1 &&
+        denExprs.every(function (e) {
+          return canonExpr(e) === "1" || canonExpr(e) === canonExpr(uniqExpr[0]);
+        });
+      // If every non-1 den is identical and there is no integer term — drop dens instead.
+      if (allSame && uniqExpr.length === 1) return null;
+      if (uniqExpr.length < 1) return null;
+      if (uniqExpr.length < 2 && !hasDen1) return null;
+      var pack = lcdFromDenExprs(denExprs.filter(function (e) {
+        return canonExpr(e) !== "1";
+      }));
+      if (pack.display === "1") return null;
+      var terms = [];
+      var i;
+      for (i = 0; i < leftTerms.length; i++) {
+        var mL = mulForDen(pack, denInfos[i].denExpr);
+        if (!mL) return null;
+        terms.push({
+          text: leftTerms[i],
+          den: denInfos[i].hasVar ? denInfos[i].denExpr : denInfos[i].numeric,
+          denExpr: denInfos[i].denExpr,
+          mul: mL.display === "1" ? 1 : /^\d+$/.test(mL.display) ? parseInt(mL.display, 10) : mL.display,
+          mulDisplay: mL.display,
+          side: "L",
+        });
+      }
+      for (i = 0; i < rightTerms.length; i++) {
+        var idx = leftTerms.length + i;
+        var mR = mulForDen(pack, denInfos[idx].denExpr);
+        if (!mR) return null;
+        terms.push({
+          text: rightTerms[i],
+          den: denInfos[idx].hasVar ? denInfos[idx].denExpr : denInfos[idx].numeric,
+          denExpr: denInfos[idx].denExpr,
+          mul: mR.display === "1" ? 1 : /^\d+$/.test(mR.display) ? parseInt(mR.display, 10) : mR.display,
+          mulDisplay: mR.display,
+          side: "R",
+        });
+      }
+      return {
+        lcd: pack.display,
+        lcdPack: pack,
+        algebraic: true,
+        leftTerms: leftTerms,
+        rightTerms: rightTerms,
+        terms: terms,
+        dens: denExprs,
+      };
+    }
+
     var dens = all.map(termDen);
     var fracDens = dens.filter(function (d) {
       return d > 1;
@@ -274,7 +1562,6 @@
     fracDens.forEach(function (d) {
       if (uniq.indexOf(d) === -1) uniq.push(d);
     });
-    var mixedX = false;
     function sideMixed(terms) {
       var hasFracX = false;
       var hasIntX = false;
@@ -286,24 +1573,67 @@
       }
       return hasFracX && hasIntX;
     }
-    mixedX = sideMixed(leftTerms) || sideMixed(rightTerms);
+    var mixedX = sideMixed(leftTerms) || sideMixed(rightTerms);
     var hasDen1 = dens.some(function (d) {
       return d === 1;
     });
     if (uniq.length < 2 && !mixedX && !(uniq.length >= 1 && hasDen1)) return null;
     var lcd = lcdOfDens(uniq.length ? uniq : dens.filter(function (d) { return d > 1; }));
     if (mixedX) {
-      var extra = dens.filter(function (d) { return d > 1; });
+      var extra = dens.filter(function (d) {
+        return d > 1;
+      });
       lcd = lcdOfDens(extra);
     }
     if (lcd <= 1) return null;
+    var termsN = [];
+    function pushSide(list, side) {
+      var i;
+      for (i = 0; i < list.length; i++) {
+        var den = termDen(list[i]);
+        if (lcd % den !== 0) return false;
+        termsN.push({
+          text: list[i],
+          den: den,
+          denExpr: String(den),
+          mul: lcd / den,
+          mulDisplay: String(lcd / den),
+          side: side,
+        });
+      }
+      return true;
+    }
+    if (!pushSide(leftTerms, "L") || !pushSide(rightTerms, "R")) return null;
+    return {
+      lcd: lcd,
+      algebraic: false,
+      leftTerms: leftTerms,
+      rightTerms: rightTerms,
+      terms: termsN,
+      dens: dens,
+    };
+  }
+
+  function lcdStep(eqText, decimals) {
+    var info = analyzeLcdNeed(eqText);
+    if (!info) return null;
+    var lcd = info.lcd;
+    if (info.algebraic) {
+      var cleared = clearEqDens(eqText);
+      if (!cleared) return null;
+      return {
+        eq: cleared,
+        hint: "הביאו למכנה משותף " + lcd + " (כפלו והורידו מכנים).",
+        explain: "המכנה המשותף הוא " + lcd + ". כופלים ומורידים מכנים.",
+      };
+    }
     var left = joinPrettyParts(
-      leftTerms.map(function (t) {
+      info.leftTerms.map(function (t) {
         return rewriteTermLcd(t, lcd, decimals);
       })
     );
     var right = joinPrettyParts(
-      rightTerms.map(function (t) {
+      info.rightTerms.map(function (t) {
         return rewriteTermLcd(t, lcd, decimals);
       })
     );
@@ -316,11 +1646,115 @@
     };
   }
 
+  function checkLcdValue(eqText, typed) {
+    var info = analyzeLcdNeed(eqText);
+    if (!info) return { ok: false, message: "כרגע אין צורך במכנה משותף במשוואה הזו." };
+    var raw = normalizeLcdTyped(typed);
+    if (!raw || raw === "0") {
+      return {
+        ok: false,
+        message: info.algebraic
+          ? "רשמו את המכנה המשותף (מספר, או ביטוי עם x כמו 5x)."
+          : "רשמו את המכנה המשותף כמספר שלם חיובי.",
+      };
+    }
+    if (info.algebraic) {
+      var gotPack = parseLcdProduct(raw);
+      var wantPack = info.lcdPack || parseLcdProduct(String(info.lcd));
+      var matched =
+        gotPack &&
+        wantPack &&
+        lcdPackKey(gotPack) === lcdPackKey(wantPack);
+      if (!matched && normalizeLcdTyped(raw) !== normalizeLcdTyped(String(info.lcd))) {
+        if (/^\d+$/.test(raw) && info.lcdPack && info.lcdPack.factors.length) {
+          return {
+            ok: false,
+            message: "המכנה המשותף צריך לכלול גם את הנעלם שבמכנים. נסו " + info.lcd + ".",
+          };
+        }
+        return {
+          ok: false,
+          reduced: true,
+          lcd: info.lcd,
+          message: "יש מכנה משותף מצומצם יותר: " + info.lcd + ".",
+        };
+      }
+      return { ok: true, lcd: info.lcd, info: info, message: "עכשיו רשמו מעל כל איבר בכמה מכפילים." };
+    }
+    if (!/^\d+$/.test(raw)) {
+      return { ok: false, message: "רשמו את המכנה המשותף כמספר שלם חיובי." };
+    }
+    var got = parseInt(raw, 10);
+    var i;
+    for (i = 0; i < info.dens.length; i++) {
+      if (got % info.dens[i] !== 0) {
+        return {
+          ok: false,
+          message: "זה לא מכנה משותף לכל האיברים. המכנה צריך להתחלק בכל המכנים שבמשוואה.",
+        };
+      }
+    }
+    if (got !== info.lcd) {
+      return {
+        ok: false,
+        reduced: true,
+        lcd: info.lcd,
+        message: "יש מכנה משותף מצומצם יותר: " + info.lcd + ".",
+      };
+    }
+    return { ok: true, lcd: info.lcd, info: info, message: "עכשיו רשמו מעל כל איבר בכמה מכפילים." };
+  }
+
+  function checkLcdMultiplier(termInfo, typed) {
+    var raw = String(typed || "")
+      .trim()
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "")
+      .replace(/×|·|\*/g, "");
+    if (!raw || raw === "0") {
+      return { ok: false, message: "רשמו מעל האיבר בכמה מכפילים (מספר או ביטוי כמו x)." };
+    }
+    var wantStr = String(termInfo.mulDisplay != null ? termInfo.mulDisplay : termInfo.mul);
+    var gotPack = parseLcdProduct(raw);
+    var wantPack = parseLcdProduct(wantStr);
+    if (
+      gotPack &&
+      wantPack &&
+      lcdPackKey(gotPack) === lcdPackKey(wantPack)
+    ) {
+      return { ok: true, message: "נכון." };
+    }
+    if (normalizeLcdTyped(raw) === normalizeLcdTyped(wantStr)) {
+      return { ok: true, message: "נכון." };
+    }
+    return {
+      ok: false,
+      message: "בדקו בכמה מכפילים: המכנה המשותף חלקי המכנה של האיבר הזה.",
+    };
+  }
+
+  function rewriteEqWithLcd(eqText, lcd) {
+    var sides = splitEq(eqText);
+    if (!sides) return null;
+    var left = joinPrettyParts(
+      splitRawTerms(sides.left).map(function (t) {
+        return rewriteTermLcdKeepMul(t, lcd);
+      })
+    );
+    var right = joinPrettyParts(
+      splitRawTerms(sides.right).map(function (t) {
+        return rewriteTermLcdKeepMul(t, lcd);
+      })
+    );
+    return left + " = " + right;
+  }
+
   function sharedLcd(eqText) {
     var sides = splitEq(eqText);
     if (!sides) return 0;
     var terms = splitRawTerms(sides.left).concat(splitRawTerms(sides.right));
     var dens = [];
+    var denExprs = [];
     var i;
     for (i = 0; i < terms.length; i++) {
       var t = String(terms[i])
@@ -328,9 +1762,20 @@
         .replace(/\s+/g, "")
         .replace(/^[+-]/, "");
       if (t === "0") continue;
-      dens.push(termDen(terms[i]));
+      var info = splitTermDenExpr(terms[i]);
+      dens.push(info.hasVar ? 0 : info.numeric);
+      denExprs.push(info.denExpr);
     }
-    if (!dens.length) return 0;
+    if (!denExprs.length) return 0;
+    if (denExprs.some(function (e) { return /x/i.test(e); })) {
+      var first = null;
+      for (i = 0; i < denExprs.length; i++) {
+        if (canonExpr(denExprs[i]) === "1") return 0;
+        if (!first) first = denExprs[i];
+        else if (canonExpr(denExprs[i]) !== canonExpr(first)) return 0;
+      }
+      return first || 0;
+    }
     var d0 = dens[0];
     if (d0 <= 1) return 0;
     for (i = 1; i < dens.length; i++) {
@@ -340,40 +1785,13 @@
   }
 
   function dropDenomsStep(eqText, decimals) {
+    var dropped = dropSharedDens(eqText);
+    if (!dropped) return null;
     var lcd = sharedLcd(eqText);
-    if (lcd <= 1) return null;
-    var sides = splitEq(eqText);
-    if (!sides) return null;
-    if (/^\s*x\s*$/i.test(sides.left) || /^\s*x\s*$/i.test(sides.right)) return null;
-    if (/^\s*(x\^2|x²)\s*$/i.test(sides.left) || /^\s*(x\^2|x²)\s*$/i.test(sides.right)) return null;
-    function dropSide(side) {
-      return joinPrettyParts(
-        splitRawTerms(side).map(function (term) {
-          var cf = parseCompoundFrac(term);
-          if (cf) {
-            var signed = (cf.sign === "-" ? -1 : 1) * cf.k;
-            return formatDroppedCompound(signed, cf.inner);
-          }
-          var parsed;
-          try {
-            parsed = global.DoctematicaAlgebra.parseEquation(term + "=0");
-          } catch (err) {
-            return term;
-          }
-          return prettySide(
-            Math.round(parsed.left.a * lcd),
-            Math.round(parsed.left.b * lcd),
-            decimals
-          );
-        })
-      );
-    }
-    var next = dropSide(sides.left) + " = " + dropSide(sides.right);
-    if (key(next) === key(eqText)) return null;
     return {
-      eq: next,
+      eq: dropped,
       hint: "כופלו את שני האגפים במכנה המשותף " + lcd + ", כדי להוריד את המכנים.",
-      explain: "כופלים את שני האגפים ב־" + lcd + " ומורידים את המכנים. ממשיכים כמו משוואה בלי שברים.",
+      explain: "כל המכנים זהים (" + lcd + "). כופלים את שני האגפים ב־" + lcd + " ומורידים את המכנים.",
     };
   }
 
@@ -513,6 +1931,22 @@
     var A = global.DoctematicaAlgebra;
     var sides = splitEq(eqText);
     if (!sides) return { done: true, hint: "כתבו משוואה עם סימן שוויון." };
+
+    if (eqHasVarDenom(eqText)) {
+      var lcdAlg = lcdStep(eqText, decimals);
+      if (lcdAlg) return lcdAlg;
+      var droppedAlg = dropDenomsStep(eqText, decimals);
+      if (droppedAlg) return droppedAlg;
+      var clearedOnce = clearEqDens(eqText);
+      if (clearedOnce) {
+        return {
+          eq: clearedOnce,
+          hint: "כפלו במכנה המשותף והורידו את המכנים (שימו לב לתחום ההצבה).",
+          explain: "מכפילים במכנה המשותף ומורידים מכנים.",
+        };
+      }
+    }
+
     var eq;
     try {
       eq = A.parseEquation(eqText, unknownKind === "x2" ? { unknown: "x2" } : {});
@@ -666,6 +2100,100 @@
     };
   }
 
+  function toClearedEquation(eqText) {
+    var cur = String(eqText || "").trim();
+    var guard = 0;
+    while (guard++ < 8 && eqHasVarDenom(cur)) {
+      var next = clearEqDens(cur) || dropSharedDens(cur);
+      if (!next || key(next) === key(cur)) break;
+      cur = next;
+    }
+    // Also clear pure numeric dens if needed
+    guard = 0;
+    while (guard++ < 8) {
+      var n2 = clearEqDens(cur) || dropSharedDens(cur);
+      if (!n2 || key(n2) === key(cur)) break;
+      cur = n2;
+    }
+    return cur;
+  }
+
+  function solveRationalValue(eqText) {
+    var cleared = toClearedEquation(eqText);
+    var parsed = global.DoctematicaAlgebra.parseEquation(cleared);
+    var d = parsed.left.a - parsed.right.a;
+    if (near0(d)) return null;
+    return (parsed.right.b - parsed.left.b) / d;
+  }
+
+  function checkRationalStep(previousText, nextText) {
+    var A = global.DoctematicaAlgebra;
+    if (key(previousText) === key(nextText)) {
+      return {
+        ok: false,
+        same: true,
+        message: "זו אותה משוואה. כתבו צעד חדש.",
+      };
+    }
+    if (A.missingEqualsSign(nextText)) {
+      return { ok: false, message: "חסר סימן שווה" };
+    }
+    var clearedPrev = toClearedEquation(previousText);
+    var clearedNext = eqHasVarDenom(nextText) ? toClearedEquation(nextText) : String(nextText).trim();
+    var prev;
+    var next;
+    try {
+      prev = A.parseEquation(clearedPrev);
+    } catch (err) {
+      return { ok: false, message: "לא ניתן לפשט את המשוואה הקודמת: " + err.message };
+    }
+    try {
+      next = A.parseEquation(clearedNext);
+    } catch (err) {
+      return { ok: false, message: err.message };
+    }
+    if (!A.equivalent(prev, next)) {
+      return {
+        ok: false,
+        message: "הצעד לא שקול. בדקו כפל במכנים / העברת אגפים (ושמרו על תחום ההצבה).",
+      };
+    }
+    if (A.isSolved(next) || /^\s*x\s*=\s*[+\-]?\d/i.test(clearedNext.replace(/[−–—]/g, "-"))) {
+      var sol = null;
+      try {
+        sol = solveRationalValue(previousText);
+      } catch (e2) {}
+      var domain = analyzeDomain(previousText);
+      if (sol != null && domain) {
+        var hit = domain.forbidden.some(function (f) {
+          return !f.symbolic && Math.abs(f.value - sol) < EPS;
+        });
+        if (hit) {
+          return {
+            ok: false,
+            message: "הערך שהתקבל מחוץ לתחום ההצבה (" + domain.display + ").",
+          };
+        }
+      }
+      if (A.isSolved(next)) {
+        return {
+          ok: true,
+          solved: true,
+          equation: next,
+          message: "זהו הפתרון: x = " + A.formatNumber(sol != null ? sol : (next.right.b - next.left.b) / (next.left.a - next.right.a) || next.right.b) + ".",
+        };
+      }
+    }
+    return {
+      ok: true,
+      solved: false,
+      equation: next,
+      message: eqHasVarDenom(previousText) && !eqHasVarDenom(nextText)
+        ? "צעד חוקי. הורדתם מכנים — המשיכו לפתור את המשוואה הרגילה."
+        : "צעד חוקי. המשיכו עד x = מספר (תוך שמירה על תחום ההצבה).",
+    };
+  }
+
   function fullPath(start, opts) {
     opts = opts || {};
     unknownKind = opts.unknown === "x2" ? "x2" : "x";
@@ -686,7 +2214,7 @@
     var ans = last ? last.eq.replace(/^\s*x\s*=\s*/i, "") : "";
     try {
       var parsed = global.DoctematicaAlgebra.parseEquation(
-        start,
+        eqHasVarDenom(start) ? toClearedEquation(start) : start,
         opts.unknown === "x2" ? { unknown: "x2" } : {}
       );
       var d = parsed.left.a - parsed.right.a;
@@ -702,5 +2230,20 @@
   global.DoctematicaTeach = {
     nextAction: nextAction,
     fullPath: fullPath,
+    analyzeLcdNeed: analyzeLcdNeed,
+    checkLcdValue: checkLcdValue,
+    checkLcdMultiplier: checkLcdMultiplier,
+    rewriteEqWithLcd: rewriteEqWithLcd,
+    clearEqDens: clearEqDens,
+    dropSharedDens: dropSharedDens,
+    analyzeDomain: analyzeDomain,
+    checkDomain: checkDomain,
+    checkDomainOne: checkDomainOne,
+    checkDomainProgress: checkDomainProgress,
+    domainNextStep: domainNextStep,
+    eqHasVarDenom: eqHasVarDenom,
+    checkRationalStep: checkRationalStep,
+    toClearedEquation: toClearedEquation,
+    splitTermDenExpr: splitTermDenExpr,
   };
 })(window);
