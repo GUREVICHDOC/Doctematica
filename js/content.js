@@ -47,6 +47,24 @@
           : "הוציאו גורם משותף x (ואפשר גם מספר), ואז פתרו כל גורם כמשוואה ששווה לאפס.",
       };
     }
+    if (level.mode === "geo-length") {
+      var geo = DoctematicaGeometry.analyzeStart(ex);
+      return {
+        mode: "geo-length",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction,
+        prompt: level.instruction,
+        geo: geo,
+        points: geo.points,
+        solutionSteps: geo.steps,
+        answer: geo.answer,
+        explain:
+          "על ציר או על ישר מקביל: ערך גדול פחות ערך קטן. אפשר גם לרשום ישר את התשובה (למשל AB=3 או 3).",
+      };
+    }
     if (level.mode === "high-root") {
       var hr = DoctematicaQuadratic.analyzeHighRootStart(ex.start);
       return {
@@ -159,6 +177,9 @@
         if ((item.topic || "equations") !== topicId) return false;
         if (topicId === "equations" && subtopicId) {
           return (item.subtopic || "basic") === subtopicId;
+        }
+        if (topicId === "analytic" && subtopicId) {
+          return (item.subtopic || "segments") === subtopicId;
         }
         return true;
       });

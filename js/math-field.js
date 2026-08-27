@@ -15,6 +15,10 @@
     return v && typeof v === "object" && v.type === "pow";
   }
 
+  function isAreaNode(v) {
+    return v && typeof v === "object" && v.type === "area";
+  }
+
   /** Plain "x^3" / "2^4" → pow node (for radicands that stored caret as text). */
   function tryParsePowText(s) {
     var t = String(s || "").replace(/\s+/g, "");
@@ -25,16 +29,43 @@
 
   function grabFracNumerator(left) {
     var s = String(left || "");
-    var alg = s.match(/((?:\d+(?:\.\d+)?)?[xy](?:\^2)?)$/i);
-    var grabbed = alg || s.match(/(-?\d+(?:\.\d+)?)$/);
-    if (!grabbed) return { left: s, num: "" };
-    var num = grabbed[1];
+    if (!s) return { left: "", num: "" };
+
+    // סוגריים מלאים בסוף: (6*2) או 3(x+1)
+    if (s.charAt(s.length - 1) === ")") {
+      var depth = 0;
+      var i;
+      for (i = s.length - 1; i >= 0; i--) {
+        var ch = s.charAt(i);
+        if (ch === ")") depth += 1;
+        else if (ch === "(") {
+          depth -= 1;
+          if (depth === 0) {
+            var start = i;
+            var before = s.slice(0, start);
+            var coef = before.match(/(\d+(?:\.\d+)?)$/);
+            if (coef) start = before.length - coef[1].length;
+            return { left: s.slice(0, start), num: s.slice(start) };
+          }
+        }
+      }
+    }
+
+    // שרשרת כפל בסוף: 6*2, AO×BO, x*3 — בלי לחצות + − =
+    // גורם: מספר, מספר+x, אות/קודקודים, או x^2
+    var atom =
+      "(?:\\d+(?:\\.\\d+)?(?:[xy](?:\\^[2-9])?)?|[A-Za-z]{1,4}(?:\\^[2-9])?)";
+    var mulOp = "[×*·]";
+    var prod = s.match(new RegExp("(" + atom + "(?:" + mulOp + atom + ")*)$", "i"));
+    if (!prod) return { left: s, num: "" };
+    var num = prod[1];
     var rest = s.slice(0, -num.length);
-    if (alg && /[-−]$/.test(rest)) {
-      var before = rest.slice(0, -1);
-      if (!before || /[+\-−×*\/(=]$/.test(before)) {
+    // מינוס יחידתי לפני המכפלה: -6*2 או -x
+    if (/[-−]$/.test(rest)) {
+      var beforeMinus = rest.slice(0, -1);
+      if (!beforeMinus || /[+\-−×*·\/(=]$/.test(beforeMinus)) {
         num = rest.slice(-1) + num;
-        rest = before;
+        rest = beforeMinus;
       }
     }
     return { left: rest, num: num };
@@ -131,6 +162,10 @@
       out.push({ path: path.concat("exp") });
       return;
     }
+    if (node.type === "area") {
+      out.push({ path: path.concat("verts") });
+      return;
+    }
     if (node.type === "mixed") out.push({ path: path.concat("whole") });
     var self = this;
     ["num", "den"].forEach(function (field) {
@@ -190,6 +225,10 @@
       if (/^-?\d+(?:\.\d+)?$/.test(b)) return b + "^" + e;
       if (/^\(.*\)$/.test(b)) return b + "^" + e;
       return "(" + b + ")^" + e;
+    }
+    if (part.type === "area") {
+      var verts = this.serializeSlot(part.verts).replace(/\s+/g, "").toUpperCase();
+      return "S△" + verts;
     }
     if (part.type === "frac") return this.serializeSlot(part);
     var w = String(part.whole || "").trim();
@@ -455,7 +494,17 @@
     this.focusPart = partIndex;
     this.focusPath = path;
     this.caretPos = a + String(ch).length;
-    if (el.classList.contains("ml-text")) {
+    if (path[0] === "verts") {
+      var cleaned = this.sanitizeAreaVerts(next);
+      el.value = cleaned;
+      this.setAt(this.parts[partIndex], path, cleaned);
+      this.caretPos = cleaned.length;
+      this.fitAllSlots();
+      if (cleaned.length >= 3) {
+        this.focusAfterAreaVerts(partIndex);
+        return;
+      }
+    } else if (el.classList.contains("ml-text")) {
       this.fitText(el, el.classList.contains("is-grow"));
     } else {
       this.fitAllSlots();
@@ -479,6 +528,18 @@
     this.insertWithSplit(split, { type: "pow", base: grabbed.base, exp: "2" });
     this.normalize();
     this.focusPath = ["exp"];
+    this.render();
+    this.focus();
+  };
+
+  MathField.prototype.insertArea = function () {
+    if (this.disabled) return;
+    var part = this.parts[this.focusPart];
+    if (part && part.type !== "text") return;
+    var split = this.splitCurrentText();
+    this.insertWithSplit(split, { type: "area", verts: "" });
+    this.normalize();
+    this.focusPath = ["verts"];
     this.render();
     this.focus();
   };
@@ -652,12 +713,13 @@
   MathField.prototype.fitSlot = function (input) {
     if (!input) return;
     input.style.width = "1px";
-    var w = Math.max(28, input.scrollWidth + 12);
+    var minW = input.classList.contains("ml-area-verts") ? 22 : 28;
+    var w = Math.max(minW, input.scrollWidth + 12);
     input.style.width = w + "px";
   };
 
   MathField.prototype.fitAllSlots = function () {
-    var slots = this.host.querySelectorAll(".ml-slot, .ml-base, .ml-exp, .ml-whole");
+    var slots = this.host.querySelectorAll(".ml-slot, .ml-base, .ml-exp, .ml-whole, .ml-area-verts");
     var i;
     for (i = 0; i < slots.length; i++) this.fitSlot(slots[i]);
     var fracs = this.host.querySelectorAll(".ml-frac");
@@ -671,6 +733,51 @@
     }
   };
 
+  MathField.prototype.sanitizeAreaVerts = function (raw) {
+    return String(raw || "")
+      .replace(/[^A-Za-z]/g, "")
+      .toUpperCase()
+      .slice(0, 3);
+  };
+
+  MathField.prototype.focusAfterAreaVerts = function (partIndex) {
+    this.focusPart = partIndex;
+    this.focusPath = ["verts"];
+    if (this.moveSlot(1, false, true)) return;
+    this.normalize();
+    var next = Math.min(partIndex + 1, this.parts.length - 1);
+    if (this.parts[next] && this.parts[next].type === "text") {
+      this.focusPart = next;
+    } else {
+      this.focusPart = this.parts.length - 1;
+    }
+    this.focusPath = ["value"];
+    this.caretPos = 0;
+    this.render();
+    this.focus();
+  };
+
+  MathField.prototype.maybeAdvanceAreaVerts = function (partIndex, path, el) {
+    if (!path || path[0] !== "verts") return false;
+    var part = this.parts[partIndex];
+    if (!part || part.type !== "area") return false;
+    var cleaned = this.sanitizeAreaVerts(el ? el.value : part.verts);
+    if (el && el.value !== cleaned) {
+      el.value = cleaned;
+      try {
+        el.setSelectionRange(cleaned.length, cleaned.length);
+      } catch (e) {}
+    }
+    this.setAt(part, ["verts"], cleaned);
+    this.fitAllSlots();
+    if (cleaned.length < 3) return false;
+    var self = this;
+    setTimeout(function () {
+      self.focusAfterAreaVerts(partIndex);
+    }, 0);
+    return true;
+  };
+
   MathField.prototype.makeInput = function (partIndex, path, value, cls) {
     var self = this;
     var input = document.createElement("input");
@@ -681,11 +788,19 @@
     input.value = value || "";
     input.setAttribute("data-part", String(partIndex));
     input.setAttribute("data-path", this.pathKey(path));
+    if (cls === "ml-area-verts") {
+      input.maxLength = 3;
+      input.setAttribute("inputmode", "text");
+      input.setAttribute("autocapitalize", "characters");
+    }
     if (this.focusPart === partIndex && this.pathKey(this.focusPath) === this.pathKey(path)) {
       input.setAttribute("data-active", "1");
     }
     input.addEventListener("input", function () {
       if (self.parts[partIndex]) self.setAt(self.parts[partIndex], path, input.value);
+      if (path[0] === "verts" && self.maybeAdvanceAreaVerts(partIndex, path, input)) {
+        return;
+      }
       if (path.length === 1 && path[0] === "value") {
         self.fitText(input, input.classList.contains("is-grow"));
       } else {
@@ -802,6 +917,26 @@
         run.appendChild(self.renderPowNode(part, index, []));
         return;
       }
+      if (part.type === "area") {
+        var area = document.createElement("span");
+        area.className = "ml-area";
+        var sLetter = document.createElement("span");
+        sLetter.className = "ml-area-s";
+        sLetter.textContent = "S";
+        area.appendChild(sLetter);
+        var tri = document.createElement("span");
+        tri.className = "ml-area-tri";
+        tri.setAttribute("aria-hidden", "true");
+        tri.innerHTML =
+          '<svg viewBox="0 0 14 12" width="0.7em" height="0.6em" focusable="false"><path d="M7 1.2 L12.8 10.8 H1.2 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+        area.appendChild(tri);
+        var vertsInp = self.makeInput(index, ["verts"], part.verts, "ml-area-verts");
+        vertsInp.placeholder = "…";
+        vertsInp.setAttribute("aria-label", "קודקודי המשולש");
+        area.appendChild(vertsInp);
+        run.appendChild(area);
+        return;
+      }
       if (part.type === "mixed") {
         var whole = self.makeInput(index, ["whole"], part.whole, "ml-whole");
         whole.placeholder = "□";
@@ -869,6 +1004,14 @@
         icon: '<span class="mixed-icon" aria-hidden="true"><b></b><span class="frac-icon"><i></i><i></i></span></span>',
         run: function () {
           self.insertMixed();
+        },
+      },
+      {
+        label: "שטח",
+        icon:
+          '<span class="area-icon" aria-hidden="true"><b>S</b><svg viewBox="0 0 14 12" width="14" height="12" focusable="false"><path d="M7 1.2 L12.8 10.8 H1.2 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>',
+        run: function () {
+          self.insertArea();
         },
       },
     ].forEach(function (spec) {

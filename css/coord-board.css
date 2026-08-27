@@ -1,0 +1,161 @@
+.geo-board {
+  margin: 0 0 0.85rem;
+  padding: 0.55rem 0.65rem;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line, rgba(20, 36, 26, 0.08));
+  border-radius: var(--radius-sm, 12px);
+  box-shadow: var(--shadow, none);
+  overflow: hidden;
+}
+
+.geo-board.hidden {
+  display: none;
+}
+
+.coord-svg {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  margin-inline: auto;
+  direction: ltr;
+}
+
+.coord-axis {
+  stroke: var(--ink, #14241a);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+
+.coord-axis-label,
+.coord-origin {
+  fill: var(--muted, #5a6d61);
+  font-family: "Frank Ruhl Libre", "Times New Roman", serif;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.coord-guide {
+  stroke: var(--muted, #5a6d61);
+  stroke-width: 1.4;
+  stroke-dasharray: 5 4;
+  opacity: 0.7;
+}
+
+.coord-guide.is-dist {
+  stroke: var(--accent-dark, #24553a);
+  opacity: 0.8;
+}
+
+.coord-seg {
+  stroke: var(--ink, #14241a);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+
+.coord-poly {
+  fill: rgba(36, 85, 58, 0.12);
+  stroke: none;
+}
+
+.coord-right-angle {
+  stroke: var(--ink, #14241a);
+  stroke-width: 1.5;
+  fill: none;
+}
+
+.coord-seg.is-dashed {
+  stroke-dasharray: 7 5;
+  opacity: 0.85;
+}
+
+.coord-seg.is-hot {
+  stroke: var(--accent-dark, #24553a);
+  stroke-width: 3.2;
+  opacity: 1;
+}
+
+.coord-dot {
+  fill: var(--ink, #14241a);
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+
+.coord-dot.is-hot {
+  fill: var(--accent-dark, #24553a);
+}
+
+.coord-dot.is-unknown {
+  fill: #fff;
+  stroke: var(--ink, #14241a);
+  stroke-width: 1.8;
+  stroke-dasharray: 2.5 1.8;
+}
+
+.coord-dot.is-revealed {
+  fill: var(--accent-dark, #24553a);
+  stroke: #fff;
+  stroke-width: 1.5;
+  stroke-dasharray: none;
+}
+
+.coord-point-label {
+  fill: var(--ink, #14241a);
+  font-family: Heebo, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.coord-point-label.is-unknown {
+  fill: var(--muted, #5a6d61);
+  font-style: italic;
+}
+
+.coord-point-label.is-revealed {
+  fill: var(--accent-dark, #24553a);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.geo-part {
+  margin: 0.35rem 0 0.6rem;
+  color: var(--ink, #14241a);
+  font-size: 0.98rem;
+  line-height: 1.55;
+}
+
+.geo-part strong {
+  font-weight: 800;
+}
+
+@media (min-width: 860px) {
+  .solve-wrap.has-geo {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1.35fr);
+    gap: 1.15rem;
+    align-items: stretch;
+  }
+
+  .solve-wrap.has-geo .geo-board {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    min-height: 100%;
+  }
+
+  .solve-wrap.has-geo .coord-svg {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    min-height: 560px;
+  }
+
+  .solve-wrap.has-geo .solve-main {
+    min-width: 0;
+  }
+}

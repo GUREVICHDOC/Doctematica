@@ -42,6 +42,15 @@
   }
 
   function fmtDisp(p) {
+    if (!p) return "";
+    if (p.d === 1) {
+      return String(p.n).replace(/-/g, "−");
+    }
+    var val = p.n / p.d;
+    var A = global.DoctematicaAlgebra;
+    if (A && A.formatNumber) {
+      return String(A.formatNumber(val)).split(" או ")[0].replace(/-/g, "−");
+    }
     return String(fmt(p)).replace(/-/g, "−");
   }
 

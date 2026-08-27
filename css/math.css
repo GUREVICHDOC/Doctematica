@@ -96,6 +96,35 @@
   vertical-align: middle;
 }
 
+.m-area {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 0.02em;
+  margin-inline-end: 0.04em;
+  font-family: "Times New Roman", "David Libre", serif;
+}
+
+.m-area-s {
+  font-size: 1.12em;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.m-area-tri {
+  font-size: 0.62em;
+  line-height: 1;
+  margin-bottom: 0.14em;
+  opacity: 0.95;
+}
+
+.m-area-verts {
+  font-size: 0.62em;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 0.1em;
+  letter-spacing: 0.02em;
+}
+
 .m-mixed {
   display: inline-flex;
   align-items: center;
@@ -317,6 +346,73 @@
   font-weight: 700;
   text-align: center;
   background: transparent;
+}
+
+.ml-area {
+  display: inline-flex;
+  align-items: flex-end;
+  flex: 0 0 auto;
+  margin: 0 2px;
+  gap: 1px;
+  font-family: "Times New Roman", "David Libre", serif;
+}
+
+.ml-area-s {
+  font-size: 1.15em;
+  font-weight: 700;
+  line-height: 1;
+  padding-bottom: 0.05em;
+}
+
+.ml-area-tri {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  margin: 0 1px 0.12em 0;
+  opacity: 0.95;
+}
+
+.ml-area-tri svg {
+  display: block;
+}
+
+.ml-area-verts {
+  width: 2.2em;
+  min-width: 1.4em;
+  border: 0;
+  border-bottom: 1px dashed #c8bba8;
+  padding: 0 1px;
+  margin: 0 0 0.08em;
+  font: inherit;
+  font-size: 0.68em;
+  font-weight: 700;
+  text-align: center;
+  background: transparent;
+  letter-spacing: 0.02em;
+}
+
+.ml-area-verts:focus {
+  outline: none;
+  background: #eef6ef;
+  border-radius: 2px;
+}
+
+.area-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: "Times New Roman", serif;
+  font-size: 1.15em;
+  line-height: 1;
+}
+
+.area-icon b {
+  font-weight: 700;
+}
+
+.area-icon svg {
+  display: block;
+  margin-top: 1px;
 }
 
 .pm-icon,

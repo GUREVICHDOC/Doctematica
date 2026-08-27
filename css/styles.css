@@ -81,9 +81,9 @@ body {
 .page {
   position: relative;
   z-index: 1;
-  max-width: 820px;
+  max-width: 1080px;
   margin: 0 auto;
-  padding: 36px 20px 72px;
+  padding: 36px 24px 72px;
 }
 
 body {
@@ -349,7 +349,22 @@ button#new-problem {
   color: var(--ok);
 }
 
-.steps li:last-child {
+.steps li.geo-section-row {
+  background: transparent;
+  box-shadow: none;
+  border-top: 1px solid rgba(20, 36, 26, 0.12);
+  margin-top: 0.35rem;
+  padding-top: 0.65rem;
+  font-weight: 800;
+  color: var(--muted, #5a6d61);
+  font-size: 0.95rem;
+}
+
+.steps li.geo-section-row .n {
+  color: var(--accent-dark, #24553a);
+}
+
+.steps li:last-child:not(.geo-section-row) {
   background: rgba(18, 21, 28, 0.035);
 }
 

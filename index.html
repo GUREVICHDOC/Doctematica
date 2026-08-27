@@ -12,6 +12,7 @@
     />
     <link rel="stylesheet" href="css/styles.css" />
     <link rel="stylesheet" href="css/math.css" />
+    <link rel="stylesheet" href="css/coord-board.css" />
   </head>
   <body>
     <div class="ambiance" aria-hidden="true">
@@ -106,9 +107,11 @@
           <span id="score">0 נכונות ברצף</span>
         </div>
         <div class="solve-wrap" id="solve-wrap">
+          <div id="geo-board" class="geo-board hidden" aria-label="מערכת צירים"></div>
           <aside id="sys-known" class="sys-known hidden" aria-label="משתנים ידועים"></aside>
           <div class="solve-main">
             <p class="prompt" id="prompt">טוען שאלה…</p>
+            <div id="geo-part" class="geo-part hidden"></div>
             <ol class="steps hidden" id="steps" aria-label="צעדי המשוואה"></ol>
             <div id="lcd-guide" class="lcd-guide hidden"></div>
             <div id="factor-guide" class="factor-guide hidden"></div>
@@ -154,6 +157,8 @@
     </div>
     <script src="js/algebra.js"></script>
     <script src="js/quadratic.js"></script>
+    <script src="js/geometry.js"></script>
+    <script src="js/coord-board.js"></script>
     <script src="js/teach.js"></script>
     <script src="js/systems.js"></script>
     <script src="js/errors.js"></script>

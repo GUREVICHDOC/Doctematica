@@ -154,6 +154,24 @@
     var out = "";
     var i = 0;
     while (i < s.length) {
+      // S△AOB — S גדול, משולש וקודקודים קטנים
+      var areaLab = s.slice(i).match(/^S(?:△|Δ)([A-Za-z]{2,6})/);
+      if (areaLab) {
+        out +=
+          '<span class="m-area">' +
+          '<span class="m-area-s">S</span>' +
+          '<span class="m-area-tri" aria-hidden="true">△</span>' +
+          '<span class="m-area-verts">' +
+          escapeHtml(areaLab[1]) +
+          "</span></span>";
+        i += areaLab[0].length;
+        if (s.charAt(i) === ":") {
+          out += '<span class="m-eq">=</span>';
+          i += 1;
+          while (s.charAt(i) === " ") i += 1;
+        }
+        continue;
+      }
       var mixed = s.slice(i).match(/^(-?\d+)\s+(\d+)\s*\/\s*(\d+)/);
       if (mixed) {
         out += mixedHTML(mixed[1], mixed[2], mixed[3]);

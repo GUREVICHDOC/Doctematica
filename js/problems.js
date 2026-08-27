@@ -25,6 +25,7 @@
     { id: "equations", label: "משוואות בנעלם אחד" },
     { id: "quadratic", label: "משוואות ריבועיות" },
     { id: "high-power", label: "משוואות בחזקה גבוהה" },
+    { id: "analytic", label: "גאומטריה אנליטית" },
     { id: "systems-sub", label: "מערכת משוואות" },
   ];
 
@@ -32,6 +33,10 @@
     equations: [
       { id: "basic", label: "משוואות בסיס" },
       { id: "denom", label: "משוואות עם מכנה" },
+    ],
+    analytic: [
+      { id: "segments", label: "אורכי קטעים" },
+      { id: "areas", label: "שטחים" },
     ],
   };
 

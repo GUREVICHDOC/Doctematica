@@ -391,8 +391,38 @@
     return a || 1;
   }
 
+  /** כמה ספרות אחרי הנקודה נדרשות לייצוג עשרוני מדויק (עד 3), או null */
+  function terminatingDecimalPlaces(n, maxPlaces) {
+    maxPlaces = maxPlaces == null ? 3 : maxPlaces;
+    var i;
+    for (i = 0; i <= maxPlaces; i++) {
+      var scale = Math.pow(10, i);
+      var scaled = n * scale;
+      if (Math.abs(scaled - Math.round(scaled)) < 1e-6) {
+        var val = Math.round(scaled) / scale;
+        if (Math.abs(val - n) < 1e-6) return i;
+      }
+    }
+    return null;
+  }
+
+  function formatDecimalFixed(n, places) {
+    if (places === 0) return String(Math.round(n));
+    var scale = Math.pow(10, places);
+    var val = Math.round(n * scale) / scale;
+    var s = val.toFixed(places);
+    if (s.indexOf(".") >= 0) {
+      s = s.replace(/0+$/, "").replace(/\.$/, "");
+    }
+    return s;
+  }
+
   function formatNumber(n) {
     if (near0(n)) return "0";
+    var decPlaces = terminatingDecimalPlaces(n, 3);
+    if (decPlaces != null) {
+      return formatDecimalFixed(n, decPlaces);
+    }
     for (var d = 1; d <= 16; d++) {
       var num = Math.round(n * d);
       if (Math.abs(n * d - num) < 1e-6) {
@@ -536,6 +566,7 @@
     solutionOf: solutionOf,
     equivalent: equivalent,
     formatNumber: formatNumber,
+    terminatingDecimalPlaces: terminatingDecimalPlaces,
     asEquation: asEquation,
     isolatedRhsKind: isolatedRhsKind,
     missingEqualsSign: missingEqualsSign,
