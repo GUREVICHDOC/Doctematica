@@ -37,6 +37,7 @@
     analytic: [
       { id: "segments", label: "אורכי קטעים" },
       { id: "areas", label: "שטחים" },
+      { id: "line", label: "הישר" },
     ],
   };
 

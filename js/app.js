@@ -36,6 +36,15 @@
 
   var mathFieldEl = document.getElementById("math-field");
   var mathKeysEl = document.getElementById("math-keys");
+  var yesnoAskEl = document.getElementById("yesno-ask");
+  var yesnoQEl = document.getElementById("yesno-q");
+  var yesBtn = document.getElementById("yes-btn");
+  var noBtn = document.getElementById("no-btn");
+  var reasonBoxEl = document.getElementById("reason-box");
+  var reasonInput = document.getElementById("reason-input");
+  var reasonCheckBtn = document.getElementById("reason-check");
+  var reasonChoicesEl = document.getElementById("reason-choices");
+  var answerRowEl = document.getElementById("answer-row");
   var mathWrap = document.getElementById("math-wrap");
   var mathField = new DoctematicaMathField(mathFieldEl, mathKeysEl);
   var sysGuideEl = document.getElementById("sys-guide");
@@ -43,6 +52,7 @@
   var solveWrap = document.getElementById("solve-wrap");
   var geoBoardEl = document.getElementById("geo-board");
   var geoPartEl = document.getElementById("geo-part");
+  var lineMatchPanelEl = document.getElementById("line-match-panel");
   var coordBoard = geoBoardEl ? new DoctematicaCoordBoard(geoBoardEl) : null;
   var quadGuideEl = document.getElementById("quad-guide");
   var factorGuideEl = document.getElementById("factor-guide");
@@ -1518,7 +1528,10 @@
     worksheetNav.classList.remove("hidden");
     randomWrap.classList.add("hidden");
     var level = currentLevel();
-    instructionEl.textContent = level.instruction;
+    instructionEl.innerHTML =
+      DoctematicaMath && DoctematicaMath.proseHTML
+        ? DoctematicaMath.proseHTML(level.instruction)
+        : level.instruction;
     exerciseNumsEl.innerHTML = "";
     if (!level.exercises || !level.exercises.length) {
       prevExBtn.classList.add("hidden");
@@ -2105,8 +2118,41 @@
     return /^סעיף:/.test(String(line || ""));
   }
 
+  function isGeoTaskHeader(line) {
+    return /^משימה:/.test(String(line || ""));
+  }
+
+  function isGeoSectionHeader(line) {
+    return isGeoPartHeader(line) || isGeoTaskHeader(line);
+  }
+
   function geoPartHeaderLabel(line) {
     return String(line || "").replace(/^סעיף:/, "");
+  }
+
+  function geoPartByLabel(pack, label) {
+    if (!pack || !pack.parts) return null;
+    var want = String(label || "");
+    var i;
+    for (i = 0; i < pack.parts.length; i++) {
+      if (String(pack.parts[i].label || "") === want) return pack.parts[i];
+    }
+    return null;
+  }
+
+  function geoPartInstructionHtml(pack, label) {
+    var part = geoPartByLabel(pack, label);
+    var text = part && part.text ? String(part.text).trim() : "";
+    if (!text) return "";
+    if (DoctematicaGeometry.formatPartHtml) return DoctematicaGeometry.formatPartHtml(text);
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function geoTaskHeaderLabel(line) {
+    return String(line || "").replace(/^משימה:/, "");
   }
 
   function ensureGeoPartHeader(label) {
@@ -2116,24 +2162,132 @@
     state.history.push(marker);
   }
 
+  function ensureGeoTaskHeader(task) {
+    if (!task || !DoctematicaGeometry.taskStepLabel) return;
+    var label = DoctematicaGeometry.taskStepLabel(task);
+    if (!label) return;
+    var marker = "משימה:" + label;
+    if (state.history.indexOf(marker) >= 0) return;
+    state.history.push(marker);
+  }
+
+  function ensureGeoFocusTaskHeader(pack, geo) {
+    if (!pack || !DoctematicaGeometry.currentFocusTask) return;
+    var focus = DoctematicaGeometry.currentFocusTask(pack, geo || state.geo);
+    if (focus) ensureGeoTaskHeader(focus);
+  }
+
+  function lastHistoryStepIndex() {
+    var i;
+    for (i = state.history.length - 1; i >= 1; i--) {
+      if (!isGeoSectionHeader(state.history[i])) return i;
+    }
+    return -1;
+  }
+
+  function attachStepNote(text) {
+    var idx = lastHistoryStepIndex();
+    if (idx < 0) return;
+    if (!state.geo.notes) state.geo.notes = {};
+    state.geo.notes[idx] = String(text || "").trim();
+    state.geo.noteOpen = null;
+  }
+
+  function renderGeoAskUi() {
+    var pack = state.problem && state.problem.geo;
+    var ask =
+      pack && DoctematicaGeometry.lineAsk
+        ? DoctematicaGeometry.lineAsk(pack, state.geo)
+        : null;
+    var yesno = ask && ask.stage === "yesno" && !state.locked;
+    var reasonNeed = ask && ask.stage === "reason" && !state.locked;
+    if (yesnoAskEl) {
+      if (yesno) {
+        yesnoAskEl.classList.remove("hidden");
+        if (yesnoQEl) yesnoQEl.textContent = ask.question || "האם הנקודה על הישר?";
+      } else {
+        yesnoAskEl.classList.add("hidden");
+      }
+    }
+    if (reasonBoxEl) {
+      if (reasonNeed) {
+        reasonBoxEl.classList.remove("hidden");
+        if (reasonInput && !reasonInput.value) reasonInput.placeholder = "או כתבו נימוק משלכם";
+        if (reasonChoicesEl) {
+          reasonChoicesEl.innerHTML = "";
+          var opts =
+            (DoctematicaGeometry.reasonChoices && DoctematicaGeometry.reasonChoices(ask.task)) || [];
+          opts.forEach(function (opt) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "reason-choice";
+            b.textContent = opt;
+            b.addEventListener("click", function () {
+              applyRequiredReason(opt);
+            });
+            reasonChoicesEl.appendChild(b);
+          });
+        }
+      } else {
+        reasonBoxEl.classList.add("hidden");
+        if (reasonInput) reasonInput.value = "";
+        if (reasonChoicesEl) reasonChoicesEl.innerHTML = "";
+      }
+    }
+    var hideMath = !!(yesno || reasonNeed);
+    var lineMatch =
+      pack &&
+      DoctematicaGeometry.lineMatchPartActive &&
+      DoctematicaGeometry.lineMatchPartActive(pack, state.geo);
+    if (lineMatch) hideMath = true;
+    if (answerRowEl) {
+      if (hideMath) answerRowEl.classList.add("hidden");
+      else answerRowEl.classList.remove("hidden");
+    }
+    if (mathKeysEl) {
+      if (hideMath) mathKeysEl.classList.add("hidden");
+      else mathKeysEl.classList.remove("hidden");
+    }
+  }
+
   function renderSteps() {
     stepsEl.innerHTML = "";
     if (state.problem && state.problem.mode === "geo-length" && state.history.length) {
       stepsEl.classList.remove("hidden");
       var stepNum = 0;
+      var isLineMatch =
+        state.problem.geo &&
+        DoctematicaGeometry.lineMatchPartActive &&
+        DoctematicaGeometry.lineMatchPartActive(state.problem.geo, state.geo);
       state.history.forEach(function (line, index) {
         var li = document.createElement("li");
         var n = document.createElement("span");
         n.className = "n";
         var body = document.createElement("span");
-        if (index === 0) {
+        if (index === 0 && !isLineMatch) {
           n.textContent = "נתון";
-          body.textContent = String(line).replace(/^נתון:\s*/, "") || "נקודות על מערכת הצירים";
+          var givenBody = String(line).replace(/^נתון:\s*/, "") || "נקודות על מערכת הצירים";
+          if (DoctematicaGeometry.formatPartHtml) {
+            body.innerHTML = DoctematicaGeometry.formatPartHtml(givenBody);
+          } else {
+            body.textContent = givenBody;
+          }
         } else if (isGeoPartHeader(line)) {
           var plab = geoPartHeaderLabel(line);
-          n.textContent = plab;
-          body.textContent = "סעיף " + plab;
-          li.classList.add("geo-section-row");
+          n.textContent = plab || "·";
+          var partHtml =
+            state.problem.geo && geoPartInstructionHtml(state.problem.geo, plab);
+          if (partHtml) {
+            body.innerHTML = partHtml;
+            li.classList.add("geo-section-row", "geo-part-row");
+          } else {
+            body.textContent = plab ? "סעיף " + plab : "סעיף";
+            li.classList.add("geo-section-row");
+          }
+        } else if (isGeoTaskHeader(line)) {
+          n.textContent = "▸";
+          body.textContent = geoTaskHeaderLabel(line);
+          li.classList.add("geo-section-row", "geo-task-row");
         } else {
           stepNum += 1;
           n.textContent = String(stepNum);
@@ -2141,6 +2295,64 @@
         }
         li.appendChild(n);
         li.appendChild(body);
+        if (index > 0 && !isGeoSectionHeader(line)) {
+          var noteWrap = document.createElement("div");
+          noteWrap.className = "step-note";
+          var saved = state.geo && state.geo.notes && state.geo.notes[index];
+          if (saved) {
+            noteWrap.classList.add("has-text");
+            noteWrap.textContent = saved;
+          } else if (!state.locked) {
+            var askReason =
+              DoctematicaGeometry.lineAsk &&
+              DoctematicaGeometry.lineAsk(state.problem.geo, state.geo);
+            if (askReason && askReason.stage === "reason" && index === lastHistoryStepIndex()) {
+              noteWrap.classList.add("is-wait");
+            } else if (state.geo && state.geo.noteOpen === index) {
+              var ta = document.createElement("textarea");
+              ta.rows = 2;
+              ta.dir = "rtl";
+              ta.className = "step-note-input";
+              ta.placeholder = "נימוק";
+              ta.addEventListener("keydown", function (ev) {
+                if (ev.key === "Enter" && !ev.shiftKey) {
+                  ev.preventDefault();
+                  if (!state.geo.notes) state.geo.notes = {};
+                  state.geo.notes[index] = ta.value.trim();
+                  state.geo.noteOpen = null;
+                  renderSteps();
+                }
+              });
+              var saveBtn = document.createElement("button");
+              saveBtn.type = "button";
+              saveBtn.className = "step-note-save";
+              saveBtn.textContent = "שמירה";
+              saveBtn.addEventListener("click", function () {
+                if (!state.geo.notes) state.geo.notes = {};
+                state.geo.notes[index] = ta.value.trim();
+                state.geo.noteOpen = null;
+                renderSteps();
+              });
+              noteWrap.appendChild(ta);
+              noteWrap.appendChild(saveBtn);
+              setTimeout(function () {
+                ta.focus();
+              }, 0);
+            } else {
+              var askBtn = document.createElement("button");
+              askBtn.type = "button";
+              askBtn.className = "step-note-ask";
+              askBtn.textContent = "לנמק?";
+              askBtn.addEventListener("click", function () {
+                state.geo.noteOpen = index;
+                renderSteps();
+              });
+              noteWrap.appendChild(askBtn);
+            }
+          }
+          li.appendChild(noteWrap);
+          li.classList.add("has-step-note");
+        }
         if (state.locked && index === state.history.length - 1 && !isGeoPartHeader(line)) {
           li.classList.add("solved-row");
         }
@@ -3159,7 +3371,12 @@
     var footTask = (pack.tasks || []).filter(function (t) {
       return t.kind === "point" && String(t.point || "").toUpperCase() === footId;
     })[0];
-    if (footTask && !(state.geo.done && state.geo.done[footTask.id])) {
+    var footDone =
+      state.geo.footCoords &&
+      state.geo.footCoords[footId] &&
+      state.geo.footCoords[footId].x != null &&
+      state.geo.footCoords[footId].y != null;
+    if ((footTask && !(state.geo.done && state.geo.done[footTask.id])) || (!footTask && !footDone)) {
       hintEl.textContent =
         "מצאו את הנקודה " +
         footId +
@@ -3178,8 +3395,14 @@
       clearGeoUi();
       return;
     }
-    if (solveWrap) solveWrap.classList.add("has-geo");
     var pack = state.problem.geo;
+    if (pack.showBoard === false) {
+      coordBoard.clear();
+      if (geoBoardEl) geoBoardEl.classList.add("hidden");
+      if (solveWrap) solveWrap.classList.add("has-geo");
+      return;
+    }
+    if (solveWrap) solveWrap.classList.add("has-geo");
     var scene = DoctematicaGeometry.sceneForProgress
       ? DoctematicaGeometry.sceneForProgress(pack, state.geo)
       : {
@@ -3190,7 +3413,14 @@
     if (DoctematicaGeometry.initDrawProgress) {
       state.geo.draw = DoctematicaGeometry.initDrawProgress(pack, state.geo);
     }
-    var drawConfig = pack.draw && pack.draw.enabled ? pack.draw : null;
+    var drawConfig = null;
+    if (
+      DoctematicaGeometry.resolveDrawConfig &&
+      DoctematicaGeometry.drawPartActive &&
+      DoctematicaGeometry.drawPartActive(pack, state.geo)
+    ) {
+      drawConfig = DoctematicaGeometry.resolveDrawConfig(pack);
+    }
     coordBoard.render({
       points: scene.points,
       segments: scene.segments,
@@ -3198,6 +3428,7 @@
       rightAngles: scene.rightAngles || pack.rightAngles || [],
       axisGuides: scene.axisGuides || [],
       distGuides: scene.distGuides || [],
+      graphs: scene.graphs || [],
       highlight: highlight || null,
       drawConfig: drawConfig,
       drawState: state.geo.draw || { heights: [], auxPoints: [] },
@@ -3227,26 +3458,249 @@
     geoPartEl.innerHTML =
       (part.label ? "<strong>" + part.label + ".</strong> " : "") +
       DoctematicaGeometry.formatPartHtml(part.text || "");
+    renderLineMatchPanel();
+  }
+
+  function applyLineMatchResult(res) {
+    if (!res || !res.ok) {
+      var bad = res && res.message ? res.message : "עוד לא.";
+      if (DoctematicaMath && DoctematicaMath.proseHTML) bad = DoctematicaMath.proseHTML(bad);
+      showFeedback(false, "<strong>עוד לא.</strong> " + bad);
+      return false;
+    }
+    state.stats.try += 1;
+    saveStats();
+    renderStats();
+    var pack = state.problem && state.problem.geo;
+    var partBefore =
+      pack && DoctematicaGeometry.currentPartText
+        ? DoctematicaGeometry.currentPartText(pack, state.geo)
+        : null;
+    if (res.lineMatch) state.geo.lineMatch = res.lineMatch;
+    if (res.done) state.geo.done = res.done;
+    renderGeoScene(null);
+    if (res.show) {
+      state.history.push(res.userStep || res.show);
+      if (res.lineMatchNote) {
+        state.geo.notes = state.geo.notes || {};
+        state.geo.notes[state.history.length - 1] = res.lineMatchNote;
+      }
+    }
+    if (
+      pack &&
+      DoctematicaGeometry.lineMatchAutoCompleteRemaining &&
+      res.done
+    ) {
+      var autoResults = DoctematicaGeometry.lineMatchAutoCompleteRemaining(pack, state.geo);
+      if (autoResults && autoResults.length) {
+        autoResults.forEach(function (ar) {
+          if (ar.done) state.geo.done = ar.done;
+          if (ar.lineMatch) state.geo.lineMatch = ar.lineMatch;
+          if (ar.show) {
+            state.history.push(ar.userStep || ar.show);
+            if (ar.lineMatchNote) {
+              state.geo.notes = state.geo.notes || {};
+              state.geo.notes[state.history.length - 1] = ar.lineMatchNote;
+            }
+          }
+          if (ar.solved) res.solved = true;
+        });
+        renderGeoScene(null);
+      }
+    }
+    var partAfter =
+      pack && DoctematicaGeometry.currentPartText
+        ? DoctematicaGeometry.currentPartText(pack, state.geo)
+        : null;
+    if (
+      partAfter &&
+      partAfter.label &&
+      (!partBefore || partAfter.label !== partBefore.label)
+    ) {
+      ensureGeoPartHeader(partAfter.label);
+      ensureGeoFocusTaskHeader(pack, state.geo);
+      state.geo.lineEqDisplay = null;
+      state.geo.mbRearranged = false;
+      state.geo.mbRearrangeExpr = null;
+    }
+    if (res.show) renderSteps();
+    renderLineMatchPanel();
+    renderGeoPart();
+    renderGeoAskUi();
+    if (res.solved) {
+      markSolved();
+      mathField.setDisabled(true);
+      checkBtn.disabled = true;
+      nextAfterSolveBtn.classList.remove("hidden");
+      showFeedback(true, "<strong>כל הכבוד.</strong> " + (res.message || "כל השיוכים נכונים."));
+      return true;
+    }
+    var okMsg = res.message || "נכון.";
+    if (DoctematicaMath && DoctematicaMath.proseHTML) okMsg = DoctematicaMath.proseHTML(okMsg);
+    showFeedback(true, "<strong>נכון.</strong> " + okMsg);
+    return true;
+  }
+
+  function renderLineMatchPanel() {
+    var pack = state.problem && state.problem.geo;
+    if (
+      !lineMatchPanelEl ||
+      !pack ||
+      !DoctematicaGeometry.lineMatchPartActive ||
+      !DoctematicaGeometry.lineMatchPartActive(pack, state.geo)
+    ) {
+      if (lineMatchPanelEl) {
+        lineMatchPanelEl.classList.add("hidden");
+        lineMatchPanelEl.innerHTML = "";
+      }
+      return;
+    }
+    lineMatchPanelEl.classList.remove("hidden");
+    var data = DoctematicaGeometry.lineMatchPanelData(pack, state.geo);
+    var reasonOpts = DoctematicaGeometry.lineMatchReasonOptions();
+    lineMatchPanelEl.innerHTML = "";
+    var intro = document.createElement("p");
+    intro.className = "line-match-intro";
+    intro.textContent =
+      "שייכו כל משוואה לישר בציור (I, II" +
+      (data.lines.length > 2 ? ", III" : "") +
+      "), ונמקו. התחשבו בשיפוע ובמקדם b.";
+    lineMatchPanelEl.appendChild(intro);
+    data.rows.forEach(function (row) {
+      var el = document.createElement("div");
+      el.className = "line-match-row" + (row.done ? " is-done" : "");
+      var eq = document.createElement("div");
+      eq.className = "line-match-eq";
+      var eqHtml = row.eqText || "";
+      if (row.eqNum != null) eqHtml = "(" + row.eqNum + ") " + eqHtml;
+      if (DoctematicaMath && DoctematicaMath.toHTML) eq.innerHTML = DoctematicaMath.toHTML(eqHtml);
+      else eq.textContent = eqHtml;
+      el.appendChild(eq);
+      var pick = document.createElement("div");
+      pick.className = "line-match-pick";
+      var pickLab = document.createElement("span");
+      pickLab.className = "line-match-pick-label";
+      pickLab.textContent = "ישר";
+      pick.appendChild(pickLab);
+      data.lines.forEach(function (opt) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "line-match-btn";
+        if (row.lineKey === opt.key) b.classList.add("is-selected");
+        if (row.done && row.task.answerKey === opt.key) b.classList.add("is-correct");
+        b.textContent = opt.label;
+        b.disabled = !!state.locked || row.done;
+        b.addEventListener("click", function () {
+          if (state.locked) return;
+          var r = DoctematicaGeometry.submitLineMatchLine(row.task.id, opt.key, pack, state.geo);
+          applyLineMatchResult(r);
+        });
+        pick.appendChild(b);
+      });
+      if (data.hasDistractor) {
+        var noneBtn = document.createElement("button");
+        noneBtn.type = "button";
+        noneBtn.className = "line-match-btn";
+        if (row.lineKey === "none") noneBtn.classList.add("is-selected");
+        if (row.done && row.task.answerKey === "none") noneBtn.classList.add("is-correct");
+        noneBtn.textContent = "לא שייך";
+        noneBtn.disabled = !!state.locked || row.done;
+        noneBtn.addEventListener("click", function () {
+          if (state.locked) return;
+          var r = DoctematicaGeometry.submitLineMatchLine(row.task.id, "none", pack, state.geo);
+          applyLineMatchResult(r);
+        });
+        pick.appendChild(noneBtn);
+      }
+      el.appendChild(pick);
+      if (row.needReason && !state.locked) {
+        var reason = document.createElement("div");
+        reason.className = "line-match-reason";
+        var rLab = document.createElement("span");
+        rLab.className = "line-match-reason-label";
+        rLab.textContent = "לנמק?";
+        reason.appendChild(rLab);
+        reasonOpts.forEach(function (opt) {
+          var rb = document.createElement("button");
+          rb.type = "button";
+          rb.className = "line-match-reason-btn";
+          rb.textContent = opt.label;
+          rb.addEventListener("click", function () {
+            var r = DoctematicaGeometry.submitLineMatchReason(row.task.id, opt.id, pack, state.geo);
+            applyLineMatchResult(r);
+          });
+          reason.appendChild(rb);
+        });
+        el.appendChild(reason);
+      }
+      if (row.done) {
+        var tag = document.createElement("span");
+        tag.className = "line-match-done-tag";
+        var reasonLab = "";
+        if (row.reason) {
+          reasonOpts.forEach(function (o) {
+            if (o.id === row.reason) reasonLab = o.label;
+          });
+        }
+        tag.textContent =
+          row.task.answerKey === "none"
+            ? "✓ לא שייך"
+            : "✓ ישר " + (row.lineKey || row.task.answerKey) + (reasonLab ? " · " + reasonLab : "");
+        el.appendChild(tag);
+      }
+      lineMatchPanelEl.appendChild(el);
+    });
   }
 
   function startGeoSession() {
-    state.geo = { done: {}, partial: {}, lastExpr: {}, coords: {}, draw: null };
-    state.history = ["נתון: נקודות על מערכת הצירים"];
+    state.geo = {
+      done: {},
+      partial: {},
+      lastExpr: {},
+      coords: {},
+      footCoords: {},
+      draw: null,
+      notes: {},
+      noteOpen: null,
+      lineEq: {},
+      intersect: {},
+      lineMatch: {},
+    };
     var pack0 = state.problem && state.problem.geo;
+    var lineMatchStart =
+      pack0 &&
+      DoctematicaGeometry.firstPartLineMatchOnly &&
+      DoctematicaGeometry.firstPartLineMatchOnly(pack0);
+    if (lineMatchStart) {
+      state.history = [];
+    } else {
+      var given =
+        DoctematicaGeometry.givenLineText &&
+        DoctematicaGeometry.givenLineText(pack0, state.geo);
+      state.history = [given || "נתון: נקודות על מערכת הצירים"];
+    }
     if (pack0) {
       var firstPart = DoctematicaGeometry.currentPartText(pack0, state.geo);
       if (firstPart && firstPart.label) ensureGeoPartHeader(firstPart.label);
+      ensureGeoFocusTaskHeader(pack0, state.geo);
     }
     renderGeoScene(null);
     renderGeoPart();
+    renderGeoAskUi();
   }
 
   function applyGeoTyped(typed) {
+    var pack = state.problem && state.problem.geo;
     if (!typed) {
-      showFeedback(false, "<strong>עוד לא.</strong> כתבו תשובה או צעד (גדול פחות קטן).");
+      var emptyMsg =
+        pack &&
+        DoctematicaGeometry.lineMatchPartActive &&
+        DoctematicaGeometry.lineMatchPartActive(pack, state.geo)
+          ? "בחרו ישר ליד המשוואה, ואז לחצו «לנמק»."
+          : "כתבו תשובה או צעד (גדול פחות קטן).";
+      showFeedback(false, "<strong>עוד לא.</strong> " + emptyMsg);
       return false;
     }
-    var pack = state.problem && state.problem.geo;
     if (!pack) {
       showFeedback(false, "<strong>עוד לא.</strong> אין תרגיל טעון.");
       return false;
@@ -3255,34 +3709,71 @@
     saveStats();
     renderStats();
     var partBefore = DoctematicaGeometry.currentPartText(pack, state.geo);
+    var doneBefore = Object.assign({}, (state.geo && state.geo.done) || {});
     var res = DoctematicaGeometry.checkTyped(typed, pack, state.geo);
     if (!res.ok) {
-      showFeedback(false, "<strong>עוד לא.</strong> " + res.message);
+      var badMsg = res.message || "";
+      if (DoctematicaMath && DoctematicaMath.proseHTML) badMsg = DoctematicaMath.proseHTML(badMsg);
+      else if (DoctematicaGeometry.formatPartHtml) badMsg = DoctematicaGeometry.formatPartHtml(badMsg);
+      showFeedback(false, "<strong>עוד לא.</strong> " + badMsg);
       return false;
     }
     if (partBefore && partBefore.label) ensureGeoPartHeader(partBefore.label);
     state.geo.done = res.done || state.geo.done || {};
-    state.geo.partial = res.partial || {};
+    state.geo.partial = res.partial !== undefined ? res.partial : state.geo.partial || {};
     state.geo.lastExpr = res.lastExpr || state.geo.lastExpr || {};
-    state.geo.coords = res.coords || state.geo.coords || {};
+    state.geo.coords = res.coords !== undefined ? res.coords : state.geo.coords || {};
+    if (res.lineEqDisplay) state.geo.lineEqDisplay = res.lineEqDisplay;
+    if (res.lineEq) state.geo.lineEq = Object.assign({}, state.geo.lineEq || {}, res.lineEq);
+    if (res.intersect) state.geo.intersect = res.intersect;
+    if (res.footCoords) state.geo.footCoords = res.footCoords;
+    if (res.mbRearranged) {
+      state.geo.mbRearranged = true;
+      state.geo.mbRearrangeExpr = null;
+    }
+    if (res.mbRearrangeExpr) state.geo.mbRearrangeExpr = res.mbRearrangeExpr;
     if (res.show) {
       var last = state.history[state.history.length - 1];
+      var historyLine = res.show;
+      if (
+        res.task &&
+        res.task.kind === "lineIntersect" &&
+        res.rawStep &&
+        (res.userStep || typed)
+      ) {
+        historyLine = res.userStep || String(typed || "").trim();
+      }
+      var chainKinds =
+        res.task &&
+        (res.task.kind === "segment" ||
+          res.task.kind === "origin" ||
+          res.task.kind === "axis" ||
+          res.task.kind === "distSeg" ||
+          res.task.kind === "area");
       var sameTaskOpen =
         res.task &&
         last &&
-        !isGeoPartHeader(last) &&
+        !isGeoSectionHeader(last) &&
+        chainKinds &&
         res.task.label &&
         last.indexOf(res.task.label) === 0 &&
         !/=\s*-?\d+(?:[.,]\d+)?\s*$/.test(String(last));
-      // אותה צלע/שטח: מעדכנים את השורה לשרשרת המצטברת; אחרת מוסיפים שורה
+      var chainY =
+        res.chain &&
+        last &&
+        !isGeoSectionHeader(last) &&
+        /^\s*[yY]\s*=/.test(String(last));
       if (
-        sameTaskOpen &&
+        (chainY || sameTaskOpen) &&
         (state.geo.done[res.task.id] ||
           (state.geo.partial && state.geo.partial[res.task.id]))
       ) {
-        state.history[state.history.length - 1] = res.show;
+        state.history[state.history.length - 1] = historyLine;
       } else {
-        state.history.push(res.show);
+        state.history.push(historyLine);
+      }
+      if (res.plugStep && DoctematicaGeometry.onLinePlugReason) {
+        attachStepNote(DoctematicaGeometry.onLinePlugReason());
       }
     }
     var partAfter = DoctematicaGeometry.currentPartText(pack, state.geo);
@@ -3292,9 +3783,16 @@
       (!partBefore || partAfter.label !== partBefore.label)
     ) {
       ensureGeoPartHeader(partAfter.label);
+      ensureGeoFocusTaskHeader(pack, state.geo);
+      state.geo.lineEqDisplay = null;
+      state.geo.mbRearranged = false;
+      state.geo.mbRearrangeExpr = null;
+    } else if (res.task && res.done && res.done[res.task.id] && !doneBefore[res.task.id]) {
+      ensureGeoFocusTaskHeader(pack, state.geo);
     }
     renderSteps();
     renderGeoPart();
+    renderGeoAskUi();
     if (res.task) {
       renderGeoScene(
         res.task.kind === "segment"
@@ -3310,6 +3808,54 @@
       mathField.setDisabled(true);
       checkBtn.disabled = true;
       renderSteps();
+      renderGeoAskUi();
+      nextAfterSolveBtn.classList.remove("hidden");
+      showFeedback(true, "<strong>כל הכבוד.</strong> " + res.message);
+      return true;
+    }
+    var okMsg = res.message || "";
+    if (DoctematicaMath && DoctematicaMath.proseHTML) okMsg = DoctematicaMath.proseHTML(okMsg);
+    else if (DoctematicaGeometry.formatPartHtml) okMsg = DoctematicaGeometry.formatPartHtml(okMsg);
+    showFeedback(true, "<strong>נכון.</strong> " + okMsg);
+    renderGeoAskUi();
+    var askNow = DoctematicaGeometry.lineAsk && DoctematicaGeometry.lineAsk(pack, state.geo);
+    if (!askNow) mathField.focus();
+    return true;
+  }
+
+  function geoHint() {
+    var pack = state.problem && state.problem.geo;
+    if (!pack) return;
+    var h = DoctematicaGeometry.nextHint(pack, state.geo);
+    var msg = h.message || "";
+    if (DoctematicaMath && DoctematicaMath.proseHTML) {
+      msg = DoctematicaMath.proseHTML(msg);
+    } else if (DoctematicaGeometry.formatPartHtml) {
+      msg = DoctematicaGeometry.formatPartHtml(msg);
+    }
+    showFeedback(true, "<strong>רמז.</strong> " + msg, "tip");
+  }
+
+  function applyRequiredReason(text) {
+    var pack = state.problem && state.problem.geo;
+    if (!pack) return false;
+    var res = DoctematicaGeometry.submitReason(text, pack, state.geo);
+    if (!res.ok) {
+      showFeedback(false, "<strong>עוד לא.</strong> " + res.message);
+      return false;
+    }
+    state.geo.done = res.done || state.geo.done || {};
+    state.geo.partial = res.partial || {};
+    state.geo.coords = res.coords || state.geo.coords || {};
+    state.geo.lastExpr = res.lastExpr || state.geo.lastExpr || {};
+    attachStepNote(res.reasonText || text);
+    renderSteps();
+    renderGeoPart();
+    renderGeoAskUi();
+    if (res.solved) {
+      markSolved();
+      mathField.setDisabled(true);
+      checkBtn.disabled = true;
       nextAfterSolveBtn.classList.remove("hidden");
       showFeedback(true, "<strong>כל הכבוד.</strong> " + res.message);
       return true;
@@ -3319,23 +3865,47 @@
     return true;
   }
 
-  function geoHint() {
-    var pack = state.problem && state.problem.geo;
-    if (!pack) return;
-    var h = DoctematicaGeometry.nextHint(pack, state.geo);
-    var msg = h.message || "";
-    if (DoctematicaGeometry.formatPartHtml) {
-      msg = DoctematicaGeometry.formatPartHtml(msg);
-    }
-    showFeedback(true, "<strong>רמז.</strong> " + msg, "tip");
-  }
-
   function geoOneStep() {
     var pack = state.problem && state.problem.geo;
     if (!pack || state.locked) return;
+    if (
+      DoctematicaGeometry.lineMatchPartActive &&
+      DoctematicaGeometry.lineMatchPartActive(pack, state.geo)
+    ) {
+      var lmStep = DoctematicaGeometry.lineMatchOneStep(pack, state.geo);
+      if (!lmStep) {
+        showFeedback(true, "<strong>רמז.</strong> התרגיל כבר נפתר.");
+        return;
+      }
+      if (lmStep.action === "line") {
+        applyLineMatchResult(
+          DoctematicaGeometry.submitLineMatchLine(lmStep.taskId, lmStep.lineKey, pack, state.geo)
+        );
+      } else {
+        applyLineMatchResult(
+          DoctematicaGeometry.submitLineMatchReason(lmStep.taskId, lmStep.reasonId, pack, state.geo)
+        );
+      }
+      return;
+    }
+    var ask =
+      DoctematicaGeometry.lineAsk && DoctematicaGeometry.lineAsk(pack, state.geo);
+    if (ask && ask.stage === "yesno") {
+      applyGeoTyped(ask.task.on ? "כן" : "לא");
+      return;
+    }
+    if (ask && ask.stage === "reason") {
+      applyRequiredReason(ask.task.reason || "לפי החישוב.");
+      return;
+    }
     var h = DoctematicaGeometry.nextHint(pack, state.geo);
+    if (h.footCalc) {
+      applyGeoTyped(h.step || h.answer);
+      return;
+    }
     if (!h.task) return;
     var typed = h.step || h.answer;
+    if (h.rawStep) typed = h.step;
     // בסגירת קטע שהתחיל: עדיף מספר מתויג כדי לא להתבלבל עם סעיפים אחרים
     if (
       h.task &&
@@ -3361,17 +3931,58 @@
   function geoShowSolution() {
     var pack = state.problem && state.problem.geo;
     if (!pack) return;
-    state.history = ["נתון: נקודות על מערכת הצירים"];
+    if (!state.geo) state.geo = {};
+    state.geo.notes = {};
+    state.geo.noteOpen = null;
+    state.history = [
+      DoctematicaGeometry.givenLineText
+        ? DoctematicaGeometry.givenLineText(pack, state.geo)
+        : "נתון: נקודות על מערכת הצירים",
+    ];
     var parts = pack.parts || [];
     if (parts.length) {
       parts.forEach(function (part) {
         if (part.label) state.history.push("סעיף:" + part.label);
+        if (part.line && DoctematicaGeometry.prettyLineEq) {
+          state.history.push("נתון: הישר " + DoctematicaGeometry.prettyLineEq(part.line));
+        }
         (part.taskIds || []).forEach(function (id) {
           var task = (pack.tasks || []).filter(function (t) {
             return t.id === id;
           })[0];
           if (task) {
-            if (task.kind === "area" && DoctematicaGeometry.canonicalAreaSteps) {
+            var taskLine =
+              part.line ||
+              (pack.line ? pack.line : null);
+            if (taskLine && (task.kind === "onLine" || task.kind === "freePoint") && DoctematicaGeometry.canonicalOnLineSteps) {
+              var plugIdx = state.history.length;
+              DoctematicaGeometry.canonicalOnLineSteps(task, pack).forEach(function (line) {
+                state.history.push(line);
+              });
+              if (!state.geo.notes) state.geo.notes = {};
+              if (task.kind === "onLine" && DoctematicaGeometry.onLinePlugReason) {
+                state.geo.notes[plugIdx] = DoctematicaGeometry.onLinePlugReason();
+              }
+              if (task.reason) {
+                state.geo.notes[state.history.length - 1] = task.reason;
+              }
+            } else if (task.kind === "lineMb" && DoctematicaGeometry.canonicalLineMbSteps) {
+              DoctematicaGeometry.canonicalLineMbSteps(task, pack).forEach(function (line) {
+                state.history.push(line);
+              });
+            } else if (task.kind === "lineIntersect" && DoctematicaGeometry.canonicalLineIntersectSteps) {
+              DoctematicaGeometry.canonicalLineIntersectSteps(task, pack).forEach(function (line) {
+                state.history.push(line);
+              });
+            } else if (
+              (taskLine || task.kind === "noIntercept") &&
+              (task.kind === "point" || task.kind === "noIntercept") &&
+              DoctematicaGeometry.canonicalLineSteps
+            ) {
+              DoctematicaGeometry.canonicalLineSteps(task, pack).forEach(function (line) {
+                state.history.push(line);
+              });
+            } else if (task.kind === "area" && DoctematicaGeometry.canonicalAreaSteps) {
               DoctematicaGeometry.canonicalAreaSteps(task, pack.map).forEach(function (line) {
                 state.history.push(line);
               });
@@ -3393,6 +4004,16 @@
     state.geo.done = done;
     state.geo.partial = {};
     state.geo.coords = {};
+    if (
+      pack.line &&
+      DoctematicaGeometry.lineMbNeedsUnsorted &&
+      DoctematicaGeometry.lineMbNeedsUnsorted(pack.line) &&
+      DoctematicaGeometry.sortedLineEq
+    ) {
+      state.geo.lineEqDisplay = DoctematicaGeometry.sortedLineEq(pack.line);
+    } else {
+      state.geo.lineEqDisplay = null;
+    }
     state.geo.draw = DoctematicaGeometry.initDrawProgress
       ? DoctematicaGeometry.initDrawProgress(pack, {})
       : null;
@@ -3402,6 +4023,7 @@
     renderSteps();
     renderGeoPart();
     renderGeoScene(null);
+    renderGeoAskUi();
     markSolved();
     mathField.setDisabled(true);
     checkBtn.disabled = true;
@@ -4141,6 +4763,13 @@
       };
     }
     if (isGeoLengthMode() || (isAnalyticTopic() && state.problem && state.problem.mode === "geo-length")) {
+      var hasOnLineHint =
+        state.problem &&
+        state.problem.geo &&
+        (state.problem.geo.tasks || []).some(function (t) {
+          return t.kind === "onLine" || t.kind === "freePoint";
+        });
+      var hasLineHint = !!(state.problem && state.problem.geo && state.problem.geo.line);
       var hasAreaHint =
         state.problem &&
         state.problem.geo &&
@@ -4150,7 +4779,11 @@
       return {
         work: true,
         buttons: true,
-        hintText: hasAreaHint
+        hintText: hasOnLineHint
+          ? "שתי דרכים: הציבו x ו־y והראו אם האגפים שווים, או הציבו רק x וחשבו y. בשאלות כן/לא — אחרי החישוב ענו כן או לא. אפשר לנמק."
+          : hasLineHint
+          ? "נתון x: הציבו ב־y = … וחשבו. נתון y: הציבו ופתרו משוואה בנעלם אחד, ואז רשמו את הנקודה (x;y)."
+          : hasAreaHint
           ? "אורכים: גדול פחות קטן. שטח: בחרו נוסחה ב«שטחים», רשמו את הקודקודים, ואז את הביטוי והתוצאה."
           : "קטע/ראשית: גדול פחות קטן. מרחק לציר: A→x. מרחק מנקודה לקטע: C→AB או CAB. מציאת נקודה: B(x;y).",
         hint: geoHint,
@@ -4257,6 +4890,7 @@
     }
     updateDomainBtn();
     renderDomainGuide();
+    renderGeoAskUi();
   }
 
   function markSolved() {
@@ -4427,10 +5061,16 @@
               : (t.verts || []).length === 4)
           );
         });
+      var hasOnLine = (geoPack.tasks || []).some(function (t) {
+        return t.kind === "onLine" || t.kind === "freePoint";
+      });
       if (hasArea) {
         promptEl.textContent = hasRect
           ? "שטח מלבן: מומלץ קודם אורכי הצלעות (גדול פחות קטן), אחר כך sABCD=AB×BC בשלבים. אם חסרים קודקודים — מצאו אותם קודם."
           : "שטח משולש: מומלץ קודם אורכי הניצבים, אחר כך sABC=(AB×BC)/2 בשלבים. אפשר גם שטח נכון ישירות.";
+      } else if (hasOnLine) {
+        promptEl.textContent =
+          "בדקו אם נקודה על הישר: הציבו x ו־y והראו שוויון בין האגפים, או הציבו רק x וחשבו y. אם נשאלתם — בחרו כן או לא, ואפשר לנמק.";
       } else if (hasDistSeg && !hasPointTask) {
         promptEl.textContent =
           "מצאו מרחק של נקודה מקטע (ראו שרטוט). רשמו C→AB או CAB. מקביל לציר → גדול פחות קטן בשיעור המתאים.";
@@ -4452,7 +5092,15 @@
       renderGeoScene(null);
       renderGeoPart();
       renderSteps();
-      mathField.focus();
+      renderGeoAskUi();
+      if (
+        !(
+          DoctematicaGeometry.lineAsk &&
+          DoctematicaGeometry.lineAsk(geoPack, state.geo)
+        )
+      ) {
+        mathField.focus();
+      }
       return;
     }
     clearGeoUi();
@@ -4522,6 +5170,11 @@
   formEl.addEventListener("submit", function (event) {
     event.preventDefault();
     if (state.locked || !state.problem) return;
+
+    if (reasonBoxEl && !reasonBoxEl.classList.contains("hidden")) {
+      applyRequiredReason(reasonInput ? reasonInput.value : "");
+      return;
+    }
 
     if (isSystemMode()) {
       handleSystemSubmit();
@@ -4674,6 +5327,22 @@
     state.exerciseIndex = (state.exerciseIndex + 1) % level.exercises.length;
     nextProblem();
   });
+
+  if (yesBtn) {
+    yesBtn.addEventListener("click", function () {
+      applyGeoTyped("כן");
+    });
+  }
+  if (noBtn) {
+    noBtn.addEventListener("click", function () {
+      applyGeoTyped("לא");
+    });
+  }
+  if (reasonCheckBtn) {
+    reasonCheckBtn.addEventListener("click", function () {
+      applyRequiredReason(reasonInput ? reasonInput.value : "");
+    });
+  }
 
   newBtn.addEventListener("click", nextProblem);
   levelEl.addEventListener("change", nextProblem);

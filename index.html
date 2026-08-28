@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="css/styles.css" />
     <link rel="stylesheet" href="css/math.css" />
     <link rel="stylesheet" href="css/coord-board.css" />
+    <link rel="stylesheet" href="css/line-match.css" />
   </head>
   <body>
     <div class="ambiance" aria-hidden="true">
@@ -112,6 +113,7 @@
           <div class="solve-main">
             <p class="prompt" id="prompt">טוען שאלה…</p>
             <div id="geo-part" class="geo-part hidden"></div>
+            <div id="line-match-panel" class="line-match-panel hidden" aria-label="שיוך משוואות לישרים"></div>
             <ol class="steps hidden" id="steps" aria-label="צעדי המשוואה"></ol>
             <div id="lcd-guide" class="lcd-guide hidden"></div>
             <div id="factor-guide" class="factor-guide hidden"></div>
@@ -125,6 +127,19 @@
                   <div class="math-line" id="math-field"></div>
                 </div>
                 <button type="submit" id="check">בדיקה</button>
+              </div>
+              <div id="yesno-ask" class="yesno-ask hidden">
+                <p id="yesno-q"></p>
+                <div class="yesno-btns">
+                  <button type="button" id="yes-btn">כן</button>
+                  <button type="button" id="no-btn">לא</button>
+                </div>
+              </div>
+              <div id="reason-box" class="reason-box hidden">
+                <label for="reason-input">נימוק</label>
+                <div id="reason-choices" class="reason-choices"></div>
+                <textarea id="reason-input" rows="2" dir="rtl" placeholder="או כתבו נימוק משלכם"></textarea>
+                <button type="button" id="reason-check">שמירה</button>
               </div>
               <div class="math-actions" id="math-keys"></div>
               <input id="answer" class="sr-only" name="answer" type="text" autocomplete="off" tabindex="-1" />

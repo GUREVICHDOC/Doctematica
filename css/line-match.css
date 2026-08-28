@@ -1,0 +1,123 @@
+.line-match-panel {
+  margin: 0.75rem 0 1rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(20, 36, 26, 0.08);
+}
+
+.line-match-intro {
+  margin: 0 0 0.75rem;
+  font-weight: 700;
+  color: var(--muted, #5a6d61);
+  font-size: 0.92rem;
+}
+
+.line-match-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+  padding: 0.65rem 0;
+  border-top: 1px solid rgba(20, 36, 26, 0.08);
+}
+
+.line-match-row:first-of-type {
+  border-top: 0;
+}
+
+.line-match-row.is-done {
+  opacity: 0.88;
+}
+
+.line-match-eq {
+  flex: 1 1 10rem;
+  min-width: 8rem;
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+.line-match-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.line-match-pick-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--muted, #5a6d61);
+  margin-inline-end: 0.15rem;
+}
+
+.line-match-btn {
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  border: 1.5px solid rgba(42, 111, 154, 0.35);
+  background: #fff;
+  color: #1a3d52;
+  border-radius: 999px;
+  padding: 0.28rem 0.72rem;
+  cursor: pointer;
+}
+
+.line-match-btn:hover {
+  background: rgba(42, 111, 154, 0.08);
+}
+
+.line-match-btn.is-selected {
+  background: rgba(42, 111, 154, 0.16);
+  border-color: #2a6f9a;
+}
+
+.line-match-btn.is-correct {
+  background: var(--ok-bg, rgba(47, 107, 69, 0.14));
+  border-color: var(--ok, #2f6b45);
+  color: var(--ok, #2f6b45);
+}
+
+.line-match-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.line-match-reason {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin-inline-start: 0;
+}
+
+.line-match-reason-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--accent-dark, #24553a);
+  margin-inline-end: 0.2rem;
+}
+
+.line-match-reason-btn {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 0;
+  background: rgba(47, 107, 69, 0.1);
+  color: var(--accent-dark, #24553a);
+  border-radius: 999px;
+  padding: 0.25rem 0.62rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.line-match-reason-btn:hover {
+  background: rgba(47, 107, 69, 0.18);
+}
+
+.line-match-done-tag {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ok, #2f6b45);
+}

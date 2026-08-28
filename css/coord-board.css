@@ -36,6 +36,93 @@
   font-weight: 700;
 }
 
+.coord-line {
+  stroke: #2a6f9a;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  opacity: 0.92;
+}
+
+.coord-line-b {
+  stroke: #c45a2a;
+}
+
+.coord-line-c {
+  stroke: #6b4fa0;
+}
+
+.coord-line-name {
+  fill: #1a3d52;
+  font-size: 15px;
+  font-weight: 800;
+  pointer-events: none;
+  paint-order: stroke fill;
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-width: 4px;
+}
+
+.coord-line-eq-wrap {
+  pointer-events: none;
+}
+
+.coord-line-eq {
+  fill: #2a6f9a;
+  font-family: "Frank Ruhl Libre", "Times New Roman", serif;
+  font-size: 13px;
+  font-weight: 700;
+  direction: ltr;
+  unicode-bidi: isolate;
+  paint-order: stroke fill;
+  stroke: rgba(255, 255, 255, 0.94);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.coord-line-eq-html {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  direction: ltr;
+  unicode-bidi: isolate;
+  color: #2a6f9a;
+  font-family: "Frank Ruhl Libre", "Times New Roman", serif;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.coord-line-eq-html .m-expr {
+  font-size: 13px;
+  font-weight: 700;
+  color: inherit;
+  line-height: 1.1;
+}
+
+.coord-line-eq-html .m-frac {
+  vertical-align: middle;
+}
+
+.coord-line-eq-html .m-x,
+.coord-line-eq-html .m-eq,
+.coord-line-eq-html .m-op,
+.coord-line-eq-html .m-num,
+.coord-line-eq-html .m-den {
+  color: inherit;
+}
+
+.coord-line-eq-html .m-expr {
+  text-shadow:
+    -1px 0 rgba(255, 255, 255, 0.95),
+    1px 0 rgba(255, 255, 255, 0.95),
+    0 -1px rgba(255, 255, 255, 0.95),
+    0 1px rgba(255, 255, 255, 0.95),
+    0 0 3px rgba(255, 255, 255, 0.92);
+}
+
 .coord-guide {
   stroke: var(--muted, #5a6d61);
   stroke-width: 1.4;
@@ -201,6 +288,47 @@
   font-weight: 800;
 }
 
+.coord-point-label-html {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 100%;
+  color: var(--ink, #14241a);
+  font-family: Heebo, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  direction: ltr;
+  unicode-bidi: isolate;
+  line-height: 1.1;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.coord-point-label-html.is-left {
+  justify-content: flex-end;
+}
+
+.coord-point-label-html .m-expr {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.05em;
+}
+
+.coord-point-label-html.is-unknown {
+  color: var(--muted, #5a6d61);
+  font-style: italic;
+}
+
+.coord-point-label-html.is-revealed {
+  color: var(--accent-dark, #24553a);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.coord-point-label-html .m-frac {
+  font-size: 0.88em;
+}
+
 .geo-part {
   margin: 0.35rem 0 0.6rem;
   color: var(--ink, #14241a);
@@ -208,8 +336,23 @@
   line-height: 1.55;
 }
 
+.geo-part .m-expr {
+  font-size: 1.05em;
+}
+
+.geo-part .m-frac {
+  vertical-align: middle;
+}
+
 .geo-part strong {
   font-weight: 800;
+}
+
+.math-prose {
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: inline-block;
+  white-space: nowrap;
 }
 
 @media (min-width: 860px) {
@@ -217,22 +360,25 @@
     display: grid;
     grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1.35fr);
     gap: 1.15rem;
-    align-items: stretch;
+    align-items: start;
   }
 
   .solve-wrap.has-geo .geo-board {
     margin: 0;
     display: flex;
     flex-direction: column;
-    align-self: stretch;
-    min-height: 100%;
+    align-self: start;
+    position: sticky;
+    top: 0.85rem;
+    max-height: calc(100vh - 1.7rem);
+    overflow: auto;
   }
 
   .solve-wrap.has-geo .coord-svg {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     width: 100%;
-    height: 100%;
-    min-height: 560px;
+    height: auto;
+    max-height: min(520px, calc(100vh - 9rem));
   }
 
   .solve-wrap.has-geo .solve-main {

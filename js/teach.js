@@ -184,6 +184,21 @@
     return (neg ? "−" : "") + body;
   }
 
+  /** y-form equate with (1/2)x-style coeffs only — skip LCD, use move/combine like linear eqs. */
+  function isCoeffFracEquateLinear(sides) {
+    if (!sides) return false;
+    var all = splitRawTerms(sides.left).concat(splitRawTerms(sides.right));
+    var hasCoeffFrac = false;
+    var i;
+    for (i = 0; i < all.length; i++) {
+      var info = splitTermDenExpr(all[i]);
+      if (info.hasVar) return false;
+      var t = String(all[i]).replace(/[−–—]/g, "-").replace(/\s+/g, "");
+      if (/x/i.test(t) && info.numeric > 1 && /^\(?-?\d+\/-?\d+\)?x$/i.test(t)) hasCoeffFrac = true;
+    }
+    return hasCoeffFrac;
+  }
+
   function isSimpleCoeffFracEq(sides) {
     if (!sides) return false;
     if (splitRawTerms(sides.left).length !== 1 || splitRawTerms(sides.right).length !== 1) return false;
@@ -1475,6 +1490,7 @@
       if (!otherHasVarDen) return null;
     }
     if (isSimpleCoeffFracEq(sides)) return null;
+    if (isCoeffFracEquateLinear(sides)) return null;
     var leftTerms = splitRawTerms(sides.left);
     var rightTerms = splitRawTerms(sides.right);
     var all = leftTerms.concat(rightTerms);
@@ -1796,14 +1812,34 @@
   }
 
   function joinPrettyParts(parts) {
-    var out = parts[0] || "0";
+    var cleaned = (parts || []).filter(function (p) {
+      return p != null && String(p).trim() !== "" && String(p).trim() !== "+";
+    });
+    if (!cleaned.length) return "0";
+    var out = stripLeadingPlus(String(cleaned[0]).trim());
     var i;
-    for (i = 1; i < parts.length; i++) {
-      var p = parts[i];
+    for (i = 1; i < cleaned.length; i++) {
+      var p = String(cleaned[i]).trim();
       if (/^[−-]/.test(p)) out += " " + p;
       else out += " + " + p;
     }
     return out;
+  }
+
+  function stripLeadingPlus(side) {
+    return String(side || "")
+      .replace(/^\s*\+\s*(?=[0-9(xyXY−-])/, "")
+      .trim();
+  }
+
+  function normalizeEqDisplay(eq) {
+    var s = String(eq || "")
+      .replace(/[−–—]/g, "−")
+      .replace(/\s*=\s*/g, " = ")
+      .trim();
+    var i = s.indexOf(" = ");
+    if (i < 0) return stripLeadingPlus(s);
+    return stripLeadingPlus(s.slice(0, i)) + " = " + stripLeadingPlus(s.slice(i + 3));
   }
 
   function expandOneTerm(term, decimals) {
@@ -1869,8 +1905,9 @@
     return { eq: next, hint: hint, explain: explain };
   }
 
-  function flipX(c, decimals) {
+  function flipX(c, decimals, leading) {
     if (near0(c)) return "";
+    if (leading) return formatAx(-c, decimals);
     if (c > 0) return " − " + formatAx(c, decimals);
     return " + " + formatAx(-c, decimals);
   }
@@ -2038,9 +2075,12 @@
 
     if (near0(La) && !near0(Ra)) {
       return {
-        eq: prettyEq(Ra, Rb, La, Lb, decimals),
-        hint: "העבירו את " + lab() + " לאגף שמאל — אפשר להחליף בין האגפים.",
-        explain: "מחליפים בין האגפים כדי ש־" + lab() + " יהיה בשמאל.",
+        eq: flipX(Ra, decimals, true) + " = " + sumStr(Rb, -Lb, decimals),
+        hint: "העבירו את איבר ה־" + lab() + " לאגף שמאל, והחליפו סימן. עדיין בלי לחשב.",
+        explain:
+          "מעבירים את " +
+          formatAx(Ra, decimals) +
+          " לאגף שמאל. פלוס הופך למינוס ומינוס לפלוס.",
       };
     }
 
@@ -2228,7 +2268,13 @@
   }
 
   global.DoctematicaTeach = {
-    nextAction: nextAction,
+    nextAction: function (eqText, opts) {
+      var act = nextAction(eqText, opts);
+      if (act && act.eq) act.eq = normalizeEqDisplay(act.eq);
+      return act;
+    },
+    normalizeEqDisplay: normalizeEqDisplay,
+    stripLeadingPlus: stripLeadingPlus,
     fullPath: fullPath,
     analyzeLcdNeed: analyzeLcdNeed,
     checkLcdValue: checkLcdValue,

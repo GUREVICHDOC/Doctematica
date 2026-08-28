@@ -60,14 +60,16 @@
   }
 
   function hideTimesSign(left, right) {
-    if (right === "x" || right === "X" || right === "y" || right === "Y" || right === "(") return true;
-    if (
-      left === ")" &&
-      (right === "x" || right === "X" || right === "y" || right === "Y" || right === "(" || isNumChar(right))
-    ) {
-      return true;
-    }
+    if (right === "x" || right === "X" || right === "y" || right === "Y") return true;
+    if (left === ")" && (right === "x" || right === "X" || right === "y" || right === "Y")) return true;
     return false;
+  }
+
+  function emitTimesAfterFracIfNeeded(out, s, i) {
+    var ch = s.charAt(i);
+    if (isNumChar(ch) || ch === "(") {
+      out += '<span class="m-op">×</span>';
+    }
   }
 
   /** Match algebraic numerator / denominator as one stacked fraction. */
@@ -93,6 +95,13 @@
     var start = p;
     if (s.charAt(p) === "+" || s.charAt(p) === "-" || s.charAt(p) === "−") p += 1;
     while (p < s.length && isNumChar(s.charAt(p))) p += 1;
+    // 8/3x is (8/3)·x — the variable is not part of the denominator.
+    if (p > start && /^[xy]/i.test(s.charAt(p))) {
+      var numDen = s.slice(start, p);
+      if (numDen && /^[+\-−]?\d+(?:\.\d+)?$/.test(numDen.replace(/−/g, "-"))) {
+        return { consumed: p - from, den: numDen };
+      }
+    }
     if (s.charAt(p) === "(") {
       while (s.charAt(p) === "(") {
         var par = matchBalancedParen(s, p);
@@ -285,24 +294,32 @@
       if (wrappedFrac) {
         out += fracHTML(wrappedFrac[1], wrappedFrac[2]);
         i += wrappedFrac[0].length;
+        emitTimesAfterFracIfNeeded(out, s, i);
         continue;
       }
-      var parFrac = s.slice(i).match(/^\((-?\d+)\s*\/\s*(-?\d+)\)/);
+      var parFrac = s.slice(i).match(/^\(([−–—-]?)(\d+)\s*\/\s*(\d+)\)/);
       if (parFrac) {
-        out += fracHTML(parFrac[1], parFrac[2]);
+        if (parFrac[1]) {
+          out += '<span class="m-neg">−</span>' + fracHTML(parFrac[2], parFrac[3]);
+        } else {
+          out += fracHTML(parFrac[2], parFrac[3]);
+        }
         i += parFrac[0].length;
+        emitTimesAfterFracIfNeeded(out, s, i);
         continue;
       }
-      var signedFrac = s.slice(i).match(/^-(\()(\d+)\/(\d+)(\))/);
+      var signedFrac = s.slice(i).match(/^[−–—-]\((\d+)\s*\/\s*(\d+)\)/);
       if (signedFrac) {
-        out += '<span class="m-neg">−</span>' + fracHTML(signedFrac[2], signedFrac[3]);
+        out += '<span class="m-neg">−</span>' + fracHTML(signedFrac[1], signedFrac[2]);
         i += signedFrac[0].length;
+        emitTimesAfterFracIfNeeded(out, s, i);
         continue;
       }
       var bareFrac = s.slice(i).match(/^(\d+)\s*\/\s*(-?\d+)/);
       if (bareFrac) {
         out += fracHTML(bareFrac[1], bareFrac[2]);
         i += bareFrac[0].length;
+        emitTimesAfterFracIfNeeded(out, s, i);
         continue;
       }
       var ch = s.charAt(i);
@@ -313,7 +330,7 @@
         i += 1;
         continue;
       }
-      if (ch === "-") {
+      if (ch === "-" || ch === "−" || ch === "–" || ch === "—") {
         out += '<span class="m-op">−</span>';
         i += 1;
         continue;
@@ -376,8 +393,55 @@
     );
   }
 
+  var LIN_X_TERM =
+    "[−–—-]?(?:(?:\\(\\s*\\d+(?:\\.\\d+)?\\s*\\/\\s*\\d+(?:\\.\\d+)?\\s*\\)\\s*)|\\d+(?:\\.\\d+)?(?:\\/\\d+(?:\\.\\d+)?)?\\s*)?[xX]";
+  var LIN_TERM =
+    "(?:" + LIN_X_TERM + "|[−–—-]?\\d+(?:\\.\\d+)?(?:\\/\\d+(?:\\.\\d+)?)?|[a-zA-Z])";
+  var LIN_SIDE = "(?:" + LIN_TERM + "(?:\\s*[+−–—-]\\s*" + LIN_TERM + ")*)";
+  var RE_LINEAR_EQ = new RegExp(LIN_SIDE + "\\s*=\\s*" + LIN_SIDE, "gi");
+  var RE_SLOPE_TEMPLATE = /y\s*=\s*mx\s*[+−–—-]\s*b/gi;
+  var RE_SLOPE_YX =
+    /[yY]\s*=\s*[−–—-]?(?:(?:\(\s*\d+(?:\.\d+)?\s*\/\s*\d+(?:\.\d+)?\s*\)\s*[xX]|\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?\s*[xX])|[xX])(?:\s*[+−–—-]\s*\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)?/gi;
+  var RE_PROSE_MATH =
+    /S(?:△|Δ|□|▭)?[A-Za-z]{3,4}(?:\s*=\s*S(?:△|Δ|□|▭)?[A-Za-z]{3,4}\s*[−–—-]\s*S(?:△|Δ|□|▭)?[A-Za-z]{3,4})?|[A-Za-z]→[A-Za-z]{2}|[A-Za-z]\s*\(\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*[.,;]\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*\)|\(\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*[.,;]\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*\)|[−–—-]?\d+(?:\.\d+)?[xX](?!\w)/g;
+
+  function proseChunkHTML(chunk) {
+    return toHTML(String(chunk || "").trim());
+  }
+
+  function detachHebrewFromMath(text) {
+    return String(text || "")
+      .replace(/ל[\-־—–](?=\s*y\s*=)/gi, "לצורה \u2066")
+      .replace(/ל[\-־—–](?=\s*[0-9]*\s*[xyXY])/gi, " \u2066");
+  }
+
+  function proseHTML(text) {
+    var src = detachHebrewFromMath(text);
+    var slots = [];
+    function stash(chunk) {
+      var id = "\x00M" + slots.length + "\x00";
+      slots.push(
+        '<span class="math-prose" dir="ltr">\u2066' + proseChunkHTML(chunk) + "\u2067</span>"
+      );
+      return id;
+    }
+    src = src.replace(RE_SLOPE_TEMPLATE, stash);
+    src = src.replace(RE_LINEAR_EQ, function (chunk, offset, full) {
+      if (offset > 0 && /[xX0-9)]\s*[+−–—-]\s*$/.test(full.slice(0, offset))) return chunk;
+      return stash(chunk);
+    });
+    src = src.replace(RE_SLOPE_YX, stash);
+    src = src.replace(RE_PROSE_MATH, stash);
+    var esc = escapeHtml(src);
+    slots.forEach(function (html, i) {
+      esc = esc.split("\x00M" + i + "\x00").join(html);
+    });
+    return esc;
+  }
+
   global.DoctematicaMath = {
     toHTML: toHTML,
+    proseHTML: proseHTML,
     systemHTML: systemHTML,
     fracHTML: fracHTML,
   };

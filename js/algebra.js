@@ -563,6 +563,7 @@
     parseEquation: parseEquation,
     checkStep: checkStep,
     isSolved: isSolved,
+    isSolvedText: isSolvedText,
     solutionOf: solutionOf,
     equivalent: equivalent,
     formatNumber: formatNumber,

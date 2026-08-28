@@ -8,6 +8,167 @@
     return { min: min - span * pad, max: max + span * pad };
   }
 
+  function readableAngleDeg(dx, dy) {
+    var a = (Math.atan2(dy, dx) * 180) / Math.PI;
+    if (a > 90) a -= 180;
+    if (a <= -90) a += 180;
+    return a;
+  }
+
+  /** כיוון נורמל בפיקסלים — לצד y>G(x) (מעל הישר בגרף) */
+  function screenNormalAboveLine(g, x, y, sx, sy) {
+    var m = isFinite(g.m) ? g.m : 0;
+    var len = Math.sqrt(m * m + 1) || 1;
+    var sx0 = sx(x);
+    var sy0 = sy(y);
+    var sx1 = sx(x - m / len);
+    var sy1 = sy(y + 1 / len);
+    var nx = sx1 - sx0;
+    var ny = sy1 - sy0;
+    var nlen = Math.sqrt(nx * nx + ny * ny) || 1;
+    return { x: nx / nlen, y: ny / nlen };
+  }
+
+  function pointLabelObstacles(points, sx, sy, Geo) {
+    var out = [];
+    points.forEach(function (p) {
+      if (String(p.label || "").toUpperCase() === "O") return;
+      var cx = sx(p.x);
+      var cy = sy(p.y);
+      out.push({ x: cx, y: cy, r: 20 });
+      var tx = cx + (p.x < 0 ? -8 : 8);
+      var ty = cy - 10;
+      var label = Geo && Geo.coordLabel ? Geo.coordLabel(p) : String(p.label || "");
+      out.push({ x: tx, y: ty, r: Math.max(28, label.length * 4.2) });
+    });
+    return out;
+  }
+
+  function scoreEqPlacement(px, py, eqLen, t, obstacles) {
+    var halfW = Math.max(36, eqLen * 3.6);
+    var halfH = 12;
+    var penalty = Math.abs(t - 0.5) * 14;
+    var i;
+    for (i = 0; i < obstacles.length; i++) {
+      var o = obstacles[i];
+      var dx = px - o.x;
+      var dy = py - o.y;
+      var need = o.r + Math.max(halfW, halfH);
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < need) penalty += (need - dist) * 3.2;
+    }
+    return penalty;
+  }
+
+  function eqLabelVisualLen(eq) {
+    var s = String(eq || "");
+    var extra = 0;
+    if (/\([^)]*\d+\s*\/\s*\d+[^)]*\)/.test(s) || /\d+\/\d+/.test(s)) extra = 10;
+    return s.length + extra;
+  }
+
+  function appendPointLabel(svg, tx, ty, labelText, labelHtml, cls, anchor) {
+    var MathR = global.DoctematicaMath;
+    if (labelHtml && MathR && typeof MathR.toHTML === "function") {
+      var foW = Math.max(56, eqLabelVisualLen(labelText) * 6.8);
+      var foH = 28;
+      var fo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+      var xOff = anchor === "end" ? -foW : 0;
+      fo.setAttribute("x", String(tx + xOff));
+      fo.setAttribute("y", String(ty - foH + 6));
+      fo.setAttribute("width", String(foW));
+      fo.setAttribute("height", String(foH));
+      var div = document.createElement("div");
+      div.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+      div.className = "coord-point-label-html " + cls;
+      div.innerHTML = labelHtml;
+      fo.appendChild(div);
+      svg.appendChild(fo);
+      return fo;
+    }
+    var el = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    el.setAttribute("x", tx);
+    el.setAttribute("y", ty);
+    el.setAttribute("class", cls);
+    if (anchor === "end") el.setAttribute("text-anchor", "end");
+    el.textContent = labelText;
+    svg.appendChild(el);
+    return el;
+  }
+
+  function appendLineEqLabel(svg, eq, g, ends, sx, sy, obstacles) {
+    if (!eq || g.showEq === false) return;
+    var visLen = eqLabelVisualLen(eq);
+    var p0x = sx(ends[0].x);
+    var p0y = sy(ends[0].y);
+    var p1x = sx(ends[1].x);
+    var p1y = sy(ends[1].y);
+    var dx = p1x - p0x;
+    var dy = p1y - p0y;
+    var segLen = Math.sqrt(dx * dx + dy * dy);
+    if (segLen < 24) return;
+    var angleDeg = readableAngleDeg(dx, dy);
+    var ts = [0.5, 0.38, 0.62, 0.26, 0.74, 0.18, 0.82, 0.1, 0.9];
+    var mx = (ends[0].x + ends[1].x) / 2;
+    var my = (ends[0].y + ends[1].y) / 2;
+    var nrm = screenNormalAboveLine(g, mx, my, sx, sy);
+    var perp = 15;
+    var best = null;
+    var bestScore = Infinity;
+    var i;
+    for (i = 0; i < ts.length; i++) {
+      var t = ts[i];
+      var px = p0x + dx * t + nrm.x * perp;
+      var py = p0y + dy * t + nrm.y * perp;
+      var sc = scoreEqPlacement(px, py, visLen, t, obstacles);
+      if (sc < bestScore) {
+        bestScore = sc;
+        best = { px: px, py: py, t: t };
+      }
+    }
+    if (!best) return;
+    if (bestScore > 80) {
+      perp = 22;
+      for (i = 0; i < ts.length; i++) {
+        var t2 = ts[i];
+        var px2 = p0x + dx * t2 + nrm.x * perp;
+        var py2 = p0y + dy * t2 + nrm.y * perp;
+        var sc2 = scoreEqPlacement(px2, py2, visLen, t2, obstacles);
+        if (sc2 < bestScore) {
+          bestScore = sc2;
+          best = { px: px2, py: py2, t: t2 };
+        }
+      }
+    }
+    var wrap = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    wrap.setAttribute("class", "coord-line-eq-wrap");
+    wrap.setAttribute("transform", "translate(" + best.px + " " + best.py + ") rotate(" + angleDeg + ")");
+    var MathR = global.DoctematicaMath;
+    if (MathR && typeof MathR.toHTML === "function") {
+      var foW = Math.max(108, visLen * 7.8);
+      var foH = 32;
+      var fo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+      fo.setAttribute("x", String(-foW / 2));
+      fo.setAttribute("y", String(-foH / 2));
+      fo.setAttribute("width", String(foW));
+      fo.setAttribute("height", String(foH));
+      var div = document.createElement("div");
+      div.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+      div.className = "coord-line-eq-html";
+      div.innerHTML = MathR.toHTML(eq);
+      fo.appendChild(div);
+      wrap.appendChild(fo);
+    } else {
+      var lab = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      lab.setAttribute("class", "coord-line-eq");
+      lab.setAttribute("text-anchor", "middle");
+      lab.setAttribute("dominant-baseline", "middle");
+      lab.textContent = eq;
+      wrap.appendChild(lab);
+    }
+    svg.appendChild(wrap);
+  }
+
   function CoordBoard(host) {
     this.host = host;
     this._view = null;
@@ -362,6 +523,16 @@
     (drawState.heights || []).forEach(function (h) {
       if (h && h.foot) extra.push(h.foot);
     });
+    (scene.graphs || []).forEach(function (g) {
+      if (!g) return;
+      if (g.vertical != null && isFinite(g.vertical)) {
+        extra.push({ x: g.vertical, y: 0 });
+        return;
+      }
+      if (!isFinite(g.m) || !isFinite(g.b)) return;
+      extra.push({ x: 0, y: g.b });
+      if (Math.abs(g.m) > 1e-9) extra.push({ x: -g.b / g.m, y: 0 });
+    });
     var view = this._computeView(points, extra);
     this._view = view;
     var sx = view.sx;
@@ -408,6 +579,98 @@
     text(width - margin.r + 4, oy - 8, "x", "coord-axis-label");
     text(ox + 8, margin.t + 4, "y", "coord-axis-label");
     text(ox - 10, oy + 14, "O", "coord-origin");
+
+    function clipLineToView(g) {
+      if (!g) return null;
+      var xr = view.xRange;
+      var yr = view.yRange;
+      if (g.vertical != null && isFinite(g.vertical)) {
+        var vx = g.vertical;
+        if (vx < xr.min - 1e-6 || vx > xr.max + 1e-6) return null;
+        return [
+          { x: vx, y: yr.min },
+          { x: vx, y: yr.max },
+        ];
+      }
+      if (!isFinite(g.m) || !isFinite(g.b)) return null;
+      var hits = [];
+      function add(x, y) {
+        if (!isFinite(x) || !isFinite(y)) return;
+        if (x < xr.min - 1e-6 || x > xr.max + 1e-6) return;
+        if (y < yr.min - 1e-6 || y > yr.max + 1e-6) return;
+        hits.push({ x: x, y: y });
+      }
+      add(xr.min, g.m * xr.min + g.b);
+      add(xr.max, g.m * xr.max + g.b);
+      if (Math.abs(g.m) > 1e-9) {
+        add((yr.min - g.b) / g.m, yr.min);
+        add((yr.max - g.b) / g.m, yr.max);
+      }
+      var uniq = [];
+      hits.forEach(function (p) {
+        if (
+          uniq.some(function (q) {
+            return Math.abs(q.x - p.x) < 1e-6 && Math.abs(q.y - p.y) < 1e-6;
+          })
+        ) {
+          return;
+        }
+        uniq.push(p);
+      });
+      if (uniq.length < 2) return null;
+      var best = [uniq[0], uniq[1]];
+      var d = 0;
+      var i;
+      var j;
+      for (i = 0; i < uniq.length; i++) {
+        for (j = i + 1; j < uniq.length; j++) {
+          var dd =
+            (uniq[i].x - uniq[j].x) * (uniq[i].x - uniq[j].x) +
+            (uniq[i].y - uniq[j].y) * (uniq[i].y - uniq[j].y);
+          if (dd > d) {
+            d = dd;
+            best = [uniq[i], uniq[j]];
+          }
+        }
+      }
+      return best;
+    }
+
+    var Geo = global.DoctematicaGeometry;
+    var pointObstacles = pointLabelObstacles(points, sx, sy, Geo);
+
+    (scene.graphs || []).forEach(function (g) {
+      var ends = clipLineToView(g);
+      if (!ends) return;
+      line(sx(ends[0].x), sy(ends[0].y), sx(ends[1].x), sy(ends[1].y), g.graphClass || "coord-line");
+      if (g.showEq === false) {
+        if (g.lineLabel) {
+          var mx = (ends[0].x + ends[1].x) / 2;
+          var my = (ends[0].y + ends[1].y) / 2;
+          var p0x = sx(ends[0].x);
+          var p0y = sy(ends[0].y);
+          var p1x = sx(ends[1].x);
+          var p1y = sy(ends[1].y);
+          var dx = p1x - p0x;
+          var dy = p1y - p0y;
+          var nrm = screenNormalAboveLine(g, mx, my, sx, sy);
+          var px = (p0x + p1x) / 2 + nrm.x * 18;
+          var py = (p0y + p1y) / 2 + nrm.y * 18;
+          var nameLab = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          nameLab.setAttribute("class", "coord-line-name");
+          nameLab.setAttribute("x", String(px));
+          nameLab.setAttribute("y", String(py));
+          nameLab.setAttribute("text-anchor", "middle");
+          nameLab.setAttribute("dominant-baseline", "middle");
+          nameLab.textContent = String(g.lineLabel);
+          svg.appendChild(nameLab);
+        }
+        return;
+      }
+      var eq = g.eqText || (Geo && Geo.givenLineEqText ? Geo.givenLineEqText(g._raw || g) : "");
+      if (!eq && Geo && Geo.prettyLineEq) eq = Geo.prettyLineEq(g._raw || g);
+      appendLineEqLabel(svg, eq, g, ends, sx, sy, pointObstacles);
+    });
 
     function isHi(seg) {
       if (!highlight) return false;
@@ -503,6 +766,7 @@
       if (!a || !b) return;
       var cls = isHi(seg) ? "coord-seg is-hot" : "coord-seg";
       if (seg.dashed) cls += " is-dashed";
+      if (seg.height) cls += " is-draw is-height";
       line(sx(a.x), sy(a.y), sx(b.x), sy(b.y), cls);
     });
 
@@ -585,13 +849,14 @@
 
       var Geo = global.DoctematicaGeometry;
       var label = Geo && Geo.coordLabel ? Geo.coordLabel(p) : p.label;
+      var labelHtml = Geo && Geo.coordLabelHTML ? Geo.coordLabelHTML(p) : null;
       var ty = cy - 10;
       var tx = cx + 8;
       if (p.x < 0) tx = cx - 8;
-      var lab = text(tx, ty, label, p.x < 0 ? "coord-point-label is-left" : "coord-point-label");
-      if (p.x < 0) lab.setAttribute("text-anchor", "end");
-      if (p.hideX || p.hideY) lab.setAttribute("class", lab.getAttribute("class") + " is-unknown");
-      if (p.revealed) lab.setAttribute("class", lab.getAttribute("class") + " is-revealed");
+      var cls = p.x < 0 ? "coord-point-label is-left" : "coord-point-label";
+      if (p.hideX || p.hideY) cls += " is-unknown";
+      if (p.revealed) cls += " is-revealed";
+      appendPointLabel(svg, tx, ty, label, labelHtml, cls, p.x < 0 ? "end" : "start");
     });
 
     this.host.appendChild(svg);

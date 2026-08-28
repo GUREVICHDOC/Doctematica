@@ -2216,5 +2216,3937 @@ window.DoctematicaCurriculum = {
         },
       ],
     },
+    {
+      id: "geo-line-points-1",
+      topic: "analytic",
+      subtopic: "line",
+      mode: "geo-length",
+      title: "מציאת נקודות",
+      instruction:
+        "אם מחפשים שיעורים — מציבים ב־y. אם בודקים אם נקודה על הישר: הציבו x ו־y והראו שוויון בין האגפים, או הציבו רק x וחשבו y. בשאלות כן/לא — אחרי החישוב ענו כן או לא. אפשר לנמק.",
+      exercises: [
+        {
+          n: 1,
+          line: { m: 1, b: 2 },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            { label: "A", x: 2, y: 4, hideY: true },
+            { label: "B", x: 0, y: 2, hideY: true },
+            { label: "C", x: -2, y: 0, hideX: true },
+            { label: "D", x: -5, y: -3, hideX: true },
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "הנקודות A, B, C ו־D נמצאות על הישר y = x + 2. בנקודה A שיעור ה־x הוא 2, ובנקודה B שיעור ה־x הוא 0. מצאו את שיעורי הנקודות A ו־B.",
+              taskIds: ["A", "B"],
+            },
+            {
+              label: "ב",
+              text: "בנקודה C שיעור ה־y הוא 0, ובנקודה D שיעור ה־y הוא −3. מצאו את שיעורי הנקודות C ו־D.",
+              taskIds: ["C", "D"],
+            },
+          ],
+          tasks: [
+            { id: "A", label: "A", kind: "point", point: "A", missing: "y" },
+            { id: "B", label: "B", kind: "point", point: "B", missing: "y" },
+            { id: "C", label: "C", kind: "point", point: "C", missing: "x" },
+            { id: "D", label: "D", kind: "point", point: "D", missing: "x" },
+          ],
+        },
+        {
+          n: 2,
+          line: { m: -3, b: 6 },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            { label: "A", x: -1, y: 9, hideY: true },
+            { label: "B", x: 0, y: 6, hideY: true },
+            { label: "C", x: 1, y: 3, hideX: true },
+            { label: "D", x: 3, y: -3, hideX: true },
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "בציור מתואר הישר y = −3x + 6 ועליו הנקודות A, B, C ו־D. בנקודה A שיעור ה־x הוא −1, ובנקודה B שיעור ה־x הוא 0. מצאו את שיעורי הנקודות A ו־B.",
+              taskIds: ["A", "B"],
+            },
+            {
+              label: "ב",
+              text: "בנקודה C שיעור ה־y הוא 3, ובנקודה D שיעור ה־y הוא −3. מצאו את שיעורי הנקודות C ו־D.",
+              taskIds: ["C", "D"],
+            },
+          ],
+          tasks: [
+            { id: "A", label: "A", kind: "point", point: "A", missing: "y" },
+            { id: "B", label: "B", kind: "point", point: "B", missing: "y" },
+            { id: "C", label: "C", kind: "point", point: "C", missing: "x" },
+            { id: "D", label: "D", kind: "point", point: "D", missing: "x" },
+          ],
+        },
+        {
+          n: 3,
+          line: { m: 1, b: 4 },
+          showBoard: false,
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "א",
+              text: "הראו שהנקודות A(1;5) ו־B(−2;2) נמצאות על הישר y = x + 4.",
+              taskIds: ["A", "B"],
+            },
+            {
+              label: "ב",
+              text: "הראו שהנקודות C(2;7) ו־D(0;5) אינן נמצאות על הישר.",
+              taskIds: ["C", "D"],
+            },
+          ],
+          tasks: [
+            {
+              id: "A",
+              label: "A",
+              kind: "onLine",
+              point: "A",
+              x: 1,
+              y: 5,
+              on: true,
+              askYesNo: true,
+              reason: "הערכים משני הצדדים אותו הדבר, לכן A על הישר.",
+            },
+            {
+              id: "B",
+              label: "B",
+              kind: "onLine",
+              point: "B",
+              x: -2,
+              y: 2,
+              on: true,
+              askYesNo: true,
+              reason: "הערכים משני הצדדים אותו הדבר, לכן B על הישר.",
+            },
+            {
+              id: "C",
+              label: "C",
+              kind: "onLine",
+              point: "C",
+              x: 2,
+              y: 7,
+              on: false,
+              askYesNo: true,
+              reason: "הערכים משני הצדדים לא אותו הדבר, לכן C לא על הישר.",
+            },
+            {
+              id: "D",
+              label: "D",
+              kind: "onLine",
+              point: "D",
+              x: 0,
+              y: 5,
+              on: false,
+              askYesNo: true,
+              reason: "הערכים משני הצדדים לא אותו הדבר, לכן D לא על הישר.",
+            },
+          ],
+        },
+        {
+          n: 4,
+          line: { m: -5, b: 0 },
+          showBoard: false,
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "א",
+              text: "נתון הישר y = −5x. אילו מהנקודות נמצאות על הישר: A(2;−10), B(0;−5), C(−1;5), D(1;5)? אחרי החישוב ענו כן או לא לכל נקודה.",
+              taskIds: ["A", "B", "C", "D"],
+            },
+            {
+              label: "ב",
+              text: "נתון הישר y = 3x − 1. רשמו שיעורים של נקודה שנמצאת על הישר.",
+              taskIds: ["P"],
+              line: { m: 3, b: -1 },
+            },
+          ],
+          tasks: [
+            { id: "A", label: "A", kind: "onLine", point: "A", x: 2, y: -10, on: true, askYesNo: true, reason: "y מתאים / האגפים שווים, לכן A על הישר." },
+            { id: "B", label: "B", kind: "onLine", point: "B", x: 0, y: -5, on: false, askYesNo: true, reason: "y לא מתאים, לכן B לא על הישר." },
+            { id: "C", label: "C", kind: "onLine", point: "C", x: -1, y: 5, on: true, askYesNo: true, reason: "y מתאים, לכן C על הישר." },
+            { id: "D", label: "D", kind: "onLine", point: "D", x: 1, y: 5, on: false, askYesNo: true, reason: "y לא מתאים, לכן D לא על הישר." },
+            { id: "P", label: "P", kind: "freePoint", point: "P", line: { m: 3, b: -1 } },
+          ],
+        },
+        {
+          n: 5,
+          line: { mn: 1, md: 3, b: 6 },
+          showBoard: false,
+          showSegments: false,
+          showAxisGuides: false,
+          parts: [
+            {
+              label: "א",
+              text: "האם הנקודה (−3;7) נמצאת על הישר y = (1/3)x + 6? נמקו.",
+              taskIds: ["P"],
+            },
+            {
+              label: "ב",
+              text: "רשמו שיעורים של נקודה שנמצאת על הישר.",
+              taskIds: ["Q"],
+            },
+          ],
+          tasks: [
+            {
+              id: "P",
+              label: "(−3;7)",
+              kind: "onLine",
+              point: "P",
+              x: -3,
+              y: 7,
+              on: false,
+              askYesNo: true,
+              reasonRequired: true,
+              reason: "אחרי הצבה y יוצא 5, ו־5 ≠ 7, לכן הנקודה לא על הישר.",
+            },
+            { id: "Q", label: "נקודה", kind: "freePoint", point: "Q" },
+          ],
+        },
+      ],
+    },
+    {
+      id: "geo-line-axis-1",
+      topic: "analytic",
+      subtopic: "line",
+      mode: "geo-length",
+      title: "נקודות חיתוך עם הצירים",
+      instruction:
+        "נקודת חיתוך עם ציר y: הציבו x = 0 ומצאו y. נקודת חיתוך עם ציר x: הציבו y = 0 ופתרו משוואה בנעלם אחד. אם המשוואה לא בצורת y = … — אפשר להציב ישירות, או קודם לסדר (לא חובה).",
+      exercises: [
+        {
+          n: 1,
+          line: { m: 2, b: 6 },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            { label: "A", x: 0, y: 6, hideY: true },
+            { label: "B", x: -3, y: 0, hideX: true },
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "בציור מתואר הישר y = 2x + 6. נקודה A היא נקודת החיתוך של הישר עם ציר y. מצאו את שיעורי נקודה A.",
+              taskIds: ["A"],
+            },
+            {
+              label: "ב",
+              text: "נקודה B היא נקודת החיתוך של הישר עם ציר x. מצאו את שיעורי נקודה B.",
+              taskIds: ["B"],
+            },
+          ],
+          tasks: [
+            { id: "A", label: "A", kind: "point", point: "A", missing: "y", intercept: "y" },
+            { id: "B", label: "B", kind: "point", point: "B", missing: "x", intercept: "x" },
+          ],
+        },
+        {
+          n: 2,
+          line: { m: -4, b: 20 },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            { label: "A", x: 0, y: 20, hideY: true },
+            { label: "B", x: 5, y: 0, hideX: true },
+          ],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר y = −4x + 20. הנקודות A ו־B הן נקודות החיתוך של הישר עם הצירים (ראו שרטוט). מצאו את שיעורי הנקודות A ו־B.",
+              taskIds: ["A", "B"],
+            },
+          ],
+          tasks: [
+            { id: "A", label: "A", kind: "point", point: "A", missing: "y", intercept: "y" },
+            { id: "B", label: "B", kind: "point", point: "B", missing: "x", intercept: "x" },
+          ],
+        },
+        {
+          n: 3,
+          line: { eqText: "x + y = 4", implicit: { ax: 1, ay: 1, c: 4 } },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            { label: "P", x: 4, y: 0, hideX: true },
+            { label: "Q", x: 0, y: 4, hideY: true },
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "נתונה הפונקציה x + y = 4. מצאו את נקודת החיתוך של גרף הפונקציה עם ציר x.",
+              taskIds: ["P"],
+            },
+            {
+              label: "ב",
+              text: "מצאו את נקודת החיתוך של גרף הפונקציה עם ציר y.",
+              taskIds: ["Q"],
+            },
+          ],
+          tasks: [
+            { id: "P", label: "P", kind: "point", point: "P", missing: "x", intercept: "x" },
+            { id: "Q", label: "Q", kind: "point", point: "Q", missing: "y", intercept: "y" },
+          ],
+        },
+        {
+          n: 4,
+          showSegments: false,
+          showAxisGuides: false,
+          parts: [
+            {
+              label: "א",
+              text: "מצאו את נקודות החיתוך עם הצירים של הישר y = 3x − 12 (ראו שרטוט).",
+              line: { m: 3, b: -12 },
+              points: [
+                { label: "A", x: 0, y: -12, hideY: true },
+                { label: "B", x: 4, y: 0, hideX: true },
+              ],
+              taskIds: ["A", "B"],
+            },
+            {
+              label: "ב",
+              text: "מצאו את נקודות החיתוך עם הצירים של הישר x + y = −5 (ראו שרטוט).",
+              line: { eqText: "x + y = −5", implicit: { ax: 1, ay: 1, c: -5 } },
+              points: [
+                { label: "P", x: -5, y: 0, hideX: true },
+                { label: "Q", x: 0, y: -5, hideY: true },
+              ],
+              taskIds: ["P", "Q"],
+            },
+            {
+              label: "ג",
+              text: "מצאו את נקודות החיתוך עם הצירים של הישר x = 4 (ראו שרטוט).",
+              line: { vertical: 4, eqText: "x = 4" },
+              points: [{ label: "R", x: 4, y: 0, hideX: true }],
+              taskIds: ["R", "noY"],
+            },
+            {
+              label: "ד",
+              text: "מצאו את נקודות החיתוך עם הצירים של הישר y = −2 (ראו שרטוט).",
+              line: { m: 0, b: -2, eqText: "y = −2" },
+              points: [{ label: "S", x: 0, y: -2, hideY: true }],
+              taskIds: ["S", "noX"],
+            },
+          ],
+          tasks: [
+            { id: "A", label: "A", kind: "point", point: "A", missing: "y", intercept: "y" },
+            { id: "B", label: "B", kind: "point", point: "B", missing: "x", intercept: "x" },
+            { id: "P", label: "P", kind: "point", point: "P", missing: "x", intercept: "x" },
+            { id: "Q", label: "Q", kind: "point", point: "Q", missing: "y", intercept: "y" },
+            { id: "R", label: "R", kind: "point", point: "R", missing: "x", intercept: "x" },
+            {
+              id: "noY",
+              label: "ציר y",
+              kind: "noIntercept",
+              axis: "y",
+              reason: "הישר x = 4 מקביל לציר y — אין חיתוך עם ציר y.",
+            },
+            { id: "S", label: "S", kind: "point", point: "S", missing: "y", intercept: "y" },
+            {
+              id: "noX",
+              label: "ציר x",
+              kind: "noIntercept",
+              axis: "x",
+              reason: "הישר y = −2 מקביל לציר x — אין חיתוך עם ציר x.",
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "geo-line-mb-1",
+      topic: "analytic",
+      subtopic: "line",
+      mode: "geo-length",
+      title: "זיהוי שיפוע וגובה",
+      instruction:
+        "במשוואה y = mx + b: m הוא המקדם של x (השיפוע), b הוא המספר החופשי (הגובה). בתרגילים שבהם המשוואה לא מסודרת — אפשר קודם לסדר את המשוואה לצורה y = mx + b (לא חובה), ואז m ו-b. אפשר גם למצוא ישר m ו-b.",
+      exercises: [
+        {
+          n: 1,
+          line: { m: 2, b: -8, eqText: "y = 2x − 8" },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר y = 2x − 8. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 2,
+          line: { m: -4, b: 7, eqText: "y = −4x + 7" },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר y = −4x + 7. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 3,
+          line: { m: -6, b: 3, eqText: "y = 3 − 6x" },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר y = 3 − 6x. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 4,
+          line: { mn: 2, md: 5, b: -4, eqText: "y = (2/5)x − 4" },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר y = (2/5)x − 4. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 5,
+          line: { m: -1, b: 9, eqText: "y = −x + 9" },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר y = −x + 9. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 6,
+          line: { m: 2, b: 0, eqText: "y = 2x" },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר y = 2x. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 7,
+          line: { m: 1, b: 0, eqText: "y = x" },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר y = x. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 8,
+          line: { m: 0, b: 5, eqText: "y = 5" },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר y = 5. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 10,
+          line: {
+            unsorted: true,
+            eqText: "y + 3x = 10",
+            implicit: { ax: 3, ay: 1, c: 10 },
+          },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר y + 3x = 10. אפשר קודם לסדר את המשוואה לצורה y = mx + b. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 11,
+          line: {
+            unsorted: true,
+            eqText: "y − 2x + 5 = 0",
+            implicit: { ax: -2, ay: 1, c: -5 },
+          },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר y − 2x + 5 = 0. אפשר קודם לסדר את המשוואה לצורה y = mx + b. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 12,
+          line: {
+            unsorted: true,
+            eqText: "2x − y = 15",
+            implicit: { ax: 2, ay: -1, c: 15 },
+          },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר 2x − y = 15. אפשר קודם לסדר את המשוואה לצורה y = mx + b. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 13,
+          line: {
+            unsorted: true,
+            eqText: "5x − y + 7 = 0",
+            implicit: { ax: 5, ay: -1, c: -7 },
+          },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר 5x − y + 7 = 0. אפשר קודם לסדר את המשוואה לצורה y = mx + b. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 14,
+          line: {
+            unsorted: true,
+            eqText: "5y = 10x + 30",
+            implicit: { ax: 10, ay: -5, c: -30 },
+          },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר 5y = 10x + 30. אפשר קודם לסדר את המשוואה לצורה y = mx + b. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 15,
+          line: {
+            unsorted: true,
+            eqText: "3y + 12x = 6",
+            implicit: { ax: 12, ay: 3, c: 6 },
+          },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר 3y + 12x = 6. אפשר קודם לסדר את המשוואה לצורה y = mx + b. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 16,
+          line: {
+            unsorted: true,
+            eqText: "3y − 8x = 6",
+            implicit: { ax: -8, ay: 3, c: 6 },
+            mn: 8,
+            md: 3,
+            b: 2,
+          },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר 3y − 8x = 6. אפשר קודם לסדר את המשוואה לצורה y = mx + b. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 17,
+          line: {
+            unsorted: true,
+            eqText: "6x − 6y = 15",
+            implicit: { ax: 6, ay: -6, c: 15 },
+          },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר 6x − 6y = 15. אפשר קודם לסדר את המשוואה לצורה y = mx + b. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+        {
+          n: 18,
+          line: {
+            unsorted: true,
+            eqText: "5x − 4y = 23",
+            implicit: { ax: 5, ay: -4, c: 23 },
+            mn: 5,
+            md: 4,
+            b: -5.75,
+          },
+          showSegments: false,
+          showAxisGuides: false,
+          points: [],
+          parts: [
+            {
+              label: "",
+              text: "בציור מתואר הישר 5x − 4y = 23. אפשר קודם לסדר את המשוואה לצורה y = mx + b. מצאו את השיפוע m ואת הגובה b.",
+              taskIds: ["m", "b"],
+            },
+          ],
+          tasks: [
+            { id: "m", kind: "lineMb", param: "m", label: "m" },
+            { id: "b", kind: "lineMb", param: "b", label: "b" },
+          ],
+        },
+      ],
+    },
+    {
+          id: "geo-line-match-1",
+          topic: "analytic",
+          subtopic: "line",
+          mode: "geo-length",
+          title: "זיהוי ישר לפי משוואה",
+          instruction: "בציור מופיעים ישרים (I, II, III). שייכו כל משוואה לישר המתאים ונמקו: שיפוע חיובי, שיפוע שלילי, או גובה לפי b — לפי מה שבאמת מזהה את הישר.",
+          exercises: [
+            {
+              n: 19,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    m: 1,
+                    b: 6
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    m: -4,
+                    b: 10
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 19. בציור שני ישרים. שייכו כל משוואה לישר המתאים ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = x + 6",
+                  answerKey: "I"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = −4x + 10",
+                  answerKey: "II"
+                }
+              ]
+            },
+            {
+              n: 20,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    mn: 1,
+                    md: 2,
+                    b: 8,
+                    eqText: "y = (1/2)x + 8"
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    mn: -1,
+                    md: 4,
+                    b: 8,
+                    eqText: "y = −(1/4)x + 8"
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 20. שני ישרים החותכים את ציר y באותה נקודה. שייכו ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = (1/2)x + 8",
+                  answerKey: "I"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = −(1/4)x + 8",
+                  answerKey: "II"
+                }
+              ]
+            },
+            {
+              n: 21,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    m: -2,
+                    b: -3
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    m: 1,
+                    b: 4
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 21. שייכו כל משוואה לישר I או II ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = x + 4",
+                  answerKey: "II"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = −2x − 3",
+                  answerKey: "I"
+                }
+              ]
+            },
+            {
+              n: 22,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    m: 1,
+                    b: 2
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    m: -2,
+                    b: 5
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 22. שייכו כל משוואה לישר I או II ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = x + 2",
+                  answerKey: "I"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = −2x + 5",
+                  answerKey: "II"
+                }
+              ]
+            },
+            {
+              n: 23,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    m: 1,
+                    b: 6
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    m: -1,
+                    b: 6
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 23. שני ישרים עם אותו גובה b. שייכו ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = x + 6",
+                  answerKey: "I"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = −x + 6",
+                  answerKey: "II"
+                }
+              ]
+            },
+            {
+              n: 24,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    m: 2,
+                    b: 4
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    m: 2,
+                    b: -4
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 24. שייכו כל משוואה לישר I או II ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = 2x − 4",
+                  answerKey: "II"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = 2x + 4",
+                  answerKey: "I"
+                }
+              ]
+            },
+            {
+              n: 25,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    m: -3,
+                    b: 5
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    m: -3,
+                    b: 2
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 25. שייכו ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = −3x + 5",
+                  answerKey: "I"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = −3x + 2",
+                  answerKey: "II"
+                }
+              ]
+            },
+            {
+              n: 26,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    m: 3,
+                    b: 2
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    m: 5,
+                    b: -4
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 26. שייכו ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = 3x + 2",
+                  answerKey: "I"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = 5x − 4",
+                  answerKey: "II"
+                }
+              ]
+            },
+            {
+              n: 27,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    m: -2,
+                    b: 0
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    m: -3,
+                    b: -2
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 27. שייכו ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = −2x",
+                  answerKey: "I"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = −3x − 2",
+                  answerKey: "II"
+                }
+              ]
+            },
+            {
+              n: 28,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    m: -2,
+                    b: 3
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    m: -2,
+                    b: 6
+                  }
+                },
+                {
+                  key: "III",
+                  label: "III",
+                  line: {
+                    m: 2,
+                    b: 2
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 28. שלושה ישרים — שייכו כל משוואה לישר I, II או III ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2",
+                    "eq3"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = 2x + 2",
+                  answerKey: "III"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = −2x + 6",
+                  answerKey: "II"
+                },
+                {
+                  id: "eq3",
+                  kind: "lineMatch",
+                  eqNum: 3,
+                  eqText: "y = −2x + 3",
+                  answerKey: "I"
+                }
+              ]
+            },
+            {
+              n: 29,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    m: -1,
+                    b: 4
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    m: 3,
+                    b: 4
+                  }
+                },
+                {
+                  key: "III",
+                  label: "III",
+                  line: {
+                    m: 3,
+                    b: -2
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 29. שייכו ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2",
+                    "eq3"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = −x + 4",
+                  answerKey: "I"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = 3x + 4",
+                  answerKey: "II"
+                },
+                {
+                  id: "eq3",
+                  kind: "lineMatch",
+                  eqNum: 3,
+                  eqText: "y = 3x − 2",
+                  answerKey: "III"
+                }
+              ]
+            },
+            {
+              n: 30,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    m: -1,
+                    b: 3
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    m: 1,
+                    b: 3
+                  }
+                },
+                {
+                  key: "III",
+                  label: "III",
+                  line: {
+                    m: -1,
+                    b: -3
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 30. שייכו ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2",
+                    "eq3"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = −x + 3",
+                  answerKey: "I"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = x + 3",
+                  answerKey: "II"
+                },
+                {
+                  id: "eq3",
+                  kind: "lineMatch",
+                  eqNum: 3,
+                  eqText: "y = −x − 3",
+                  answerKey: "III"
+                }
+              ]
+            },
+            {
+              n: 31,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    m: -2,
+                    b: 3
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    m: 3,
+                    b: 2
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 31. שני ישרים ושלוש משוואות — אחת מהן לא שייכת. שייכו ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2",
+                    "eq3"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = 3x + 2",
+                  answerKey: "II"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = −2x + 3",
+                  answerKey: "I"
+                },
+                {
+                  id: "eq3",
+                  kind: "lineMatch",
+                  eqNum: 3,
+                  eqText: "y = 3x + 3",
+                  answerKey: "none"
+                }
+              ]
+            },
+            {
+              n: 32,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    m: 1,
+                    b: 3
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    m: -1,
+                    b: 6
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 32. שני ישרים ושלוש משוואות — אחת מיותרת. שייכו ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2",
+                    "eq3"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = −x + 6",
+                  answerKey: "II"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = −x + 2",
+                  answerKey: "none"
+                },
+                {
+                  id: "eq3",
+                  kind: "lineMatch",
+                  eqNum: 3,
+                  eqText: "y = x + 3",
+                  answerKey: "I"
+                }
+              ]
+            },
+            {
+              n: 33,
+              lines: [
+                {
+                  key: "I",
+                  label: "I",
+                  line: {
+                    m: 0.5,
+                    b: 6
+                  }
+                },
+                {
+                  key: "II",
+                  label: "II",
+                  line: {
+                    m: -1,
+                    b: 6
+                  }
+                }
+              ],
+              showSegments: false,
+              showAxisGuides: false,
+              points: [],
+              parts: [
+                {
+                  label: "",
+                  text: "תרגיל 33. שני ישרים עם אותו b, ושלוש משוואות. שייכו ונמקו.",
+                  taskIds: [
+                    "eq1",
+                    "eq2",
+                    "eq3"
+                  ]
+                }
+              ],
+              tasks: [
+                {
+                  id: "eq1",
+                  kind: "lineMatch",
+                  eqNum: 1,
+                  eqText: "y = (1/2)x + 6",
+                  answerKey: "I"
+                },
+                {
+                  id: "eq2",
+                  kind: "lineMatch",
+                  eqNum: 2,
+                  eqText: "y = −(1/2)x + 4",
+                  answerKey: "none"
+                },
+                {
+                  id: "eq3",
+                  kind: "lineMatch",
+                  eqNum: 3,
+                  eqText: "y = −x + 6",
+                  answerKey: "II"
+                }
+              ]
+            }
+          ]
+        },
+    {
+      id: "geo-line-intersect-1",
+      topic: "analytic",
+      subtopic: "line",
+      mode: "geo-length",
+      title: "חיתוך בין ישרים",
+      instruction:
+        "כדי למצוא את נקודת החיתוך: השוו בין המשוואות (הביטויים של y), פתרו עבור x, הציבו באחת המשוואות ומצאו את y, ורשמו את הנקודה. אם משוואה לא מסודרת — קודם סדרו לצורה y = mx + b.",
+      exercises: [
+        {
+          n: 1,
+          lines: [
+            { key: "A", label: "AB", line: { m: 1, b: 2, eqText: "y = x + 2" } },
+            { key: "B", label: "CD", line: { m: -1, b: 6, eqText: "y = −x + 6" } },
+          ],
+          showSegments: false,
+          showAxisGuides: false,
+          points: [{ label: "P", x: 2, y: 4, hideX: true, hideY: true }],
+          parts: [
+            {
+              label: "",
+              text: "משוואת הישר AB היא y = x + 2.\nמשוואת הישר CD היא y = −x + 6.\nהנקודה P היא נקודת החיתוך בין שני הישרים. מצאו את קואורדינטות נקודה P.",
+              taskIds: ["P"],
+            },
+          ],
+          tasks: [{ id: "P", kind: "lineIntersect", point: "P", label: "P", lineKey: "A" }],
+        },
+        {
+          n: 2,
+          lines: [
+            { key: "A", label: "AD", line: { m: -2, b: 14, eqText: "y = 14 − 2x" } },
+            { key: "B", label: "BC", line: { m: -1, b: 4, eqText: "y = 4 − x" } },
+          ],
+          showSegments: false,
+          showAxisGuides: false,
+          points: [{ label: "P", x: 10, y: -6, hideX: true, hideY: true }],
+          parts: [
+            {
+              label: "",
+              text: "הישר AD הוא גרף הפונקציה y = 14 − 2x.\nהישר BC הוא גרף הפונקציה y = 4 − x.\nהנקודה P היא נקודת החיתוך בין שני הישרים. מצאו את שיעורי הנקודה P.",
+              taskIds: ["P"],
+            },
+          ],
+          tasks: [{ id: "P", kind: "lineIntersect", point: "P", label: "P", lineKey: "A" }],
+        },
+        {
+          n: 3,
+          lines: [
+            {
+              key: "A",
+              label: "AD",
+              line: {
+                unsorted: true,
+                eqText: "y + 4x = −16",
+                implicit: { ax: 4, ay: 1, c: -16 },
+              },
+            },
+            {
+              key: "B",
+              label: "BC",
+              line: {
+                unsorted: true,
+                eqText: "y − x = −6",
+                implicit: { ax: -1, ay: 1, c: -6 },
+              },
+            },
+          ],
+          showSegments: false,
+          showAxisGuides: false,
+          points: [{ label: "P", x: -2, y: -8, hideX: true, hideY: true }],
+          parts: [
+            {
+              label: "",
+              text: "הישר AD הוא גרף הפונקציה y + 4x = −16.\nהישר BC הוא גרף הפונקציה y − x = −6.\nמצאו את שיעורי נקודת החיתוך של שני הישרים (הנקודה P שבציור).",
+              taskIds: ["P"],
+            },
+          ],
+          tasks: [{ id: "P", kind: "lineIntersect", point: "P", label: "P", lineKey: "A" }],
+        },
+        {
+          n: 4,
+          lines: [
+            { key: "A", label: "ℓ₁", line: { m: 3, b: 0, eqText: "y = 3x" } },
+            { key: "B", label: "ℓ₂", line: { m: -1, b: 4, eqText: "y = −x + 4" } },
+          ],
+          showSegments: false,
+          showAxisGuides: false,
+          points: [{ label: "P", x: 1, y: 3, hideX: true, hideY: true }],
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 20א. נתונים שני ישרים:\ny = 3x\ny = −x + 4\nמצאו את שיעורי נקודת החיתוך ביניהם (הנקודה P בציור).",
+              taskIds: ["P"],
+            },
+          ],
+          tasks: [{ id: "P", kind: "lineIntersect", point: "P", label: "P", lineKey: "A" }],
+        },
+        {
+          n: 5,
+          lines: [
+            { key: "A", label: "ℓ₁", line: { mn: 1, md: 2, b: 2, eqText: "y = (1/2)x + 2" } },
+            { key: "B", label: "ℓ₂", line: { m: -1, b: 8, eqText: "y = −x + 8" } },
+          ],
+          showSegments: false,
+          showAxisGuides: false,
+          points: [{ label: "P", x: 4, y: 4, hideX: true, hideY: true }],
+          parts: [
+            {
+              label: "ב",
+              text: "תרגיל 20ב. נתונים שני ישרים:\ny = (1/2)x + 2\ny = −x + 8\nמצאו את שיעורי נקודת החיתוך ביניהם (הנקודה P בציור).",
+              taskIds: ["P"],
+            },
+          ],
+          tasks: [{ id: "P", kind: "lineIntersect", point: "P", label: "P", lineKey: "A" }],
+        },
+        {
+          n: 6,
+          lines: [
+            {
+              key: "A",
+              label: "ℓ₁",
+              line: {
+                unsorted: true,
+                eqText: "2x + y = 8",
+                implicit: { ax: 2, ay: 1, c: 8 },
+              },
+            },
+            {
+              key: "B",
+              label: "ℓ₂",
+              line: {
+                unsorted: true,
+                eqText: "x + 3y = 19",
+                implicit: { ax: 1, ay: 3, c: 19 },
+              },
+            },
+          ],
+          showSegments: false,
+          showAxisGuides: false,
+          points: [{ label: "P", x: 1, y: 6, hideX: true, hideY: true }],
+          parts: [
+            {
+              label: "ג",
+              text: "תרגיל 20ג. נתונים שני ישרים:\n2x + y = 8\nx + 3y = 19\nקודם סדרו את שתי המשוואות לצורה y = mx + b, ואז מצאו את שיעורי נקודת החיתוך (הנקודה P בציור).",
+              taskIds: ["P"],
+            },
+          ],
+          tasks: [{ id: "P", kind: "lineIntersect", point: "P", label: "P", lineKey: "A" }],
+        },
+        {
+          n: 7,
+          lines: [
+            {
+              key: "A",
+              label: "ℓ₁",
+              line: {
+                unsorted: true,
+                eqText: "3x + 4y = 45",
+                implicit: { ax: 3, ay: 4, c: 45 },
+              },
+            },
+            {
+              key: "B",
+              label: "ℓ₂",
+              line: {
+                unsorted: true,
+                eqText: "3x − 2y = 9",
+                implicit: { ax: 3, ay: -2, c: 9 },
+              },
+            },
+          ],
+          showSegments: false,
+          showAxisGuides: false,
+          points: [{ label: "P", x: 7, y: 6, hideX: true, hideY: true }],
+          parts: [
+            {
+              label: "ד",
+              text: "תרגיל 20ד. נתונים שני ישרים:\n3x + 4y = 45\n3x − 2y = 9\nקודם סדרו את שתי המשוואות לצורה y = mx + b, ואז מצאו את שיעורי נקודת החיתוך (הנקודה P בציור).",
+              taskIds: ["P"],
+            },
+          ],
+          tasks: [{ id: "P", kind: "lineIntersect", point: "P", label: "P", lineKey: "A" }],
+        },
+        {
+          n: 8,
+          lines: [
+            { key: "A", label: "AD", line: { m: -2, b: 22, eqText: "y = −2x + 22" } },
+            { key: "B", label: "BC", line: { m: 1, b: 4, eqText: "y = x + 4" } },
+          ],
+          showSegments: false,
+          showAxisGuides: false,
+          segments: [
+            { from: "A", to: "D" },
+            { from: "B", to: "C" },
+            { from: "P", to: "C" },
+            { from: "P", to: "D" },
+          ],
+          polygons: [{ verts: ["P", "C", "D"] }],
+          points: [
+            { label: "A", x: 0, y: 22, hideY: true },
+            { label: "B", x: 0, y: 4, hideY: true },
+            { label: "C", x: -4, y: 0, hideX: true },
+            { label: "D", x: 11, y: 0, hideX: true },
+            { label: "P", x: 6, y: 10, hideX: true, hideY: true },
+            { label: "H", x: 6, y: 0, drawOnly: true },
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 21א. הישרים AD ו-BC הם גרפים של:\nAD: y = −2x + 22\nBC: y = x + 4\nמצאו את שיעורי הנקודות A, B, C, D ו-P (ראו ציור).",
+              taskIds: ["A", "B", "C", "D", "P"],
+            },
+            {
+              label: "ב",
+              text: "חשבו את שטח המשולש PCD. מומלץ: אורך CD וגובה מ-P לבסיס CD.",
+              taskIds: ["CD", "SPCD"],
+            },
+          ],
+          tasks: [
+            { id: "A", kind: "point", point: "A", missing: "y", intercept: "y", lineKey: "A" },
+            { id: "B", kind: "point", point: "B", missing: "y", intercept: "y", lineKey: "B" },
+            { id: "C", kind: "point", point: "C", missing: "x", intercept: "x", lineKey: "B" },
+            { id: "D", kind: "point", point: "D", missing: "x", intercept: "x", lineKey: "A" },
+            { id: "P", kind: "lineIntersect", point: "P", label: "P", lineKey: "A" },
+            { id: "CD", kind: "segment", from: "C", to: "D", optional: true },
+            {
+              id: "SPCD",
+              label: "S△PCD",
+              kind: "area",
+              verts: ["P", "C", "D"],
+              legs: [
+                ["C", "D"],
+                ["P", "H"],
+              ],
+            },
+          ],
+        },
+        {
+          n: 9,
+          lines: [
+            {
+              key: "A",
+              label: "AB",
+              line: {
+                unsorted: true,
+                eqText: "x + 2y = 10",
+                implicit: { ax: 1, ay: 2, c: 10 },
+              },
+            },
+            {
+              key: "B",
+              label: "CD",
+              line: {
+                unsorted: true,
+                eqText: "2x − 3y = 6",
+                implicit: { ax: 2, ay: -3, c: 6 },
+              },
+            },
+          ],
+          showSegments: false,
+          showAxisGuides: false,
+          segments: [
+            { from: "A", to: "B" },
+            { from: "C", to: "D" },
+            { from: "P", to: "B" },
+            { from: "P", to: "D" },
+            { from: "P", to: "A" },
+            { from: "P", to: "C" },
+          ],
+          polygons: [{ verts: ["P", "B", "D"] }, { verts: ["A", "P", "C"] }],
+          points: [
+            { label: "A", x: 0, y: 5, hideY: true },
+            { label: "B", x: 10, y: 0, hideX: true },
+            { label: "C", x: 0, y: -2, hideY: true },
+            { label: "D", x: 3, y: 0, hideX: true },
+            { label: "P", x: 6, y: 2, hideX: true, hideY: true },
+            { label: "H", x: 6, y: 0, drawOnly: true },
+            { label: "G", x: 0, y: 2, drawOnly: true },
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 22א. נתונים שני ישרים:\nAB: x + 2y = 10\nCD: 2x − 3y = 6\nמצאו את שיעורי הנקודות A, B, C, D ו-P. לפני חיתוך — סדרו את שתי המשוואות לצורה y = mx + b.",
+              taskIds: ["A", "B", "C", "D", "P"],
+            },
+            {
+              label: "ב",
+              text: "חשבו את שטח המשולש PBD.",
+              taskIds: ["BD", "SPBD"],
+            },
+            {
+              label: "ג",
+              text: "חשבו את שטח המשולש APC.",
+              taskIds: ["AC", "SAPC"],
+            },
+          ],
+          tasks: [
+            { id: "A", kind: "point", point: "A", missing: "y", intercept: "y", lineKey: "A" },
+            { id: "B", kind: "point", point: "B", missing: "x", intercept: "x", lineKey: "A" },
+            { id: "C", kind: "point", point: "C", missing: "y", intercept: "y", lineKey: "B" },
+            { id: "D", kind: "point", point: "D", missing: "x", intercept: "x", lineKey: "B" },
+            { id: "P", kind: "lineIntersect", point: "P", label: "P", lineKey: "A" },
+            { id: "BD", kind: "segment", from: "B", to: "D", optional: true },
+            {
+              id: "SPBD",
+              label: "S△PBD",
+              kind: "area",
+              verts: ["P", "B", "D"],
+              legs: [
+                ["B", "D"],
+                ["P", "H"],
+              ],
+            },
+            { id: "AC", kind: "segment", from: "A", to: "C", optional: true },
+            {
+              id: "SAPC",
+              label: "S△APC",
+              kind: "area",
+              verts: ["A", "P", "C"],
+              legs: [
+                ["A", "C"],
+                ["P", "G"],
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "geo-line-summary-1",
+      topic: "analytic",
+      subtopic: "line",
+      mode: "geo-length",
+      title: "סיכום ביניים",
+      instruction: "תרגילי סיכום: שיוך משוואות לישרים, נקודות חיתוך עם צירים, חיתוך בין ישרים, אורכי קטעים, מרחקים ושטחים — באותה לוגיקה של הרמזים והצעדים שכבר למדנו.",
+      exercises: [
+        {
+          n: 1,
+          lines: [
+            {
+              key: "I",
+              label: "I",
+              line: {
+                m: 3,
+                b: -6,
+                eqText: "y = 3x − 6"
+              }
+            },
+            {
+              key: "II",
+              label: "II",
+              line: {
+                m: -1,
+                b: 10,
+                eqText: "y = −x + 10"
+              }
+            }
+          ],
+          hideLineEq: true,
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            {
+              label: "A",
+              x: 0,
+              y: 10,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "B",
+              x: 10,
+              y: 0,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "C",
+              x: 2,
+              y: 0,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "D",
+              x: 0,
+              y: -6,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "P",
+              x: 4,
+              y: 6,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "G",
+              x: 4,
+              y: 0,
+              drawOnly: true
+            }
+          ],
+          draw: {
+            enabled: true,
+            hintText: "לחצו «+ גובה», בחרו P, וגררו את רגל הגובה אל BC.",
+            triangle: [
+              "P",
+              "C",
+              "B"
+            ],
+            heights: [
+              {
+                id: "hPG",
+                from: "P",
+                base: [
+                  "C",
+                  "B"
+                ],
+                footLabel: "G",
+                recommended: true
+              }
+            ]
+          },
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 1. לפניכם שרטוט של שני ישרים I ו-II. נתונות שתי המשוואות:\n(1) y = 3x − 6\n(2) y = −x + 10\nשייכו כל משוואה לישר המתאים ונמקו.",
+              taskIds: [
+                "eq1",
+                "eq2"
+              ]
+            },
+            {
+              label: "ב",
+              text: "מצאו את שיעורי הנקודות A, B, C, D, P.",
+              taskIds: [
+                "A",
+                "B",
+                "C",
+                "D",
+                "P"
+              ]
+            },
+            {
+              label: "ג",
+              text: "חשבו את שטח המשולש PCB.",
+              taskIds: [
+                "CB",
+                "SPCB"
+              ]
+            }
+          ],
+          tasks: [
+            {
+              id: "eq1",
+              kind: "lineMatch",
+              eqNum: 1,
+              eqText: "y = 3x − 6",
+              answerKey: "I"
+            },
+            {
+              id: "eq2",
+              kind: "lineMatch",
+              eqNum: 2,
+              eqText: "y = −x + 10",
+              answerKey: "II"
+            },
+            {
+              id: "A",
+              kind: "point",
+              point: "A",
+              label: "A",
+              missing: "y",
+              intercept: "y",
+              lineKey: "II"
+            },
+            {
+              id: "B",
+              kind: "point",
+              point: "B",
+              label: "B",
+              missing: "x",
+              intercept: "x",
+              lineKey: "II"
+            },
+            {
+              id: "C",
+              kind: "point",
+              point: "C",
+              label: "C",
+              missing: "x",
+              intercept: "x",
+              lineKey: "I"
+            },
+            {
+              id: "D",
+              kind: "point",
+              point: "D",
+              label: "D",
+              missing: "y",
+              intercept: "y",
+              lineKey: "I"
+            },
+            {
+              id: "P",
+              kind: "lineIntersect",
+              point: "P",
+              label: "P",
+              lineKey: "I"
+            },
+            {
+              id: "CB",
+              kind: "segment",
+              from: "C",
+              to: "B",
+              optional: true
+            },
+            {
+              id: "SPCB",
+              label: "S△PCB",
+              kind: "area",
+              verts: [
+                "P",
+                "C",
+                "B"
+              ],
+              legs: [
+                [
+                  "C",
+                  "B"
+                ],
+                [
+                  "P",
+                  "G"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          n: 2,
+          lines: [
+            {
+              key: "L1",
+              label: "ℓ₁",
+              line: {
+                m: 1,
+                b: 2,
+                eqText: "y = x + 2"
+              }
+            },
+            {
+              key: "L2",
+              label: "ℓ₂",
+              line: {
+                mn: -1,
+                md: 2,
+                b: 8,
+                eqText: "y = −(1/2)x + 8"
+              }
+            }
+          ],
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            {
+              label: "A",
+              x: -2,
+              y: 0,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "B",
+              x: 4,
+              y: 6,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "C",
+              x: 16,
+              y: 0,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "G",
+              x: 4,
+              y: 0,
+              drawOnly: true
+            }
+          ],
+          draw: {
+            enabled: true,
+            hintText: "לחצו «+ גובה», בחרו B, וגררו את רגל הגובה אל AC.",
+            triangle: [
+              "A",
+              "B",
+              "C"
+            ],
+            heights: [
+              {
+                id: "hBG",
+                from: "B",
+                base: [
+                  "A",
+                  "C"
+                ],
+                footLabel: "G",
+                recommended: true
+              }
+            ]
+          },
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 2. הישר y = x + 2 והישר y = −(1/2)x + 8 יוצרים עם ציר x את המשולש ABC.\nמצאו את שיעורי קודקודי המשולש A, B, C.",
+              taskIds: [
+                "A",
+                "B",
+                "C"
+              ]
+            },
+            {
+              label: "ב",
+              text: "מצאו את המרחק בין שני הקודקודים של המשולש הנמצאים על ציר x.",
+              taskIds: [
+                "AC"
+              ]
+            },
+            {
+              label: "ג",
+              text: "מצאו את המרחק של הנקודה B מציר x.",
+              taskIds: [
+                "Bx"
+              ]
+            },
+            {
+              label: "ד",
+              text: "חשבו את שטח המשולש ABC.",
+              taskIds: [
+                "SABC"
+              ]
+            }
+          ],
+          tasks: [
+            {
+              id: "A",
+              kind: "point",
+              point: "A",
+              label: "A",
+              missing: "x",
+              intercept: "x",
+              lineKey: "L1"
+            },
+            {
+              id: "B",
+              kind: "lineIntersect",
+              point: "B",
+              label: "B",
+              lineKey: "L1"
+            },
+            {
+              id: "C",
+              kind: "point",
+              point: "C",
+              label: "C",
+              missing: "x",
+              intercept: "x",
+              lineKey: "L2"
+            },
+            {
+              id: "AC",
+              kind: "segment",
+              from: "A",
+              to: "C"
+            },
+            {
+              id: "Bx",
+              kind: "axis",
+              point: "B",
+              axis: "x"
+            },
+            {
+              id: "SABC",
+              label: "S△ABC",
+              kind: "area",
+              verts: [
+                "A",
+                "B",
+                "C"
+              ],
+              legs: [
+                [
+                  "A",
+                  "C"
+                ],
+                [
+                  "B",
+                  "G"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          n: 3,
+          lines: [
+            {
+              key: "L1",
+              label: "ℓ₁",
+              line: {
+                m: 1,
+                b: 1,
+                eqText: "y = x + 1"
+              }
+            },
+            {
+              key: "L2",
+              label: "ℓ₂",
+              line: {
+                mn: -1,
+                md: 2,
+                b: 4,
+                eqText: "y = −(1/2)x + 4"
+              }
+            }
+          ],
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            {
+              label: "A",
+              x: -1,
+              y: 0,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "B",
+              x: 2,
+              y: 3,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "C",
+              x: 8,
+              y: 0,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "G",
+              x: 2,
+              y: 0,
+              drawOnly: true
+            }
+          ],
+          draw: {
+            enabled: true,
+            hintText: "לחצו «+ גובה», בחרו B, וגררו את רגל הגובה אל AC.",
+            triangle: [
+              "A",
+              "B",
+              "C"
+            ],
+            heights: [
+              {
+                id: "hBG",
+                from: "B",
+                base: [
+                  "A",
+                  "C"
+                ],
+                footLabel: "G",
+                recommended: true
+              }
+            ]
+          },
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 3. הישר y = x + 1 והישר y = −(1/2)x + 4 יוצרים עם ציר x את המשולש ABC.\nמצאו את שיעורי קודקודי המשולש A, B, C.",
+              taskIds: [
+                "A",
+                "B",
+                "C"
+              ]
+            },
+            {
+              label: "ב",
+              text: "מצאו את המרחק בין שני הקודקודים של המשולש הנמצאים על ציר x.",
+              taskIds: [
+                "AC"
+              ]
+            },
+            {
+              label: "ג",
+              text: "חשבו את שטח המשולש ABC.",
+              taskIds: [
+                "SABC"
+              ]
+            }
+          ],
+          tasks: [
+            {
+              id: "A",
+              kind: "point",
+              point: "A",
+              label: "A",
+              missing: "x",
+              intercept: "x",
+              lineKey: "L1"
+            },
+            {
+              id: "B",
+              kind: "lineIntersect",
+              point: "B",
+              label: "B",
+              lineKey: "L1"
+            },
+            {
+              id: "C",
+              kind: "point",
+              point: "C",
+              label: "C",
+              missing: "x",
+              intercept: "x",
+              lineKey: "L2"
+            },
+            {
+              id: "AC",
+              kind: "segment",
+              from: "A",
+              to: "C"
+            },
+            {
+              id: "SABC",
+              label: "S△ABC",
+              kind: "area",
+              verts: [
+                "A",
+                "B",
+                "C"
+              ],
+              legs: [
+                [
+                  "A",
+                  "C"
+                ],
+                [
+                  "B",
+                  "G"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          n: 4,
+          lines: [
+            {
+              key: "AB",
+              label: "AB",
+              line: {
+                mn: 1,
+                md: 2,
+                b: 2,
+                eqText: "y = (1/2)x + 2"
+              }
+            },
+            {
+              key: "CD",
+              label: "CD",
+              line: {
+                m: 2,
+                b: -4,
+                eqText: "y = 2x − 4"
+              }
+            }
+          ],
+          hideLineEq: true,
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            {
+              label: "A",
+              x: 0,
+              y: 2,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "B",
+              x: -4,
+              y: 0,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "C",
+              x: 2,
+              y: 0,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "D",
+              x: 0,
+              y: -4,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "P",
+              x: 4,
+              y: 4,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "G",
+              x: 4,
+              y: 0,
+              drawOnly: true
+            }
+          ],
+          draw: {
+            enabled: true,
+            hintText: "לחצו «+ גובה», בחרו P, וגררו את רגל הגובה אל BC.",
+            triangle: [
+              "B",
+              "P",
+              "C"
+            ],
+            heights: [
+              {
+                id: "hPG",
+                from: "P",
+                base: [
+                  "B",
+                  "C"
+                ],
+                footLabel: "G",
+                recommended: true
+              }
+            ]
+          },
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 4. הישרים AB ו-CD הם הגרפים של הפונקציות:\n(1) y = 2x − 4\n(2) y = (1/2)x + 2\nשייכו כל משוואה לישר המתאים ונמקו.",
+              taskIds: [
+                "eq1",
+                "eq2"
+              ]
+            },
+            {
+              label: "ב",
+              text: "מצאו את שיעורי הנקודות B, C, P.",
+              taskIds: [
+                "B",
+                "C",
+                "P"
+              ]
+            },
+            {
+              label: "ג",
+              text: "חשבו את שטח המשולש BPC.",
+              taskIds: [
+                "BC",
+                "SBPC"
+              ]
+            }
+          ],
+          tasks: [
+            {
+              id: "eq1",
+              kind: "lineMatch",
+              eqNum: 1,
+              eqText: "y = 2x − 4",
+              answerKey: "CD"
+            },
+            {
+              id: "eq2",
+              kind: "lineMatch",
+              eqNum: 2,
+              eqText: "y = (1/2)x + 2",
+              answerKey: "AB"
+            },
+            {
+              id: "B",
+              kind: "point",
+              point: "B",
+              label: "B",
+              missing: "x",
+              intercept: "x",
+              lineKey: "AB"
+            },
+            {
+              id: "C",
+              kind: "point",
+              point: "C",
+              label: "C",
+              missing: "x",
+              intercept: "x",
+              lineKey: "CD"
+            },
+            {
+              id: "P",
+              kind: "lineIntersect",
+              point: "P",
+              label: "P",
+              lineKey: "AB"
+            },
+            {
+              id: "BC",
+              kind: "segment",
+              from: "B",
+              to: "C",
+              optional: true
+            },
+            {
+              id: "SBPC",
+              label: "S△BPC",
+              kind: "area",
+              verts: [
+                "B",
+                "P",
+                "C"
+              ],
+              legs: [
+                [
+                  "B",
+                  "C"
+                ],
+                [
+                  "P",
+                  "G"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          n: 5,
+          lines: [
+            {
+              key: "L1",
+              label: "ℓ₁",
+              line: {
+                m: -2,
+                b: 4,
+                eqText: "y = −2x + 4"
+              }
+            },
+            {
+              key: "L2",
+              label: "ℓ₂",
+              line: {
+                m: -1,
+                b: -2,
+                eqText: "y = −x − 2"
+              }
+            }
+          ],
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            {
+              label: "A",
+              x: 0,
+              y: 4,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "B",
+              x: 0,
+              y: -2,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "C",
+              x: 6,
+              y: -8,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "H",
+              x: 0,
+              y: -8,
+              drawOnly: true
+            }
+          ],
+          draw: {
+            enabled: true,
+            hintText: "לחצו «+ גובה», בחרו C, וגררו את רגל הגובה אל AB (ציר y).",
+            triangle: [
+              "A",
+              "B",
+              "C"
+            ],
+            heights: [
+              {
+                id: "hCH",
+                from: "C",
+                base: [
+                  "A",
+                  "B"
+                ],
+                footLabel: "H",
+                recommended: true
+              }
+            ]
+          },
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 5. הישר y = −2x + 4 והישר y = −x − 2 יוצרים עם ציר y את המשולש ABC.\nמצאו את שיעורי קודקודי המשולש A, B, C.",
+              taskIds: [
+                "A",
+                "B",
+                "C"
+              ]
+            },
+            {
+              label: "ב",
+              text: "מצאו את המרחק בין שני קודקודי המשולש הנמצאים על ציר y.",
+              taskIds: [
+                "AB"
+              ]
+            },
+            {
+              label: "ג",
+              text: "מקודקוד C הורידו אנך (מאונך) לציר y. מצאו את אורך האנך שבין הקודקוד לבין ציר y.\n(הוסיפו את הגובה לציור עם «+ גובה», בחרו C, וגררו את הרגל אל AB.)",
+              taskIds: [
+                "Cy"
+              ]
+            },
+            {
+              label: "ד",
+              text: "חשבו את שטח המשולש ABC.",
+              taskIds: [
+                "SABC"
+              ]
+            }
+          ],
+          tasks: [
+            {
+              id: "A",
+              kind: "point",
+              point: "A",
+              label: "A",
+              missing: "y",
+              intercept: "y",
+              lineKey: "L1"
+            },
+            {
+              id: "B",
+              kind: "point",
+              point: "B",
+              label: "B",
+              missing: "y",
+              intercept: "y",
+              lineKey: "L2"
+            },
+            {
+              id: "C",
+              kind: "lineIntersect",
+              point: "C",
+              label: "C",
+              lineKey: "L1"
+            },
+            {
+              id: "AB",
+              kind: "segment",
+              from: "A",
+              to: "B"
+            },
+            {
+              id: "Cy",
+              kind: "axis",
+              point: "C",
+              axis: "y",
+              drawHeight: true
+            },
+            {
+              id: "SABC",
+              label: "S△ABC",
+              kind: "area",
+              verts: [
+                "A",
+                "B",
+                "C"
+              ],
+              legs: [
+                [
+                  "A",
+                  "B"
+                ],
+                [
+                  "C",
+                  "H"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          n: 6,
+          lines: [
+            {
+              key: "L1",
+              label: "ℓ₁",
+              line: {
+                m: 2,
+                b: 4,
+                eqText: "y = 2x + 4"
+              }
+            },
+            {
+              key: "L2",
+              label: "ℓ₂",
+              line: {
+                mn: 1,
+                md: 2,
+                b: -2,
+                eqText: "y = (1/2)x − 2"
+              }
+            }
+          ],
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            {
+              label: "G",
+              x: 0,
+              y: 4,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "H",
+              x: -4,
+              y: -4,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "I",
+              x: 0,
+              y: -2,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "J",
+              x: 0,
+              y: -4,
+              drawOnly: true
+            }
+          ],
+          draw: {
+            enabled: true,
+            hintText: "לחצו «+ גובה», בחרו H, וגררו את רגל הגובה אל GI (ציר y).",
+            triangle: [
+              "G",
+              "H",
+              "I"
+            ],
+            heights: [
+              {
+                id: "hHJ",
+                from: "H",
+                base: [
+                  "G",
+                  "I"
+                ],
+                footLabel: "J",
+                recommended: true
+              }
+            ]
+          },
+          polygons: [
+            {
+              verts: [
+                "G",
+                "H",
+                "I"
+              ]
+            }
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 6. הישר y = 2x + 4 והישר y = (1/2)x − 2 יוצרים עם ציר y את המשולש GHI.\nמצאו את שיעורי הקודקודים G, H ו-I.",
+              taskIds: [
+                "G",
+                "H",
+                "I"
+              ]
+            },
+            {
+              label: "ב",
+              text: "מצאו את המרחק בין שני קודקודי המשולש המונחים על ציר y.",
+              taskIds: [
+                "GI"
+              ]
+            },
+            {
+              label: "ג",
+              text: "מקודקוד H הורידו אנך (מאונך) לציר y. מצאו את אורך האנך שבין הקודקוד לבין ציר y.\n(הוסיפו את הגובה לציור עם «+ גובה», בחרו H, וגררו את הרגל אל GI.)",
+              taskIds: [
+                "Hy"
+              ]
+            },
+            {
+              label: "ד",
+              text: "חשבו את שטח המשולש GHI.",
+              taskIds: [
+                "SGHI"
+              ]
+            }
+          ],
+          tasks: [
+            {
+              id: "G",
+              kind: "point",
+              point: "G",
+              label: "G",
+              missing: "y",
+              intercept: "y",
+              lineKey: "L1"
+            },
+            {
+              id: "H",
+              kind: "lineIntersect",
+              point: "H",
+              label: "H",
+              lineKey: "L1"
+            },
+            {
+              id: "I",
+              kind: "point",
+              point: "I",
+              label: "I",
+              missing: "y",
+              intercept: "y",
+              lineKey: "L2"
+            },
+            {
+              id: "GI",
+              kind: "segment",
+              from: "G",
+              to: "I"
+            },
+            {
+              id: "Hy",
+              kind: "axis",
+              point: "H",
+              axis: "y",
+              drawHeight: true
+            },
+            {
+              id: "SGHI",
+              label: "S△GHI",
+              kind: "area",
+              verts: [
+                "G",
+                "H",
+                "I"
+              ],
+              legs: [
+                [
+                  "G",
+                  "I"
+                ],
+                [
+                  "H",
+                  "J"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          n: 7,
+          lines: [
+            {
+              key: "I",
+              label: "I",
+              line: {
+                m: 1,
+                b: 4,
+                eqText: "y = x + 4"
+              }
+            },
+            {
+              key: "II",
+              label: "II",
+              line: {
+                m: -2,
+                b: 6,
+                eqText: "y = −2x + 6"
+              }
+            }
+          ],
+          hideLineEq: true,
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            {
+              label: "A",
+              x: 0,
+              y: 4,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "B",
+              x: -4,
+              y: 0,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "C",
+              x: 0,
+              y: 6,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "D",
+              x: 3,
+              y: 0,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "P",
+              x: 0.6666666666666666,
+              y: 4.666666666666667,
+              hideX: true,
+              hideY: true
+            }
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 7. לפניכם שרטוט של שני ישרים I ו-II. נתונות שלוש משוואות:\n(1) y = x + 4\n(2) y = −2x + 6\n(3) y = 2x + 6\nלכל אחד מן הישרים I ו-II, מצאו את המשוואה המתאימה מבין (1), (2), (3) ונמקו.",
+              taskIds: [
+                "eq1",
+                "eq2"
+              ]
+            },
+            {
+              label: "ב",
+              text: "מצאו את נקודות החיתוך של כל אחד משני הישרים עם הצירים.",
+              taskIds: [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            {
+              label: "ג",
+              text: "מצאו את שיעורי נקודת החיתוך של הישרים I ו-II.",
+              taskIds: [
+                "P"
+              ]
+            }
+          ],
+          tasks: [
+            {
+              id: "eq1",
+              kind: "lineMatch",
+              eqNum: 1,
+              eqText: "y = x + 4",
+              answerKey: "I"
+            },
+            {
+              id: "eq2",
+              kind: "lineMatch",
+              eqNum: 2,
+              eqText: "y = −2x + 6",
+              answerKey: "II"
+            },
+            {
+              id: "A",
+              kind: "point",
+              point: "A",
+              label: "A",
+              missing: "y",
+              intercept: "y",
+              lineKey: "I"
+            },
+            {
+              id: "B",
+              kind: "point",
+              point: "B",
+              label: "B",
+              missing: "x",
+              intercept: "x",
+              lineKey: "I"
+            },
+            {
+              id: "C",
+              kind: "point",
+              point: "C",
+              label: "C",
+              missing: "y",
+              intercept: "y",
+              lineKey: "II"
+            },
+            {
+              id: "D",
+              kind: "point",
+              point: "D",
+              label: "D",
+              missing: "x",
+              intercept: "x",
+              lineKey: "II"
+            },
+            {
+              id: "P",
+              kind: "lineIntersect",
+              point: "P",
+              label: "P",
+              lineKey: "I"
+            }
+          ]
+        },
+        {
+          n: 8,
+          lines: [
+            {
+              key: "I",
+              label: "I",
+              line: {
+                m: 2,
+                b: 6,
+                eqText: "y = 2x + 6"
+              }
+            },
+            {
+              key: "II",
+              label: "II",
+              line: {
+                m: -3,
+                b: 11,
+                eqText: "y = −3x + 11"
+              }
+            }
+          ],
+          hideLineEq: true,
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            {
+              label: "A",
+              x: -3,
+              y: 0,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "B",
+              x: 3.6666666666666665,
+              y: 0,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "C",
+              x: 0,
+              y: 6,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "D",
+              x: 0,
+              y: 11,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "P",
+              x: 1,
+              y: 8,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "G",
+              x: 1,
+              y: 0,
+              drawOnly: true
+            }
+          ],
+          draw: {
+            enabled: true,
+            hintText: "לחצו «+ גובה», בחרו P, וגררו את רגל הגובה אל AB (ציר x).",
+            triangle: [
+              "A",
+              "P",
+              "B"
+            ],
+            heights: [
+              {
+                id: "hPG",
+                from: "P",
+                base: [
+                  "A",
+                  "B"
+                ],
+                footLabel: "G",
+                recommended: true
+              }
+            ]
+          },
+          polygons: [
+            {
+              verts: [
+                "A",
+                "P",
+                "B"
+              ]
+            }
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 8. לפניכם שרטוט של שני ישרים I ו-II. נתונות שלוש משוואות:\n(1) y = 2x + 6\n(2) y = −3x + 11\n(3) y = −3x + 6\nלכל אחד מהישרים I ו-II, מצאו את המשוואה המתאימה מבין (1), (2), (3) ונמקו.",
+              taskIds: [
+                "eq1",
+                "eq2"
+              ]
+            },
+            {
+              label: "ב",
+              text: "מצאו את שיעורי הנקודות A, B, C, D ו-P.",
+              taskIds: [
+                "A",
+                "B",
+                "C",
+                "D",
+                "P"
+              ]
+            },
+            {
+              label: "ג",
+              text: "חשבו את שטח המשולש APB.",
+              taskIds: [
+                "AB",
+                "SAPB"
+              ]
+            }
+          ],
+          tasks: [
+            {
+              id: "eq1",
+              kind: "lineMatch",
+              eqNum: 1,
+              eqText: "y = 2x + 6",
+              answerKey: "I"
+            },
+            {
+              id: "eq2",
+              kind: "lineMatch",
+              eqNum: 2,
+              eqText: "y = −3x + 11",
+              answerKey: "II"
+            },
+            {
+              id: "A",
+              kind: "point",
+              point: "A",
+              label: "A",
+              missing: "x",
+              intercept: "x",
+              lineKey: "I"
+            },
+            {
+              id: "B",
+              kind: "point",
+              point: "B",
+              label: "B",
+              missing: "x",
+              intercept: "x",
+              lineKey: "II"
+            },
+            {
+              id: "C",
+              kind: "point",
+              point: "C",
+              label: "C",
+              missing: "y",
+              intercept: "y",
+              lineKey: "I"
+            },
+            {
+              id: "D",
+              kind: "point",
+              point: "D",
+              label: "D",
+              missing: "y",
+              intercept: "y",
+              lineKey: "II"
+            },
+            {
+              id: "P",
+              kind: "lineIntersect",
+              point: "P",
+              label: "P",
+              lineKey: "I"
+            },
+            {
+              id: "AB",
+              kind: "segment",
+              from: "A",
+              to: "B",
+              optional: true
+            },
+            {
+              id: "SAPB",
+              label: "S△APB",
+              kind: "area",
+              verts: [
+                "A",
+                "P",
+                "B"
+              ],
+              legs: [
+                [
+                  "A",
+                  "B"
+                ],
+                [
+                  "P",
+                  "G"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          n: 9,
+          lines: [
+            {
+              key: "I",
+              label: "I",
+              line: {
+                m: -1,
+                b: 4,
+                eqText: "y = −x + 4"
+              }
+            },
+            {
+              key: "II",
+              label: "II",
+              line: {
+                m: 2,
+                b: 4,
+                eqText: "y = 2x + 4"
+              }
+            }
+          ],
+          hideLineEq: true,
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            {
+              label: "A",
+              x: 0,
+              y: 4,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "B",
+              x: -2,
+              y: 0,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "C",
+              x: 4,
+              y: 0,
+              hideX: true,
+              hideY: true
+            }
+          ],
+          polygons: [
+            {
+              verts: [
+                "A",
+                "B",
+                "C"
+              ]
+            }
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 9. לפניכם שרטוט של שני ישרים I ו-II. נתונות שלוש משוואות:\n(1) y = −x + 2\n(2) y = −x + 4\n(3) y = 2x + 4\nלכל אחד מן הישרים I ו-II, מצאו את המשוואה המתאימה מבין (1), (2), (3) ונמקו.",
+              taskIds: [
+                "eq1",
+                "eq2"
+              ]
+            },
+            {
+              label: "ב",
+              text: "מצאו את שיעורי הנקודות A, B, C.",
+              taskIds: [
+                "A",
+                "B",
+                "C"
+              ]
+            },
+            {
+              label: "ג",
+              text: "חשבו את שטחי המשולשים AOC ו-ABC. לשטח ABC אפשר גם S△AOC+S△AOB.",
+              taskIds: [
+                "OA",
+                "OC",
+                "SAOC",
+                "BC",
+                "SABC"
+              ]
+            }
+          ],
+          tasks: [
+            {
+              id: "eq1",
+              kind: "lineMatch",
+              eqNum: 2,
+              eqText: "y = −x + 4",
+              answerKey: "I"
+            },
+            {
+              id: "eq2",
+              kind: "lineMatch",
+              eqNum: 3,
+              eqText: "y = 2x + 4",
+              answerKey: "II"
+            },
+            {
+              id: "A",
+              kind: "point",
+              point: "A",
+              label: "A",
+              missing: "y",
+              intercept: "y",
+              lineKey: "I"
+            },
+            {
+              id: "B",
+              kind: "point",
+              point: "B",
+              label: "B",
+              missing: "x",
+              intercept: "x",
+              lineKey: "II"
+            },
+            {
+              id: "C",
+              kind: "point",
+              point: "C",
+              label: "C",
+              missing: "x",
+              intercept: "x",
+              lineKey: "I"
+            },
+            {
+              id: "OA",
+              kind: "origin",
+              point: "A",
+              optional: true
+            },
+            {
+              id: "OC",
+              kind: "origin",
+              point: "C",
+              optional: true
+            },
+            {
+              id: "SAOC",
+              label: "S△AOC",
+              kind: "area",
+              verts: [
+                "A",
+                "O",
+                "C"
+              ],
+              legs: [
+                [
+                  "O",
+                  "A"
+                ],
+                [
+                  "O",
+                  "C"
+                ]
+              ]
+            },
+            {
+              id: "BC",
+              kind: "segment",
+              from: "B",
+              to: "C",
+              optional: true
+            },
+            {
+              id: "SABC",
+              label: "S△ABC",
+              kind: "area",
+              verts: [
+                "A",
+                "B",
+                "C"
+              ],
+              legs: [
+                [
+                  "B",
+                  "C"
+                ],
+                [
+                  "A",
+                  "O"
+                ]
+              ],
+              sum: {
+                optional: true,
+                parts: [
+                  [
+                    "A",
+                    "O",
+                    "C"
+                  ],
+                  [
+                    "A",
+                    "O",
+                    "B"
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          n: 10,
+          lines: [
+            {
+              key: "I",
+              label: "I",
+              line: {
+                m: -2,
+                b: 2,
+                eqText: "y = −2x + 2"
+              }
+            },
+            {
+              key: "II",
+              label: "II",
+              line: {
+                m: 2,
+                b: -2,
+                eqText: "y = 2x − 2"
+              }
+            },
+            {
+              key: "III",
+              label: "III",
+              line: {
+                m: -2,
+                b: -2,
+                eqText: "y = −2x − 2"
+              }
+            }
+          ],
+          hideLineEq: true,
+          showSegments: false,
+          showAxisGuides: false,
+          points: [
+            {
+              label: "A",
+              x: 0,
+              y: 2,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "B",
+              x: 1,
+              y: 0,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "C",
+              x: 0,
+              y: -2,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "D",
+              x: -1,
+              y: 0,
+              hideX: true,
+              hideY: true
+            }
+          ],
+          polygons: [
+            {
+              verts: [
+                "B",
+                "O",
+                "C"
+              ]
+            }
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 10. לפניכם שרטוט של שלושה ישרים I, II, III. נתונות שלוש משוואות:\n(1) y = −2x + 2\n(2) y = 2x − 2\n(3) y = −2x − 2\nהתאימו כל משוואה לישר I, II או III ונמקו.",
+              taskIds: [
+                "eq1",
+                "eq2",
+                "eq3"
+              ]
+            },
+            {
+              label: "ב",
+              text: "מצאו את שיעורי הנקודות A, B, C, D.",
+              taskIds: [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            {
+              label: "ג",
+              text: "חשבו את שטח המשולש BOC.",
+              taskIds: [
+                "OB",
+                "OC",
+                "SBOC"
+              ]
+            }
+          ],
+          tasks: [
+            {
+              id: "eq1",
+              kind: "lineMatch",
+              eqNum: 1,
+              eqText: "y = −2x + 2",
+              answerKey: "I"
+            },
+            {
+              id: "eq2",
+              kind: "lineMatch",
+              eqNum: 2,
+              eqText: "y = 2x − 2",
+              answerKey: "II"
+            },
+            {
+              id: "eq3",
+              kind: "lineMatch",
+              eqNum: 3,
+              eqText: "y = −2x − 2",
+              answerKey: "III"
+            },
+            {
+              id: "A",
+              kind: "point",
+              point: "A",
+              label: "A",
+              missing: "y",
+              intercept: "y",
+              lineKey: "I"
+            },
+            {
+              id: "B",
+              kind: "point",
+              point: "B",
+              label: "B",
+              missing: "x",
+              intercept: "x",
+              lineKey: "I"
+            },
+            {
+              id: "C",
+              kind: "point",
+              point: "C",
+              label: "C",
+              missing: "y",
+              intercept: "y",
+              lineKey: "II"
+            },
+            {
+              id: "D",
+              kind: "point",
+              point: "D",
+              label: "D",
+              missing: "x",
+              intercept: "x",
+              lineKey: "III"
+            },
+            {
+              id: "OB",
+              kind: "origin",
+              point: "B",
+              optional: true
+            },
+            {
+              id: "OC",
+              kind: "origin",
+              point: "C",
+              optional: true
+            },
+            {
+              id: "SBOC",
+              label: "S△BOC",
+              kind: "area",
+              verts: [
+                "B",
+                "O",
+                "C"
+              ],
+              legs: [
+                [
+                  "O",
+                  "B"
+                ],
+                [
+                  "O",
+                  "C"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          n: 11,
+          line: {
+            m: 2,
+            b: 0,
+            eqText: "y = 2x"
+          },
+          showSegments: true,
+          showAxisGuides: false,
+          points: [
+            {
+              label: "B",
+              x: 4,
+              y: 0
+            },
+            {
+              label: "P",
+              x: 4,
+              y: 8,
+              hideX: true,
+              hideY: true
+            }
+          ],
+          segments: [
+            {
+              from: "B",
+              to: "P"
+            },
+            {
+              from: "O",
+              to: "P"
+            }
+          ],
+          polygons: [
+            {
+              verts: [
+                "B",
+                "O",
+                "P"
+              ]
+            }
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 11. הישר BP מקביל לציר ה-y. משוואת הישר PO היא y = 2x. שיעורי הנקודה B הם (4;0). O — ראשית הצירים.\nמצאו את שיעור ה-x של הנקודה P.",
+              taskIds: [
+                "Px"
+              ]
+            },
+            {
+              label: "ב",
+              text: "חשבו את שטח המשולש BOP.",
+              taskIds: [
+                "OB",
+                "BP",
+                "SBOP"
+              ]
+            }
+          ],
+          tasks: [
+            {
+              id: "Px",
+              kind: "point",
+              point: "P",
+              label: "P",
+              missing: "x",
+              completeWhen: "x",
+              twinX: "B",
+              answerX: 4,
+              answerY: 8
+            },
+            {
+              id: "OB",
+              kind: "origin",
+              point: "B",
+              optional: true
+            },
+            {
+              id: "BP",
+              kind: "segment",
+              from: "B",
+              to: "P",
+              optional: true
+            },
+            {
+              id: "SBOP",
+              label: "S△BOP",
+              kind: "area",
+              verts: [
+                "B",
+                "O",
+                "P"
+              ],
+              legs: [
+                [
+                  "O",
+                  "B"
+                ],
+                [
+                  "B",
+                  "P"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          n: 12,
+          line: {
+            m: 1,
+            b: -1,
+            eqText: "y = x − 1"
+          },
+          showSegments: true,
+          showAxisGuides: false,
+          points: [
+            {
+              label: "B",
+              x: 0,
+              y: 3
+            },
+            {
+              label: "A",
+              x: 4,
+              y: 3,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "C",
+              x: 0,
+              y: -1,
+              hideX: true,
+              hideY: true
+            }
+          ],
+          segments: [
+            {
+              from: "A",
+              to: "B"
+            },
+            {
+              from: "A",
+              to: "C"
+            },
+            {
+              from: "B",
+              to: "C"
+            }
+          ],
+          polygons: [
+            {
+              verts: [
+                "A",
+                "B",
+                "C"
+              ]
+            }
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 12. הישר AB מקביל לציר ה-x. שיעורי הנקודה B הם (0;3). דרך נקודה A עובר ישר שמשוואתו y = x − 1, החותך את ציר ה-y בנקודה C.\nמצאו את שיעורי הנקודות A ו-C.",
+              taskIds: [
+                "C",
+                "A"
+              ]
+            },
+            {
+              label: "ב",
+              text: "חשבו את שטח המשולש ABC.",
+              taskIds: [
+                "BC",
+                "AB",
+                "SABC"
+              ]
+            }
+          ],
+          tasks: [
+            {
+              id: "C",
+              kind: "point",
+              point: "C",
+              label: "C",
+              missing: "y",
+              intercept: "y"
+            },
+            {
+              id: "A",
+              kind: "point",
+              point: "A",
+              label: "A",
+              missing: "both",
+              twinY: "B",
+              answerX: 4,
+              answerY: 3
+            },
+            {
+              id: "BC",
+              kind: "segment",
+              from: "B",
+              to: "C",
+              optional: true
+            },
+            {
+              id: "AB",
+              kind: "segment",
+              from: "A",
+              to: "B",
+              optional: true
+            },
+            {
+              id: "SABC",
+              label: "S△ABC",
+              kind: "area",
+              verts: [
+                "A",
+                "B",
+                "C"
+              ],
+              legs: [
+                [
+                  "B",
+                  "C"
+                ],
+                [
+                  "A",
+                  "B"
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+    },
   ],
 };
