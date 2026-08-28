@@ -1,0 +1,56 @@
+---
+description: Geometry solution path — twin first, then plug; multiple valid paths; pick the easy intercept.
+globs: js/geometry.js,data/curriculum.js,data/curriculum.json,data/geo-*.json
+alwaysApply: true
+---
+
+# Geometry path (Yonatan)
+
+Walk this tree for **every** point before changing hints, checks, or curriculum.
+
+## Point on a line
+
+1. Twin from a parallel (if any): ∥ y-axis → same **x**; ∥ x-axis → same **y**. Reveal it on the graph.
+2. Substitute into the line, then compute. Do not hint «רשמו את הנקודה» while a coordinate is missing.
+3. Then write `P(x;y)`. Skipping a middle step is allowed if the next equation is still correct.
+
+## Two twins, no plug
+
+If both coordinates come from parallels (`twinX` and `twinY`, no line to substitute into): either axis first, reveal it, then the other, then `P(x;y)`. Skip to the point is allowed. Do not hint «רשמו את הנקודה» while a coordinate is still missing.
+
+## Intercepts — site path
+
+- On the y-axis: `x = 0` → plug → y → point.
+- On the x-axis: `y = 0` → plug → solve for x → point.
+- If the point lies on **more than one line**, pick the **easier** equation to plug into (already `y = mx + b`, integer coeffs, positive m, intercept that is already b). That is the site / one-step path.
+
+## Other valid paths (always accept)
+
+A point on two lines may also be found by:
+
+- intercept of the **other** line (`x = 0` or `y = 0` in that equation), or
+- **equating** the two lines (`2x − 2 = −2x − 2`), then solving for x and plugging for y.
+
+Hints follow **what the student already typed**. If they equated, continue that solve. If they wrote `x = 0`, follow intercept on the line they plug into. Do not reject a correct equate because the site prefers `x = 0`.
+
+## Area
+
+- Right triangle with legs ∥ axes: optional leg lengths, then \(S=(leg\times leg)/2\) in stages. Direct area is allowed.
+- Base ∥ x-axis (not necessarily right-angled): AB (large x minus small x), height from a vertex to that line (= \(|y|\) of the base; foot G). Then \(S=(AB\times h)/2\) in stages. Splitting into two right triangles is also allowed. The foot may fall outside the segment (continue the line).
+- Base ∥ y-axis: same with large y minus small y, height = \(|x|\) of that vertical line.
+
+## Side from a given area
+
+Right triangle, legs ∥ axes, \(S\) given: optional write \(S△=(leg\times leg)/2\), then plug the known area and the known length, leave the unknown side (`BO` or `x`) and solve as a linear equation (one-sided denom → multiply both sides, e.g. `10=(BO×4)/2` → `20=4BO` → `BO=5`). Direct plug is allowed. Skip to the length is allowed. Then the point (on an axis / from a parallel).
+
+On the figure: given area is labeled `S=…` inside the triangle. Computed (and given) side lengths sit next to that side, rotated with the same slope, offset toward the interior so they do not cover a line equation.
+
+## Draw height («+ גובה»)
+
+Offer «+ גובה» in the **current part** whenever the student is asked for a height: its length, its foot, a perpendicular to a side/axis, or an area that uses that height. Do not wait for the area part (e.g. «מצאו את אורך הגובה» before \(S\)). Foot may fall outside the segment. Drawing is optional — a correct length or area without drawing is still accepted. Do not offer it while they are only finding a vertex or a side that is not the altitude.
+
+## Engine
+
+- Discover lines through `(answerX, answerY)` from `pack.lines`. Do not hard-code only `lineKey`.
+- `y = 3` / tag `Y` is the y-axis, never a wrong x.
+- TwinY is the mirror of twinX.

@@ -2291,7 +2291,11 @@
         } else {
           stepNum += 1;
           n.textContent = String(stepNum);
-          body.innerHTML = DoctematicaMath.toHTML(String(line));
+          var histLine = String(line);
+          if (DoctematicaGeometry.capsHistoryLetters) {
+            histLine = DoctematicaGeometry.capsHistoryLetters(histLine);
+          }
+          body.innerHTML = DoctematicaMath.toHTML(histLine);
         }
         li.appendChild(n);
         li.appendChild(body);
@@ -3429,6 +3433,8 @@
       axisGuides: scene.axisGuides || [],
       distGuides: scene.distGuides || [],
       graphs: scene.graphs || [],
+      areaLabels: scene.areaLabels || [],
+      segLabels: scene.segLabels || [],
       highlight: highlight || null,
       drawConfig: drawConfig,
       drawState: state.geo.draw || { heights: [], auxPoints: [] },
@@ -3450,14 +3456,13 @@
       return;
     }
     var part = DoctematicaGeometry.currentPartText(state.problem.geo, state.geo);
-    geoPartEl.classList.remove("hidden");
-    if (!part) {
-      geoPartEl.textContent = "";
+    if (!part || part.label) {
+      geoPartEl.classList.add("hidden");
+      geoPartEl.innerHTML = "";
       return;
     }
-    geoPartEl.innerHTML =
-      (part.label ? "<strong>" + part.label + ".</strong> " : "") +
-      DoctematicaGeometry.formatPartHtml(part.text || "");
+    geoPartEl.classList.remove("hidden");
+    geoPartEl.innerHTML = DoctematicaGeometry.formatPartHtml(part.text || "");
     renderLineMatchPanel();
   }
 
@@ -3564,7 +3569,9 @@
     intro.textContent =
       "שייכו כל משוואה לישר בציור (I, II" +
       (data.lines.length > 2 ? ", III" : "") +
-      "), ונמקו. התחשבו בשיפוע ובמקדם b.";
+      ")" +
+      (data.hasDistractor ? ". אם משוואה לא מתאימה לאף ישר — בחרו «לא שייך»" : "") +
+      ", ונמקו. התחשבו בשיפוע ובמקדם b.";
     lineMatchPanelEl.appendChild(intro);
     data.rows.forEach(function (row) {
       var el = document.createElement("div");
@@ -3664,6 +3671,7 @@
       noteOpen: null,
       lineEq: {},
       intersect: {},
+      pointRoute: {},
       lineMatch: {},
     };
     var pack0 = state.problem && state.problem.geo;
@@ -3726,6 +3734,7 @@
     if (res.lineEqDisplay) state.geo.lineEqDisplay = res.lineEqDisplay;
     if (res.lineEq) state.geo.lineEq = Object.assign({}, state.geo.lineEq || {}, res.lineEq);
     if (res.intersect) state.geo.intersect = res.intersect;
+    if (res.pointRoute) state.geo.pointRoute = Object.assign({}, state.geo.pointRoute || {}, res.pointRoute);
     if (res.footCoords) state.geo.footCoords = res.footCoords;
     if (res.mbRearranged) {
       state.geo.mbRearranged = true;
@@ -3737,11 +3746,15 @@
       var historyLine = res.show;
       if (
         res.task &&
-        res.task.kind === "lineIntersect" &&
         res.rawStep &&
-        (res.userStep || typed)
+        (res.userStep || typed) &&
+        (res.task.kind === "lineIntersect" ||
+          (res.intersect && res.intersect.taskId === res.task.id))
       ) {
         historyLine = res.userStep || String(typed || "").trim();
+      }
+      if (DoctematicaGeometry.capsHistoryLetters) {
+        historyLine = DoctematicaGeometry.capsHistoryLetters(historyLine);
       }
       var chainKinds =
         res.task &&
@@ -3917,8 +3930,8 @@
         h.task.kind === "distSeg" ||
         h.task.kind === "area")
     ) {
-      if (h.task.kind === "area") {
-        // שטח: רק השלב הבא בשרשרת (הצבה / מכפלה / תוצאה) — לא לקפוץ לסוף
+      if (h.task.kind === "area" || h.task.fromArea) {
+        // שטח / צלע משטח: השלב הבא בשרשרת (הצבה / משוואה לינארית / תוצאה) — לא לקפוץ לסוף
         typed = h.step || h.answer;
       } else {
         var tag = String(h.task.label || "").replace(/→/g, "").replace(/->/g, "");
@@ -3975,13 +3988,17 @@
                 state.history.push(line);
               });
             } else if (
-              (taskLine || task.kind === "noIntercept") &&
               (task.kind === "point" || task.kind === "noIntercept") &&
               DoctematicaGeometry.canonicalLineSteps
             ) {
-              DoctematicaGeometry.canonicalLineSteps(task, pack).forEach(function (line) {
-                state.history.push(line);
-              });
+              var lineSteps = DoctematicaGeometry.canonicalLineSteps(task, pack);
+              if (lineSteps.length) {
+                lineSteps.forEach(function (line) {
+                  state.history.push(line);
+                });
+              } else if (task.kind === "point") {
+                state.history.push(DoctematicaGeometry.canonicalStep(task, pack.map));
+              }
             } else if (task.kind === "area" && DoctematicaGeometry.canonicalAreaSteps) {
               DoctematicaGeometry.canonicalAreaSteps(task, pack.map).forEach(function (line) {
                 state.history.push(line);

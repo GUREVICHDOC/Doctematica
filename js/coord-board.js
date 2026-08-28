@@ -719,6 +719,27 @@
       svg.appendChild(el);
     });
 
+    (scene.areaLabels || []).forEach(function (lab) {
+      var verts = (lab.verts || []).map(resolvePt).filter(Boolean);
+      if (verts.length < 3) return;
+      var cx = 0;
+      var cy = 0;
+      verts.forEach(function (p) {
+        cx += p.x;
+        cy += p.y;
+      });
+      cx /= verts.length;
+      cy /= verts.length;
+      var txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      txt.setAttribute("class", "coord-area-s");
+      txt.setAttribute("x", String(sx(cx)));
+      txt.setAttribute("y", String(sy(cy)));
+      txt.setAttribute("text-anchor", "middle");
+      txt.setAttribute("dominant-baseline", "middle");
+      txt.textContent = String(lab.text || "");
+      svg.appendChild(txt);
+    });
+
     function drawRightAngle(at, from, to) {
       if (!at || !from || !to) return;
       var size = 14;
@@ -768,6 +789,58 @@
       if (seg.dashed) cls += " is-dashed";
       if (seg.height) cls += " is-draw is-height";
       line(sx(a.x), sy(a.y), sx(b.x), sy(b.y), cls);
+    });
+
+    function centroidOfPolys() {
+      var acc = { x: 0, y: 0, n: 0 };
+      (scene.polygons || []).forEach(function (poly) {
+        var verts = (poly.verts || []).map(resolvePt).filter(Boolean);
+        if (verts.length < 3) return;
+        verts.forEach(function (p) {
+          acc.x += p.x;
+          acc.y += p.y;
+          acc.n += 1;
+        });
+      });
+      if (!acc.n) return null;
+      return { x: acc.x / acc.n, y: acc.y / acc.n };
+    }
+    var triC = centroidOfPolys();
+    (scene.segLabels || []).forEach(function (lab) {
+      var a = resolvePt(lab.from);
+      var b = resolvePt(lab.to);
+      if (!a || !b) return;
+      var p0x = sx(a.x);
+      var p0y = sy(a.y);
+      var p1x = sx(b.x);
+      var p1y = sy(b.y);
+      var dx = p1x - p0x;
+      var dy = p1y - p0y;
+      var slen = Math.sqrt(dx * dx + dy * dy) || 1;
+      var mx = (a.x + b.x) / 2;
+      var my = (a.y + b.y) / 2;
+      var nx = -dy / slen;
+      var ny = dx / slen;
+      if (triC) {
+        var toC = { x: sx(triC.x) - (p0x + p1x) / 2, y: sy(triC.y) - (p0y + p1y) / 2 };
+        if (nx * toC.x + ny * toC.y < 0) {
+          nx = -nx;
+          ny = -ny;
+        }
+      }
+      var angleDeg = readableAngleDeg(dx, dy);
+      var px = (p0x + p1x) / 2 + nx * 16;
+      var py = (p0y + p1y) / 2 + ny * 16;
+      var wrap = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      wrap.setAttribute("class", "coord-seg-len-wrap");
+      wrap.setAttribute("transform", "translate(" + px + " " + py + ") rotate(" + angleDeg + ")");
+      var lenT = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      lenT.setAttribute("class", "coord-seg-len");
+      lenT.setAttribute("text-anchor", "middle");
+      lenT.setAttribute("dominant-baseline", "middle");
+      lenT.textContent = String(lab.text || "");
+      wrap.appendChild(lenT);
+      svg.appendChild(wrap);
     });
 
     // גבהים שהתלמיד הוסיף

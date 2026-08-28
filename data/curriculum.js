@@ -5217,7 +5217,8 @@ window.DoctematicaCurriculum = {
               text: "תרגיל 7. לפניכם שרטוט של שני ישרים I ו-II. נתונות שלוש משוואות:\n(1) y = x + 4\n(2) y = −2x + 6\n(3) y = 2x + 6\nלכל אחד מן הישרים I ו-II, מצאו את המשוואה המתאימה מבין (1), (2), (3) ונמקו.",
               taskIds: [
                 "eq1",
-                "eq2"
+                "eq2",
+                "eq3"
               ]
             },
             {
@@ -5252,6 +5253,13 @@ window.DoctematicaCurriculum = {
               eqNum: 2,
               eqText: "y = −2x + 6",
               answerKey: "II"
+            },
+            {
+              id: "eq3",
+              kind: "lineMatch",
+              eqNum: 3,
+              eqText: "y = 2x + 6",
+              answerKey: "none"
             },
             {
               id: "A",
@@ -5402,7 +5410,8 @@ window.DoctematicaCurriculum = {
               text: "תרגיל 8. לפניכם שרטוט של שני ישרים I ו-II. נתונות שלוש משוואות:\n(1) y = 2x + 6\n(2) y = −3x + 11\n(3) y = −3x + 6\nלכל אחד מהישרים I ו-II, מצאו את המשוואה המתאימה מבין (1), (2), (3) ונמקו.",
               taskIds: [
                 "eq1",
-                "eq2"
+                "eq2",
+                "eq3"
               ]
             },
             {
@@ -5439,6 +5448,13 @@ window.DoctematicaCurriculum = {
               eqNum: 2,
               eqText: "y = −3x + 11",
               answerKey: "II"
+            },
+            {
+              id: "eq3",
+              kind: "lineMatch",
+              eqNum: 3,
+              eqText: "y = −3x + 6",
+              answerKey: "none"
             },
             {
               id: "A",
@@ -5575,7 +5591,8 @@ window.DoctematicaCurriculum = {
               text: "תרגיל 9. לפניכם שרטוט של שני ישרים I ו-II. נתונות שלוש משוואות:\n(1) y = −x + 2\n(2) y = −x + 4\n(3) y = 2x + 4\nלכל אחד מן הישרים I ו-II, מצאו את המשוואה המתאימה מבין (1), (2), (3) ונמקו.",
               taskIds: [
                 "eq1",
-                "eq2"
+                "eq2",
+                "eq3"
               ]
             },
             {
@@ -5600,6 +5617,13 @@ window.DoctematicaCurriculum = {
             }
           ],
           tasks: [
+            {
+              id: "eq3",
+              kind: "lineMatch",
+              eqNum: 1,
+              eqText: "y = −x + 2",
+              answerKey: "none"
+            },
             {
               id: "eq1",
               kind: "lineMatch",
@@ -5978,8 +6002,7 @@ window.DoctematicaCurriculum = {
               kind: "point",
               point: "P",
               label: "P",
-              missing: "x",
-              completeWhen: "x",
+              missing: "both",
               twinX: "B",
               answerX: 4,
               answerY: 8
@@ -6077,8 +6100,8 @@ window.DoctematicaCurriculum = {
               label: "א",
               text: "תרגיל 12. הישר AB מקביל לציר ה-x. שיעורי הנקודה B הם (0;3). דרך נקודה A עובר ישר שמשוואתו y = x − 1, החותך את ציר ה-y בנקודה C.\nמצאו את שיעורי הנקודות A ו-C.",
               taskIds: [
-                "C",
-                "A"
+                "A",
+                "C"
               ]
             },
             {
@@ -6143,6 +6166,466 @@ window.DoctematicaCurriculum = {
                   "B"
                 ]
               ]
+            }
+          ]
+        },
+        {
+          n: 13,
+          line: {
+            mn: 1,
+            md: 2,
+            b: 0,
+            eqText: "y = (1/2)x"
+          },
+          showSegments: true,
+          showAxisGuides: false,
+          points: [
+            {
+              label: "A",
+              x: -4,
+              y: 3
+            },
+            {
+              label: "B",
+              x: 6,
+              y: 3,
+              hideX: true,
+              hideY: true
+            },
+            {
+              label: "G",
+              x: 0,
+              y: 3,
+              drawOnly: true
+            }
+          ],
+          segments: [
+            {
+              from: "O",
+              to: "A"
+            },
+            {
+              from: "O",
+              to: "B"
+            },
+            {
+              from: "A",
+              to: "B"
+            }
+          ],
+          polygons: [
+            {
+              verts: [
+                "O",
+                "A",
+                "B"
+              ]
+            }
+          ],
+          draw: {
+            enabled: true,
+            hintText: "לחצו «+ גובה», בחרו O, וגררו את רגל הגובה אל AB.",
+            triangle: [
+              "O",
+              "A",
+              "B"
+            ],
+            heights: [
+              {
+                id: "hOG",
+                from: "O",
+                base: [
+                  "A",
+                  "B"
+                ],
+                footLabel: "G",
+                recommended: true
+              }
+            ]
+          },
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 13. הישר AB מקביל לציר ה-x. שיעורי הנקודה A הם (−4;3). O — ראשית הצירים. משוואת הישר BO היא y = (1/2)x.\nמצאו את שיעורי הנקודה B.",
+              taskIds: [
+                "B"
+              ]
+            },
+            {
+              label: "ב",
+              text: "חשבו את שטח המשולש OAB.",
+              taskIds: [
+                "AB",
+                "OG",
+                "SOAB"
+              ]
+            }
+          ],
+          tasks: [
+            {
+              id: "B",
+              kind: "point",
+              point: "B",
+              label: "B",
+              missing: "both",
+              twinY: "A",
+              answerX: 6,
+              answerY: 3
+            },
+            {
+              id: "AB",
+              kind: "segment",
+              from: "A",
+              to: "B",
+              optional: true
+            },
+            {
+              id: "OG",
+              kind: "origin",
+              point: "G",
+              optional: true
+            },
+            {
+              id: "SOAB",
+              label: "S△OAB",
+              kind: "area",
+              verts: [
+                "O",
+                "A",
+                "B"
+              ],
+              legs: [
+                [
+                  "A",
+                  "B"
+                ],
+                [
+                  "O",
+                  "G"
+                ]
+              ],
+              sum: {
+                optional: true,
+                parts: [
+                  [
+                    "O",
+                    "A",
+                    "G"
+                  ],
+                  [
+                    "O",
+                    "B",
+                    "G"
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          n: 14,
+          line: {
+            m: 1,
+            b: 0,
+            eqText: "y = x"
+          },
+          showSegments: true,
+          showAxisGuides: false,
+          points: [
+            { label: "A", x: 2, y: 5 },
+            { label: "B", x: 5, y: 5, hideX: true, hideY: true },
+            { label: "C", x: 0, y: 0 },
+            { label: "H", x: 0, y: 5, drawOnly: true }
+          ],
+          segments: [
+            { from: "A", to: "B" },
+            { from: "B", to: "C" },
+            { from: "C", to: "A" }
+          ],
+          polygons: [{ verts: ["A", "B", "C"] }],
+          rightAngles: [{ at: "H", from: "C", to: "A" }],
+          draw: {
+            enabled: true,
+            hintText: "לחצו «+ גובה», בחרו C, וגררו את רגל הגובה אל הישר של AB (יכולה ליפול מחוץ לקטע).",
+            triangle: ["A", "B", "C"],
+            heights: [
+              {
+                id: "hCH",
+                from: "C",
+                base: ["A", "B"],
+                footLabel: "H",
+                recommended: true
+              }
+            ]
+          },
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 14. במשולש ABC נתון: A(2;5). C — ראשית הצירים. הצלע BC מונחת על הישר y = x והצלע AB מקבילה לציר ה-x.\nמצאו את שיעורי הקודקוד B.",
+              taskIds: ["B"]
+            },
+            {
+              label: "ב",
+              text: "חשבו את אורך הצלע AB.",
+              taskIds: ["AB"]
+            },
+            {
+              label: "ג",
+              text: "מצאו את אורך הגובה לצלע AB.",
+              taskIds: ["CH"]
+            },
+            {
+              label: "ד",
+              text: "חשבו את שטח המשולש ABC.",
+              taskIds: ["SABC"]
+            }
+          ],
+          tasks: [
+            {
+              id: "B",
+              kind: "point",
+              point: "B",
+              label: "B",
+              missing: "both",
+              twinY: "A",
+              answerX: 5,
+              answerY: 5
+            },
+            {
+              id: "AB",
+              kind: "segment",
+              from: "A",
+              to: "B"
+            },
+            {
+              id: "CH",
+              kind: "segment",
+              from: "C",
+              to: "H"
+            },
+            {
+              id: "SABC",
+              label: "S△ABC",
+              kind: "area",
+              verts: ["A", "B", "C"],
+              legs: [
+                ["A", "B"],
+                ["C", "H"]
+              ]
+            }
+          ]
+        },
+        {
+          n: 15,
+          showSegments: true,
+          showAxisGuides: false,
+          points: [
+            { label: "A", x: 0, y: 0 },
+            { label: "B", x: 3, y: 6, hideX: true, hideY: true },
+            { label: "C", x: 9, y: 6 },
+            { label: "E", x: 3, y: 2 },
+            { label: "H", x: 3, y: 0, drawOnly: true }
+          ],
+          segments: [
+            { from: "A", to: "B" },
+            { from: "B", to: "C" },
+            { from: "C", to: "A" },
+            { from: "B", to: "E", dashed: true }
+          ],
+          polygons: [{ verts: ["A", "B", "C"] }],
+          rightAngles: [{ at: "H", from: "A", to: "E" }],
+          draw: {
+            enabled: true,
+            hintText: "לחצו «+ גובה», בחרו A, וגררו את רגל הגובה אל הישר של BE (יכולה ליפול מחוץ לקטע).",
+            triangle: ["A", "B", "E"],
+            heights: [
+              {
+                id: "hAH",
+                from: "A",
+                base: ["B", "E"],
+                footLabel: "H",
+                recommended: true
+              }
+            ]
+          },
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 15. במשולש ABC נתון: A(0;0), C(9;6). הצלע BC מקבילה לציר ה-x. דרך הקודקוד B עובר ישר המקביל לציר ה-y והחותך את הצלע AC בנקודה E. שיעורי הנקודה E הם (3;2).\nמצאו את שיעורי הקודקוד B.",
+              taskIds: ["B"]
+            },
+            {
+              label: "ב",
+              text: "חשבו את אורך הקטע BE.",
+              taskIds: ["BE"]
+            },
+            {
+              label: "ג",
+              text: "חשבו את שטח המשולש ABE.",
+              taskIds: ["AH", "SABE"]
+            }
+          ],
+          tasks: [
+            {
+              id: "B",
+              kind: "point",
+              point: "B",
+              label: "B",
+              missing: "both",
+              twinX: "E",
+              twinY: "C",
+              answerX: 3,
+              answerY: 6
+            },
+            {
+              id: "BE",
+              kind: "segment",
+              from: "B",
+              to: "E"
+            },
+            {
+              id: "AH",
+              kind: "segment",
+              from: "A",
+              to: "H",
+              optional: true
+            },
+            {
+              id: "SABE",
+              label: "S△ABE",
+              kind: "area",
+              verts: ["A", "B", "E"],
+              legs: [
+                ["B", "E"],
+                ["A", "H"]
+              ]
+            }
+          ]
+        },
+        {
+          n: 16,
+          givenText: "AOB משולש ישר-זווית ב־O. A(0;4). שטח המשולש 10",
+          givenArea: { verts: ["A", "O", "B"], value: 10, label: "S△AOB" },
+          showSegments: true,
+          showAxisGuides: false,
+          points: [
+            { label: "A", x: 0, y: 4 },
+            { label: "B", x: 5, y: 0, hideX: true, hideY: true }
+          ],
+          segments: [
+            { from: "O", to: "A" },
+            { from: "O", to: "B" },
+            { from: "A", to: "B" }
+          ],
+          polygons: [{ verts: ["A", "O", "B"] }],
+          rightAngles: [{ at: "O", from: "A", to: "B" }],
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 16. AOB משולש ישר-זווית בראשית הצירים. שיעורי הנקודה A הם (0;4). שטח המשולש 10.\nמצאו את אורך הצלע AO.",
+              taskIds: ["OA"]
+            },
+            {
+              label: "ב",
+              text: "מצאו את אורך הצלע OB ואת שיעורי הנקודה B.",
+              taskIds: ["OB", "B"]
+            }
+          ],
+          tasks: [
+            { id: "OA", kind: "origin", point: "A" },
+            {
+              id: "OB",
+              kind: "origin",
+              point: "B",
+              fromArea: {
+                label: "S△AOB",
+                verts: ["A", "O", "B"],
+                value: 10,
+                legs: [
+                  ["B", "O"],
+                  ["A", "O"]
+                ],
+                unknown: ["B", "O"]
+              }
+            },
+            {
+              id: "B",
+              kind: "point",
+              point: "B",
+              label: "B",
+              missing: "both",
+              intercept: "x",
+              answerX: 5,
+              answerY: 0
+            }
+          ]
+        },
+        {
+          n: 17,
+          givenText: "AB מקביל לציר ה-y. AO=4. שטח המשולש ABO הוא 20",
+          givenArea: { verts: ["A", "B", "O"], value: 20, label: "S△ABO" },
+          givenLengths: [{ from: "A", to: "O", len: 4 }],
+          showSegments: true,
+          showAxisGuides: false,
+          points: [
+            { label: "A", x: 4, y: 0, hideX: true, hideY: true },
+            { label: "B", x: 4, y: 10, hideX: true, hideY: true }
+          ],
+          segments: [
+            { from: "O", to: "A" },
+            { from: "A", to: "B" },
+            { from: "B", to: "O" }
+          ],
+          polygons: [{ verts: ["A", "B", "O"] }],
+          rightAngles: [{ at: "A", from: "O", to: "B" }],
+          parts: [
+            {
+              label: "א",
+              text: "תרגיל 17. הצלע AB מקבילה לציר ה-y. אורך הקטע AO הוא 4. שטח המשולש ABO הוא 20.\nמצאו את אורך הקטע AB.",
+              taskIds: ["AB"]
+            },
+            {
+              label: "ב",
+              text: "הנקודה A נמצאת על ציר ה-x. מצאו את שיעורי הנקודות A ו־B.",
+              taskIds: ["A", "B"]
+            }
+          ],
+          tasks: [
+            {
+              id: "AB",
+              kind: "segment",
+              from: "A",
+              to: "B",
+              fromArea: {
+                label: "S△ABO",
+                verts: ["A", "B", "O"],
+                value: 20,
+                legs: [
+                  ["A", "B"],
+                  ["A", "O"]
+                ],
+                unknown: ["A", "B"]
+              }
+            },
+            {
+              id: "A",
+              kind: "point",
+              point: "A",
+              label: "A",
+              missing: "both",
+              intercept: "x",
+              answerX: 4,
+              answerY: 0
+            },
+            {
+              id: "B",
+              kind: "point",
+              point: "B",
+              label: "B",
+              missing: "both",
+              twinX: "A",
+              answerX: 4,
+              answerY: 10
             }
           ]
         }

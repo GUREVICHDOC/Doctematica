@@ -147,6 +147,36 @@
   stroke: none;
 }
 
+.coord-area-s {
+  fill: #24553a;
+  font-family: "Frank Ruhl Libre", "Times New Roman", serif;
+  font-size: 15px;
+  font-weight: 700;
+  direction: ltr;
+  unicode-bidi: isolate;
+  paint-order: stroke fill;
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-width: 4px;
+  pointer-events: none;
+}
+
+.coord-seg-len-wrap {
+  pointer-events: none;
+}
+
+.coord-seg-len {
+  fill: #14241a;
+  font-family: "Frank Ruhl Libre", "Times New Roman", serif;
+  font-size: 13px;
+  font-weight: 700;
+  direction: ltr;
+  unicode-bidi: isolate;
+  paint-order: stroke fill;
+  stroke: rgba(255, 255, 255, 0.94);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
 .coord-right-angle {
   stroke: var(--ink, #14241a);
   stroke-width: 1.5;

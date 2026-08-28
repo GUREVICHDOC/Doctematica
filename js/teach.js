@@ -1474,9 +1474,111 @@
     return L;
   }
 
+  function densOfSide(side) {
+    return splitRawTerms(side).map(termDen);
+  }
+
+  function allDensEq(dens, d) {
+    return dens.length > 0 && dens.every(function (x) {
+      return x === d;
+    });
+  }
+
+  function isBareXOverNumber(side) {
+    var t = String(side || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "");
+    return /^\(?(x\^2|x²|x)\)?\/(\d+(?:\.\d+)?)$/i.test(t);
+  }
+
+  function isPlainNumberSideEarly(side) {
+    var t = String(side || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "");
+    return /^-?\d+(\.\d+)?$/.test(t) || /^-?\d+\/\d+$/.test(t) || /^\(-?\d+\/\d+\)$/.test(t);
+  }
+
+  /**
+   * מכנה מספרי רק בצד אחד (הצד השני בלי שברים).
+   * הצעד המומלץ: כפל שני האגפים במכנה — לא מכנה משותף.
+   * מחזיר את המכנה D, או null.
+   */
+  function oneSidedNumericDenom(eqText) {
+    var sides = splitEq(eqText);
+    if (!sides) return null;
+    if (eqHasVarDenom(eqText)) return null;
+    if (isSimpleCoeffFracEq(sides)) return null;
+    if (
+      /^\s*(x\^2|x²|x)\s*$/i.test(sides.left) ||
+      /^\s*(x\^2|x²|x)\s*$/i.test(sides.right)
+    ) {
+      return null;
+    }
+    if (isBareXOverNumber(sides.left) && isPlainNumberSideEarly(sides.right)) return null;
+    if (isBareXOverNumber(sides.right) && isPlainNumberSideEarly(sides.left)) return null;
+    var denL = densOfSide(sides.left);
+    var denR = densOfSide(sides.right);
+    var D = 0;
+    if (allDensEq(denL, 1) && denR.length && denR.every(function (d) {
+      return d > 1;
+    }) && allDensEq(denR, denR[0])) {
+      D = denR[0];
+    } else if (
+      allDensEq(denR, 1) &&
+      denL.length &&
+      denL.every(function (d) {
+        return d > 1;
+      }) &&
+      allDensEq(denL, denL[0])
+    ) {
+      D = denL[0];
+    } else {
+      return null;
+    }
+    return D > 1 ? D : null;
+  }
+
+  function unwrapSimpleProductParens(s) {
+    var t = String(s || "").trim();
+    var m = t.match(/^\(([^()]+)\)$/);
+    if (!m) return s;
+    var inner = m[1].replace(/×/g, "*").replace(/\s+/g, "");
+    if (/[+\-]/.test(inner.replace(/^-/, ""))) return s;
+    var p = inner.match(/^(\d+(?:\.\d+)?)\*([xyXY])$/);
+    if (p) return p[1] + p[2];
+    var p2 = inner.match(/^([xyXY])\*(\d+(?:\.\d+)?)$/);
+    if (p2) return p2[2] + p2[1];
+    return inner;
+  }
+
+  function oneSidedDenomClearStep(eqText, decimals) {
+    var D = oneSidedNumericDenom(eqText);
+    if (!D) return null;
+    var sides = splitEq(eqText);
+    var left = joinPrettyParts(
+      splitRawTerms(sides.left).map(function (t) {
+        return unwrapSimpleProductParens(clearTermDen(t, D));
+      })
+    );
+    var right = joinPrettyParts(
+      splitRawTerms(sides.right).map(function (t) {
+        return unwrapSimpleProductParens(clearTermDen(t, D));
+      })
+    );
+    var next = left + " = " + right;
+    if (key(next) === key(eqText)) return null;
+    var denShow = fmt(D, decimals);
+    return {
+      eq: next,
+      hint: "כפלו את שני האגפים במכנה " + denShow + ". המכנה רק בצד אחד — אין צורך במכנה משותף.",
+      explain: "מעבירים את המכנה " + denShow + " בכפל לשני האגפים.",
+    };
+  }
+
   function analyzeLcdNeed(eqText) {
     var sides = splitEq(eqText);
     if (!sides) return null;
+    if (oneSidedNumericDenom(eqText)) return null;
     if (
       /^\s*x\s*$/i.test(sides.left) ||
       /^\s*x\s*$/i.test(sides.right) ||
@@ -2004,6 +2106,9 @@
           }
         : { done: true, hint: "המשוואה כבר פתורה: x מבודד ומחושב." };
     }
+
+    var oneSideClear = oneSidedDenomClearStep(eqText, decimals);
+    if (oneSideClear) return oneSideClear;
 
     var lcdAct = unknownKind === "x2" && (kind === "unreduced" || kind === "expr") ? null : lcdStep(eqText, decimals);
     if (lcdAct) return lcdAct;

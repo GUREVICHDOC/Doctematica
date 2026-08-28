@@ -494,7 +494,106 @@
     return m ? m[1].trim() : null;
   }
 
+  function packLineEntries(pack) {
+    if (pack && pack.lines && pack.lines.length) return pack.lines;
+    if (pack && pack.line) return [{ key: "L", label: "", line: pack.line }];
+    return [];
+  }
+
+  function pointOnLineRaw(raw, x, y) {
+    var L = parseLineSpec(raw);
+    if (!L) return false;
+    if (L.vertical != null) return nearNum(L.vertical, x);
+    return nearNum(lineYAt(raw, x), y);
+  }
+
+  function linesThroughPoint(pack, x, y) {
+    return packLineEntries(pack).filter(function (e) {
+      return e && e.line && pointOnLineRaw(e.line, x, y);
+    });
+  }
+
+  function linesThroughTask(pack, task) {
+    if (!task || task.answerX == null || task.answerY == null) return [];
+    return linesThroughPoint(pack, task.answerX, task.answerY);
+  }
+
+  function interceptPlugScore(raw, axis) {
+    var L = parseLineSpec(raw);
+    if (!L) return 1000;
+    var s = 0;
+    if (raw.implicit) s += 40;
+    if (lineMbNeedsUnsorted(raw)) s += 40;
+    if (L.md && L.md > 1) s += 15;
+    if (String(axis || "") === "y") {
+      if (L.m < 0) s += 1;
+      if (!nearNum(L.b, Math.round(L.b))) s += 8;
+      return s;
+    }
+    if (near0(L.m)) return 500;
+    if (!nearNum(Math.abs(L.m), 1)) s += 5;
+    if (L.m < 0) s += 2;
+    var xv = -L.b / L.m;
+    if (!nearNum(xv, Math.round(xv))) s += 10;
+    return s;
+  }
+
+  function preferredInterceptLine(pack, task) {
+    var thru = linesThroughTask(pack, task);
+    if (!thru.length) return null;
+    var axis = nearNum(task.answerX, 0) ? "y" : nearNum(task.answerY, 0) ? "x" : null;
+    if (!axis) return thru[0];
+    return thru.slice().sort(function (a, b) {
+      var da = interceptPlugScore(a.line, axis);
+      var db = interceptPlugScore(b.line, axis);
+      if (da !== db) return da - db;
+      if (task.lineKey === a.key) return -1;
+      if (task.lineKey === b.key) return 1;
+      return 0;
+    })[0];
+  }
+
+  function looksLikeTwoSidedXEquate(typed) {
+    var t = String(typed || "").replace(/[−–—]/g, "-");
+    var i = t.indexOf("=");
+    if (i < 0) return false;
+    var left = t.slice(0, i);
+    var right = t.slice(i + 1);
+    if (right.indexOf("=") >= 0) return false;
+    return /x/i.test(left) && /x/i.test(right);
+  }
+
+  function equateCanonicalForKeys(pack, progress, keys) {
+    if (!keys || keys.length < 2) return "";
+    var raw0 = intersectLineRaw(pack, keys[0]);
+    var raw1 = intersectLineRaw(pack, keys[1]);
+    var rhs0 = slopeInterceptRhsText(intersectDisplayEq(pack, progress, keys[0]), raw0);
+    var rhs1 = slopeInterceptRhsText(intersectDisplayEq(pack, progress, keys[1]), raw1);
+    if (!rhs0 || !rhs1) return "";
+    return rhs0 + " = " + rhs1;
+  }
+
+  function matchEquatePair(typed, pack, progress, thru) {
+    if (!looksLikeTwoSidedXEquate(typed) || !thru || thru.length < 2) return null;
+    var i;
+    var j;
+    for (i = 0; i < thru.length; i++) {
+      for (j = i + 1; j < thru.length; j++) {
+        var ab = equateCanonicalForKeys(pack, progress, [thru[i].key, thru[j].key]);
+        var ba = equateCanonicalForKeys(pack, progress, [thru[j].key, thru[i].key]);
+        if (ab && intersectEquateEquivalent(typed, ab)) return [thru[i].key, thru[j].key];
+        if (ba && intersectEquateEquivalent(typed, ba)) return [thru[j].key, thru[i].key];
+      }
+    }
+    return null;
+  }
+
   function intersectEquateCanonical(pack, progress) {
+    var keys = progress && progress.intersect && progress.intersect.keys;
+    if (keys && keys.length >= 2) {
+      var keyed = equateCanonicalForKeys(pack, progress, keys);
+      if (keyed) return keyed;
+    }
     var lines = intersectLines(pack);
     if (lines.length < 2) return "";
     var rhs0 = slopeInterceptRhsText(intersectDisplayEq(pack, progress, lines[0].key), lines[0].line);
@@ -525,6 +624,11 @@
     var intr = (progress && progress.intersect) || {};
     if (intr.xDone) return true;
     var task = openLineIntersectTask(pack, progress);
+    if (!task && intr.taskId) {
+      task = (pack.tasks || []).filter(function (t) {
+        return t.id === intr.taskId;
+      })[0];
+    }
     if (!task) return false;
     var cf = progress.coords && progress.coords[task.id];
     return !!(cf && cf.x);
@@ -747,8 +851,16 @@
 
   function lineMatchPanelData(pack, progress) {
     progress = progress || {};
-    var tasks = (pack.tasks || []).filter(function (t) {
-      return t.kind === "lineMatch";
+    var partTasks = lineMatchPartTasks(pack, progress);
+    var tasks = (partTasks.length
+      ? partTasks
+      : (pack.tasks || []).filter(function (t) {
+          return t.kind === "lineMatch";
+        })
+    ).slice().sort(function (a, b) {
+      var na = a.eqNum == null ? 999 : a.eqNum;
+      var nb = b.eqNum == null ? 999 : b.eqNum;
+      return na - nb;
     });
     var lineOpts = lineMatchLineItems(pack).map(function (it) {
       return { key: it.key, label: it.label || it.key };
@@ -796,8 +908,6 @@
 
   function lineMatchInferRemaining(pack, progress) {
     var pending = lineMatchPendingPartTasks(pack, progress);
-    if (pending.length !== 1) return null;
-    var task = pending[0];
     var used = lineMatchUsedLines(progress, null);
     var unused = lineMatchLineItems(pack)
       .map(function (it) {
@@ -806,11 +916,12 @@
       .filter(function (k) {
         return k && !used[k];
       });
-    if (task.answerKey === "none") {
-      if (!unused.length) return { taskId: task.id, lineKey: "none", task: task };
-      return null;
-    }
-    if (unused.length === 1 && unused[0] === task.answerKey) {
+    // 3 משוואות / 2 ישרים: אחרי שיוך אחד נשארות שתי משוואות לישר אחד — עדיין יש הסחה.
+    // משלימים אוטומטית רק כשנשארה משוואה אחת וישר אחד שמתאימים.
+    if (pending.length !== 1 || unused.length !== 1) return null;
+    var task = pending[0];
+    if (task.answerKey === "none") return null;
+    if (unused[0] === task.answerKey) {
       return { taskId: task.id, lineKey: task.answerKey, task: task };
     }
     return null;
@@ -979,9 +1090,13 @@
   }
 
   function lineMatchOneStep(pack, progress) {
-    var tasks = (pack.tasks || []).filter(function (t) {
-      return t.kind === "lineMatch" && !(progress.done && progress.done[t.id]);
-    });
+    var tasks = lineMatchPendingPartTasks(pack, progress)
+      .slice()
+      .sort(function (a, b) {
+        var na = a.eqNum == null ? 999 : a.eqNum;
+        var nb = b.eqNum == null ? 999 : b.eqNum;
+        return na - nb;
+      });
     if (!tasks.length) return null;
     var task = tasks[0];
     var row = lineMatchRowState(progress, task.id);
@@ -1131,13 +1246,35 @@
   function checkLineIntersect(typed, parsed, pack, progress, pending, doneMap, partialMap, coordsMap) {
     var hits = preferPartTasks(
       pending.filter(function (t) {
-        return t.kind === "lineIntersect";
+        if (t.kind === "lineIntersect") return true;
+        if (t.kind !== "point") return false;
+        if (progress.intersect && progress.intersect.taskId === t.id) return true;
+        return linesThroughTask(pack, t).length >= 2 && looksLikeTwoSidedXEquate(typed);
       }),
       pack,
       progress
     );
     if (!hits.length) return null;
     var phit = hits[0];
+    if (phit.kind === "point" && !(progress.intersect && progress.intersect.taskId === phit.id)) {
+      var matchPt = null;
+      var partPts = preferPartTasks(
+        pending.filter(function (t) {
+          return t.kind === "point";
+        }),
+        pack,
+        progress
+      );
+      var mpi;
+      for (mpi = 0; mpi < partPts.length; mpi++) {
+        if (matchEquatePair(typed, pack, progress, linesThroughTask(pack, partPts[mpi]))) {
+          matchPt = partPts[mpi];
+          break;
+        }
+      }
+      if (!matchPt) return null;
+      phit = matchPt;
+    }
     var stage = intersectStage(pack, progress);
     var maps = cloneMaps(doneMap, partialMap, coordsMap, progress);
     if (!maps.coords[phit.id]) maps.coords[phit.id] = { x: false, y: false };
@@ -1192,13 +1329,21 @@
     }
 
     if (stage.stage === "equate") {
-      var canonical = intersectEquateCanonical(pack, progress);
+      if (phit.kind === "point") {
+        var thruEq = linesThroughTask(pack, phit);
+        var pairEq = matchEquatePair(typed, pack, progress, thruEq);
+        if (!pairEq) return null;
+        intr.keys = pairEq;
+        intr.taskId = phit.id;
+      }
+      var canonical = intersectEquateCanonical(pack, Object.assign({}, progress, { intersect: intr }));
       if (intersectEquateEquivalent(typed, canonical)) {
         intr.equated = true;
         intr.equateExpr = canonical;
         intr.lastExpr = prettyRearrangeStep(typed);
         maps.partial[phit.id] = true;
-        return resPartial(intr.lastExpr, "נכון. עכשיו פתרו את המשוואה ומצאו את x.", {
+        maps.lastExpr[phit.id] = intr.lastExpr;
+        return resPartial(intr.lastExpr, "נכון. זו השוואה בין הישרים. עכשיו פתרו ומצאו את x.", {
           rawStep: true,
           userStep: intr.lastExpr,
         });
@@ -1231,6 +1376,7 @@
       if (parsed && parsed.kind === "point") {
         return null;
       }
+      if (phit.kind === "point") return null;
       return {
         ok: false,
         message: "השוו בין שני הישרים: " + canonical + ".",
@@ -1601,11 +1747,8 @@
     if (!L) return "";
     if (L.vertical != null && nearNum(y, 0)) return "x = " + fmtNum(L.vertical);
     var left = fmtNum(y);
-    var xs;
-    if (near0(L.m)) xs = "0";
-    else if (nearNum(L.m, 1)) xs = "x";
-    else if (nearNum(L.m, -1)) xs = "−x";
-    else xs = (L.m < 0 ? "−" + fmtNum(-L.m) : fmtNum(L.m)) + "x";
+    var xs = slopeInterceptXTerm(L);
+    if (!xs) xs = "0";
     if (near0(L.b)) return left + " = " + xs;
     if (L.b > 0) return left + " = " + xs + " + " + fmtNum(L.b);
     return left + " = " + xs + " − " + fmtNum(-L.b);
@@ -1618,6 +1761,26 @@
     if (t.indexOf("=") < 0) return false;
     if (/[xyXY]=-?\d/.test(t) && !/[xX]/.test(t.replace(/^[yY]=/, ""))) return false;
     return /x/i.test(t);
+  }
+
+  function eqIsBareAxis(s, axis) {
+    var t = String(s || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "");
+    if (!t) return false;
+    if (String(axis || "").toLowerCase() === "y") return /^y=/i.test(t) && !/[xX]/.test(t);
+    return /^x=/i.test(t) && !/[yY]/.test(t);
+  }
+
+  function firstUnknownAxis(task, cf) {
+    cf = cf || {};
+    if (cf.x && !cf.y) return "y";
+    if (cf.y && !cf.x) return "x";
+    if (task && task.twinY && !task.twinX) return "y";
+    if (task && task.twinX && !task.twinY) return "x";
+    var miss = String((task && task.missing) || "x").toLowerCase();
+    if (miss === "y" || miss === "x") return miss;
+    return "x";
   }
 
   function normEqText(s) {
@@ -1714,6 +1877,15 @@
   }
 
   function lineForPointTask(pack, progress, task) {
+    var route = progress && progress.pointRoute && task && progress.pointRoute[task.id];
+    if (route && route.lineKey) {
+      var routed = intersectLineRaw(pack, route.lineKey);
+      if (routed) return routed;
+    }
+    if (task && (task.intercept === "y" || task.intercept === "x")) {
+      var pref = preferredInterceptLine(pack, task);
+      if (pref && pref.line) return pref.line;
+    }
     if (task && task.lineKey && pack && pack.lines && pack.lines.length) {
       return intersectLineRaw(pack, task.lineKey);
     }
@@ -1724,6 +1896,13 @@
   }
 
   function lineForTask(pack, taskId) {
+    var task = (pack.tasks || []).filter(function (t) {
+      return t.id === taskId;
+    })[0];
+    if (task && task.lineKey && pack && pack.lines && pack.lines.length) {
+      var keyed = intersectLineRaw(pack, task.lineKey);
+      if (keyed) return keyed;
+    }
     var found = null;
     (pack.parts || []).some(function (p) {
       if ((p.taskIds || []).indexOf(taskId) >= 0) {
@@ -1928,7 +2107,9 @@
 
   function areaFormulaHint(task) {
     if (areaShape(task) === "rect") return "שטח מלבן: אורך×רוחב.";
-    return "שטח משולש ישר־זווית: (רגל×רגל)/2.";
+    var body = canonicalAreaBody(task);
+    if (body) return "שטח משולש: " + body + ".";
+    return "שטח משולש: (בסיס×גובה)/2.";
   }
 
   function areaUsesSumCanonical(task) {
@@ -2229,8 +2410,358 @@
     return m[1] + " + " + fmtNum(-lo);
   }
 
+  function fromAreaUnknownNames(task) {
+    var fa = task && task.fromArea ? task.fromArea : {};
+    var a;
+    var b;
+    if (fa.unknown && fa.unknown.length >= 2) {
+      a = String(fa.unknown[0] || "").toUpperCase();
+      b = String(fa.unknown[1] || "").toUpperCase();
+    } else if (task && task.kind === "origin") {
+      a = "O";
+      b = String(task.point || "").toUpperCase();
+    } else {
+      a = String((task && task.from) || "").toUpperCase();
+      b = String((task && task.to) || "").toUpperCase();
+    }
+    return [a + b, b + a].filter(function (n) {
+      return n.length >= 2;
+    });
+  }
+
+  function fromAreaKnownLeg(task, pack) {
+    var fa = task && task.fromArea ? task.fromArea : {};
+    var unk = fromAreaUnknownNames(task);
+    var legs = fa.legs || [];
+    var i;
+    for (i = 0; i < legs.length; i++) {
+      var n = String(legs[i][0] || "").toUpperCase() + String(legs[i][1] || "").toUpperCase();
+      var rev = String(legs[i][1] || "").toUpperCase() + String(legs[i][0] || "").toUpperCase();
+      if (unk.indexOf(n) >= 0 || unk.indexOf(rev) >= 0) continue;
+      var len = legLength(pack && pack.map, legs[i][0], legs[i][1]);
+      if (len == null || !isFinite(len)) continue;
+      return { name: n, rev: rev, len: len };
+    }
+    return null;
+  }
+
+  function fromAreaLetterBody(task) {
+    var fa = task && task.fromArea ? task.fromArea : {};
+    return canonicalAreaBody({
+      kind: "area",
+      verts: fa.verts,
+      legs: fa.legs,
+    });
+  }
+
+  function fromAreaPlugEq(task, pack, useX) {
+    var fa = task.fromArea || {};
+    var known = fromAreaKnownLeg(task, pack);
+    var unk = useX ? "x" : fromAreaUnknownNames(task)[0];
+    if (!known) return fmtNum(fa.value) + "=" + unk;
+    return fmtNum(fa.value) + "=(" + unk + "×" + fmtNum(known.len) + ")/2";
+  }
+
+  function fromAreaCanonicalSteps(task, pack) {
+    var fa = task.fromArea || {};
+    var label = fa.label || areaTriangleName(fa.verts);
+    var letters = fromAreaLetterBody(task);
+    var unk = fromAreaUnknownNames(task)[0];
+    var out = [];
+    if (letters) out.push(label + "=" + letters);
+    out.push(fromAreaPlugEq(task, pack, false));
+    var eqX = fromAreaPlugEq(task, pack, true).replace(/×/g, "*");
+    var guard = 0;
+    while (guard++ < 10) {
+      var nxt = teachLinearNext(eqX);
+      if (!nxt || !nxt.eq) break;
+      var shown = xEqBackToUnknown(nxt.eq, unk);
+      if (out[out.length - 1] === shown) break;
+      out.push(shown);
+      eqX = String(nxt.eq).replace(/×/g, "*");
+      if (/^\s*x\s*=\s*-?[\d.]/i.test(String(nxt.eq).replace(/\s+/g, ""))) break;
+    }
+    var last = out[out.length - 1] || "";
+    if (!new RegExp("^" + unk + "=" + fmtNum(task.answer) + "$", "i").test(last.replace(/\s+/g, ""))) {
+      out.push(unk + "=" + fmtNum(task.answer));
+    }
+    return out;
+  }
+
+  function fromAreaToXEq(s, task, pack) {
+    var t = normalizeZeroAsO(String(s || ""))
+      .replace(/[−–—]/g, "-")
+      .replace(/×|·/g, "*")
+      .replace(/\s+/g, "");
+    t = t.replace(/^S(?:△|Δ)?[A-Z]{3}(?:=|:)/i, "");
+    var known = fromAreaKnownLeg(task, pack);
+    if (known) {
+      t = t.replace(new RegExp(known.name, "gi"), fmtNum(known.len));
+      t = t.replace(new RegExp(known.rev, "gi"), fmtNum(known.len));
+    }
+    fromAreaUnknownNames(task).forEach(function (n) {
+      t = t.replace(new RegExp(n, "gi"), "x");
+    });
+    return t;
+  }
+
+  function fromAreaHasLetterKnown(s, task, pack) {
+    var t = normalizeZeroAsO(prettyAreaExpr(s));
+    var known = fromAreaKnownLeg(task, pack);
+    if (!known) return false;
+    return new RegExp(known.name, "i").test(t) || new RegExp(known.rev, "i").test(t);
+  }
+
+  function fromAreaHasUnknownLetter(s, task) {
+    var t = normalizeZeroAsO(prettyAreaExpr(s));
+    return fromAreaUnknownNames(task).some(function (n) {
+      return new RegExp(n, "i").test(t);
+    });
+  }
+
+  function fromAreaHasX(s) {
+    var t = String(s || "").replace(/×/g, "*");
+    return /(^|[^A-Za-z])x([^A-Za-z]|$)/i.test(t);
+  }
+
+  function fromAreaLooksLikeFormula(s, task, pack) {
+    var t = prettyAreaExpr(s);
+    if (!/\//.test(t) && !/÷/.test(t)) return false;
+    return fromAreaHasUnknownLetter(s, task) && fromAreaHasLetterKnown(s, task, pack);
+  }
+
+  function fromAreaLooksLikeAttempt(s, task, pack) {
+    var t = String(s || "");
+    if (fromAreaLooksLikeFormula(s, task, pack)) return true;
+    if (fromAreaHasUnknownLetter(s, task) || fromAreaHasX(s)) return true;
+    if (/^S(?:△|Δ)?[A-Z]{3}/i.test(prettyAreaExpr(t)) && task.fromArea) return true;
+    return false;
+  }
+
+  function xEqBackToUnknown(eq, unkName) {
+    return String(eq || "").replace(/\bx\b/gi, unkName);
+  }
+
+  function pendingFromAreaTasks(pending, pack, progress) {
+    return preferPartTasks(
+      (pending || []).filter(function (t) {
+        return t && t.fromArea && (t.kind === "segment" || t.kind === "origin");
+      }),
+      pack,
+      progress
+    );
+  }
+
+  function finishFromAreaLen(task, show, doneMap, partialMap, coordsMap, pack, progress) {
+    var nextDone = {};
+    Object.keys(doneMap).forEach(function (k) {
+      nextDone[k] = true;
+    });
+    nextDone[task.id] = true;
+    var nextPartial = {};
+    Object.keys(partialMap).forEach(function (k) {
+      if (k !== task.id) nextPartial[k] = true;
+    });
+    var nextExpr = {};
+    Object.keys((progress && progress.lastExpr) || {}).forEach(function (k) {
+      if (k !== task.id) nextExpr[k] = progress.lastExpr[k];
+    });
+    var left = remainingRequired(pack, nextDone);
+    return {
+      ok: true,
+      solved: left.length === 0,
+      done: nextDone,
+      partial: nextPartial,
+      coords: coordsMap,
+      lastExpr: nextExpr,
+      task: task,
+      show: show || task.label + "=" + fmtNum(task.answer),
+      message: left.length ? "נכון. המשיכו לסעיף הבא." : "כל החלקים נפתרו.",
+    };
+  }
+
+  function partialFromArea(task, show, msg, doneMap, partialMap, coordsMap, progress) {
+    var maps = cloneMaps(doneMap, partialMap, coordsMap, progress);
+    maps.partial[task.id] = true;
+    maps.lastExpr[task.id] = show;
+    return {
+      ok: true,
+      solved: false,
+      done: maps.done,
+      partial: maps.partial,
+      coords: maps.coords,
+      lastExpr: maps.lastExpr,
+      task: task,
+      show: show,
+      rawStep: true,
+      message: msg,
+    };
+  }
+
+  function checkSegFromArea(typed, parsed, pack, progress, pending, doneMap, partialMap, coordsMap) {
+    var tasks = pendingFromAreaTasks(pending, pack, progress);
+    if (!tasks.length) return null;
+    var task = tasks[0];
+    if (parsed && parsed.kind === "point") return null;
+    var raw = String(typed || "").trim();
+    if (!raw) return null;
+
+    if (
+      parsed &&
+      parsed.value != null &&
+      isFinite(parsed.value) &&
+      nearNum(parsed.value, task.answer) &&
+      (parsed.kind === "final" || parsed.kind === "full") &&
+      !fromAreaLooksLikeAttempt(raw, task, pack)
+    ) {
+      var tagOk = !parsed.tag || taskMatchesTag(task, parsed.tag);
+      if (tagOk) {
+        return finishFromAreaLen(
+          task,
+          task.label + "=" + fmtNum(task.answer),
+          doneMap,
+          partialMap,
+          coordsMap,
+          pack,
+          progress
+        );
+      }
+    }
+
+    if (!fromAreaLooksLikeAttempt(raw, task, pack) && !(parsed && parsed.tag && taskMatchesTag(task, parsed.tag))) {
+      return null;
+    }
+
+    var pretty = prettyAreaExpr(raw);
+    var unk = fromAreaUnknownNames(task)[0];
+    var known = fromAreaKnownLeg(task, pack);
+    var fa = task.fromArea || {};
+    var xEq = fromAreaToXEq(raw, task, pack);
+    var Algebra = global.DoctematicaAlgebra;
+
+    var iso = String(xEq || "").match(/^x=(.+)$/i) || String(xEq || "").match(/^(.+)=x$/i);
+    if (iso) {
+      var isoV = parseNumberToken(iso[1]) || evalArithExpr(iso[1]);
+      if (isoV != null && nearNum(isoV, task.answer)) {
+        var isoShow = fromAreaHasX(raw) ? pretty : unk + "=" + fmtNum(task.answer);
+        return finishFromAreaLen(task, isoShow, doneMap, partialMap, coordsMap, pack, progress);
+      }
+    }
+
+    if (fromAreaLooksLikeFormula(raw, task, pack)) {
+      var formShow = pretty.indexOf("=") >= 0 ? pretty : (fa.label || "S") + "=" + pretty;
+      return partialFromArea(
+        task,
+        formShow,
+        "נכון. עכשיו הציבו את השטח " +
+          fmtNum(fa.value) +
+          " ואת " +
+          (known ? known.name + "=" + fmtNum(known.len) : "הצלע הידועה") +
+          ", והשאירו את " +
+          unk +
+          " כנעלם (אפשר גם x).",
+        doneMap,
+        partialMap,
+        coordsMap,
+        progress
+      );
+    }
+
+    function isolatedXValue(eq) {
+      var bits = String(eq || "").split("=");
+      if (bits.length < 2) return null;
+      var L = bits[0];
+      var R = bits[bits.length - 1];
+      if (/^x$/i.test(L)) return parseNumberToken(R) || evalArithExpr(R);
+      if (/^x$/i.test(R)) return parseNumberToken(L) || evalArithExpr(L);
+      return null;
+    }
+    function showFromAreaEq() {
+      if (fromAreaHasX(raw) && !fromAreaHasUnknownLetter(raw, task)) return pretty;
+      return pretty;
+    }
+    function acceptPlugOrSolve(res, fallbackMsg) {
+      if (!res) return null;
+      if (res.same || res.ok) {
+        var solN = isolatedXValue(xEq);
+        if ((res.solved || solN != null) && solN != null && nearNum(solN, task.answer)) {
+          return finishFromAreaLen(task, pretty, doneMap, partialMap, coordsMap, pack, progress);
+        }
+        if (res.ok || res.same) {
+          return partialFromArea(
+            task,
+            showFromAreaEq(),
+            res.same
+              ? "נכון. פתרו את המשוואה — הנעלם הוא " + unk + " (אפשר גם x)."
+              : res.message || fallbackMsg,
+            doneMap,
+            partialMap,
+            coordsMap,
+            progress
+          );
+        }
+      }
+      return null;
+    }
+
+    var prev = progress.lastExpr && progress.lastExpr[task.id];
+    var plugCanon = fromAreaPlugEq(task, pack, true).replace(/×/g, "*");
+    var hasEq = /=/.test(xEq);
+    if (hasEq && Algebra && typeof Algebra.checkStep === "function") {
+      var prevX = prev ? fromAreaToXEq(prev, task, pack) : plugCanon;
+      if (!/=/.test(String(prevX))) prevX = plugCanon;
+      var accepted = null;
+      try {
+        accepted = acceptPlugOrSolve(
+          Algebra.checkStep(prevX, xEq),
+          "צעד חוקי. המשיכו לבודד את " + unk + " (או x)."
+        );
+      } catch (e) {}
+      if (accepted) return accepted;
+      if (!prev || fromAreaLooksLikeFormula(prev, task, pack)) {
+        try {
+          accepted = acceptPlugOrSolve(
+            Algebra.checkStep(plugCanon, xEq),
+            "נכון. פתרו את המשוואה — הנעלם הוא " + unk + " (אפשר גם x)."
+          );
+        } catch (e2) {}
+        if (accepted) return accepted;
+      }
+    }
+
+    if (parsed && parsed.value != null && nearNum(parsed.value, task.answer) && taskMatchesTag(task, parsed.tag)) {
+      return finishFromAreaLen(
+        task,
+        task.label + "=" + fmtNum(task.answer),
+        doneMap,
+        partialMap,
+        coordsMap,
+        pack,
+        progress
+      );
+    }
+
+    return {
+      ok: false,
+      message:
+        "רשמו את נוסחת השטח " +
+        (fa.label || "S") +
+        "=" +
+        (fromAreaLetterBody(task) || "(צלע×צלע)/2") +
+        ", או הציבו ישר " +
+        fromAreaPlugEq(task, pack, false) +
+        ". הנעלם הוא " +
+        unk +
+        " (אפשר גם x).",
+    };
+  }
+
   /** שרשרת פתרון בשורה אחת: גדול פחות קטן = פישוט = תוצאה */
   function canonicalDiffChain(task, map) {
+    if (task && task.fromArea) {
+      var stepsFa = fromAreaCanonicalSteps(task, { map: map });
+      return stepsFa.length ? stepsFa.join(" → ") : task.label + "=" + fmtNum(task.answer);
+    }
     var label = task.label || "";
     var body = canonicalDiffBody(task, map);
     if (!body) return canonicalStep(task, map);
@@ -2466,15 +2997,25 @@
       (Math.max.apply(null, ys4) - Math.min.apply(null, ys4));
   }
 
+  /** BO / OB / AOB — אותיות גדולות; x,y נשארים משתנים. */
+  function capsHistoryLetters(s) {
+    return String(s || "").replace(/[A-Za-z]+/g, function (w) {
+      if (/^[xy]$/i.test(w)) return w.toLowerCase();
+      return w.toUpperCase();
+    });
+  }
+
   function prettyAreaExpr(rhs) {
-    return normalizeZeroAsO(String(rhs || ""))
-      .replace(/[\u200e\u200f\u202a-\u202e]/g, "")
-      .replace(/[−–—]/g, "−")
-      .replace(/Δ/g, "△")
-      .replace(/▭/g, "□")
-      .replace(/[·•∗✕✖]/g, "×")
-      .replace(/\*/g, "×")
-      .replace(/\s+/g, "");
+    return capsHistoryLetters(
+      normalizeZeroAsO(String(rhs || ""))
+        .replace(/[\u200e\u200f\u202a-\u202e]/g, "")
+        .replace(/[−–—]/g, "−")
+        .replace(/Δ/g, "△")
+        .replace(/▭/g, "□")
+        .replace(/[·•∗✕✖]/g, "×")
+        .replace(/\*/g, "×")
+        .replace(/\s+/g, "")
+    );
   }
 
   /** (4×2)/2, (4×2)/(2), 4×2/2 ו־(2×4)/2 — אותו שלב */
@@ -2837,6 +3378,7 @@
         verts: t.verts,
         legs: t.legs,
         missing: t.missing,
+        completeWhen: t.completeWhen || null,
         intercept: t.intercept || null,
         twin: t.twin,
         twinX: t.twinX,
@@ -2862,6 +3404,7 @@
         answerKey: t.answerKey != null ? t.answerKey : null,
         drawHeight: !!t.drawHeight,
         heightFoot: heightFoot || null,
+        fromArea: t.fromArea || null,
       });
     });
     return tasks;
@@ -2944,7 +3487,8 @@
     tasks.forEach(function (t) {
       if (t.kind === "origin" && t.point) {
         var p = String(t.point).toUpperCase();
-        idAlias[p] = t.id;
+        // לא לדרוס משימת נקודה B/C במזהה OB/OC
+        if (!idAlias[p]) idAlias[p] = t.id;
         idAlias["O" + p] = t.id;
         idAlias[p + "O"] = t.id;
       }
@@ -3065,6 +3609,9 @@
         return t.kind === "lineMatch";
       }),
       showBoard: ex.showBoard !== false,
+      givenArea: ex.givenArea || null,
+      givenLengths: ex.givenLengths || null,
+      givenText: ex.givenText || null,
     };
   }
 
@@ -3111,13 +3658,36 @@
     var pending = (pack.tasks || []).filter(function (t) {
       return t.kind === "area" && !(progress.done && progress.done[t.id]);
     });
-    return pending.some(function (t) {
-      return (t.legs || []).some(function (leg) {
+    if (
+      pending.some(function (t) {
+        return (t.legs || []).some(function (leg) {
+          return (
+            leg &&
+            (String(leg[0] || "").toUpperCase() === key || String(leg[1] || "").toUpperCase() === key)
+          );
+        });
+      })
+    ) {
+      return true;
+    }
+    var part = currentPartText(pack, progress);
+    var ids = (part && part.taskIds) || [];
+    return ids.some(function (id) {
+      var t = (pack.tasks || []).filter(function (task) {
+        return task.id === id;
+      })[0];
+      if (!t || !taskUsesDrawnHeight(t, pack)) return false;
+      if (t.kind === "segment" || t.kind === "origin") {
+        var a = t.kind === "origin" ? "O" : t.from;
+        var b = t.kind === "origin" ? t.point : t.to;
         return (
-          leg &&
-          (String(leg[0] || "").toUpperCase() === key || String(leg[1] || "").toUpperCase() === key)
+          String(a || "").toUpperCase() === key || String(b || "").toUpperCase() === key
         );
-      });
+      }
+      if (t.kind === "point") {
+        return String(t.point || t.label || "").toUpperCase() === key;
+      }
+      return isDrawFootLabel(pack, key);
     });
   }
 
@@ -3422,6 +3992,46 @@
           });
         });
       }
+      if (t.kind === "segment" || t.kind === "origin") {
+        var fromLab = t.kind === "origin" ? "O" : t.from;
+        var toLab = t.kind === "origin" ? t.point : t.to;
+        var segFoot = null;
+        var segApex = null;
+        if (isDrawFootPoint(pack, toLab)) {
+          segFoot = String(toLab || "").toUpperCase();
+          segApex = String(fromLab || "").toUpperCase();
+        } else if (isDrawFootPoint(pack, fromLab)) {
+          segFoot = String(fromLab || "").toUpperCase();
+          segApex = String(toLab || "").toUpperCase();
+        }
+        if (segFoot && segApex) {
+          var baseFromArea = null;
+          (pack.tasks || []).forEach(function (at) {
+            if (baseFromArea || at.kind !== "area" || !at.legs) return;
+            var hLeg = (at.legs || []).filter(function (leg) {
+              return legUsesFoot(leg, segApex) === segFoot;
+            })[0];
+            if (!hLeg) return;
+            var bLeg = (at.legs || []).filter(function (L) {
+              return L !== hLeg;
+            })[0];
+            if (!baseFromArea && bLeg && bLeg.length >= 2) {
+              baseFromArea = [
+                String(bLeg[0]).toUpperCase(),
+                String(bLeg[1]).toUpperCase(),
+              ];
+            }
+          });
+          if (baseFromArea) {
+            add({
+              from: segApex,
+              base: baseFromArea,
+              footLabel: segFoot,
+              recommended: true,
+            });
+          }
+        }
+      }
     });
     return heights;
   }
@@ -3468,15 +4078,40 @@
     });
   }
 
-  function pendingAreaNeedsDraw(pack, progress) {
-    progress = progress || {};
-    return (pack.tasks || []).some(function (t) {
-      return (
-        t.kind === "area" &&
-        !(progress.done && progress.done[t.id]) &&
-        areaNeedsDrawHeight(t, pack)
-      );
-    });
+  function taskUsesDrawnHeight(t, pack) {
+    if (!t) return false;
+    if (t.drawHeight) return true;
+    var cfg = resolveDrawConfig(pack);
+    if (!cfg || !cfg.heights || !cfg.heights.length) return false;
+    function isFoot(lab) {
+      var k = String(lab || "").toUpperCase();
+      return cfg.heights.some(function (h) {
+        return String(h.footLabel || "").toUpperCase() === k;
+      });
+    }
+    if (t.kind === "area") return areaNeedsDrawHeight(t, pack);
+    if (t.kind === "point" && isFoot(t.point || t.label)) return true;
+    if (t.kind === "axis") {
+      return !!t.drawHeight || isHeightApex(pack, t.point);
+    }
+    if (t.kind === "segment" || t.kind === "origin") {
+      var a = t.kind === "origin" ? "O" : t.from;
+      var b = t.kind === "origin" ? t.point : t.to;
+      return isFoot(a) || isFoot(b) || isFoot(t.point);
+    }
+    if (t.kind === "distSeg") {
+      var p = String(t.point || "").toUpperCase();
+      var from = String(t.from || "").toUpperCase();
+      var to = String(t.to || "").toUpperCase();
+      return cfg.heights.some(function (h) {
+        var apex = String(h.from || "").toUpperCase();
+        var base = (h.base || []).map(function (x) {
+          return String(x || "").toUpperCase();
+        });
+        return apex === p && base.indexOf(from) >= 0 && base.indexOf(to) >= 0;
+      });
+    }
+    return false;
   }
 
   function drawPartActive(pack, progress) {
@@ -3485,21 +4120,15 @@
     var part = currentPartText(pack, progress);
     var ids = (part && part.taskIds) || [];
     if (!ids.length) return false;
-    var areaNeedsDraw = pendingAreaNeedsDraw(pack, progress);
     var i;
     for (i = 0; i < ids.length; i++) {
       var t = (pack.tasks || []).filter(function (task) {
         return task.id === ids[i];
       })[0];
       if (!t) continue;
-      if (t.drawHeight) return true;
-      if (
-        areaNeedsDrawHeight(t, pack) &&
-        !(progress.done && progress.done[t.id])
-      ) {
-        return true;
-      }
-      if (areaNeedsDraw && t.kind === "axis" && isHeightApex(pack, t.point)) return true;
+      if (!taskUsesDrawnHeight(t, pack)) continue;
+      if (progress.done && progress.done[t.id]) continue;
+      return true;
     }
     return false;
   }
@@ -3565,12 +4194,12 @@
             copy.hideY = false;
             copy.revealed = true;
           }
-        } else if (!pack.line && !activeLine(pack, progress) && (cf.x || cf.y)) {
+        } else if (cf.x || cf.y) {
           if (cf.x) copy.hideX = false;
           if (cf.y) copy.hideY = false;
-        } else if (progress.partial && progress.partial[task.id] && !pack.line && !activeLine(pack, progress)) {
+        } else if (progress.partial && progress.partial[task.id]) {
           if (miss === "y") copy.hideY = false;
-          else copy.hideX = false;
+          else if (miss === "x") copy.hideX = false;
         }
       }
       if (copy.drawOnly) {
@@ -3631,6 +4260,38 @@
           if (p && foot) guides.push({ from: p, to: foot });
         });
         return guides;
+      })(),
+      areaLabels: (function () {
+        var ga = pack.givenArea;
+        if (!ga || ga.value == null) return [];
+        return [
+          {
+            verts: ga.verts || [],
+            text: "S=" + fmtNum(ga.value),
+          },
+        ];
+      })(),
+      segLabels: (function () {
+        var out = [];
+        var seen = {};
+        function addLen(from, to, len) {
+          var a = String(from || "").toUpperCase();
+          var b = String(to || "").toUpperCase();
+          if (!a || !b || len == null || !isFinite(len)) return;
+          var key = a < b ? a + "|" + b : b + "|" + a;
+          if (seen[key]) return;
+          seen[key] = true;
+          out.push({ from: a, to: b, text: fmtNum(len) });
+        }
+        (pack.givenLengths || []).forEach(function (g) {
+          addLen(g.from, g.to, g.len);
+        });
+        (pack.tasks || []).forEach(function (t) {
+          if (!progress.done || !progress.done[t.id]) return;
+          if (t.kind === "origin") addLen("O", t.point, t.answer);
+          if (t.kind === "segment") addLen(t.from, t.to, t.answer);
+        });
+        return out;
       })(),
     };
   }
@@ -4155,7 +4816,7 @@
     maps.coords[phit.id] = { x: true, y: true };
     delete maps.lastExpr[phit.id];
     var left = remainingRequired(pack, maps.done);
-    return {
+    var out = {
       ok: true,
       solved: left.length === 0,
       done: maps.done,
@@ -4169,6 +4830,10 @@
         ? "נכון. הנקודה " + phit.label + " " + pointTaskLabel(phit) + ". המשיכו."
         : "נכון. הנקודה " + phit.label + " " + pointTaskLabel(phit) + ". כל התשובות נכונות.",
     };
+    if (progress.intersect && progress.intersect.taskId === phit.id) {
+      out.intersect = {};
+    }
+    return out;
   }
 
   function checkLineYEq(typed, parsed, pack, progress, phit, doneMap, partialMap, coordsMap) {
@@ -4414,7 +5079,7 @@
           message: "אפשר לסדר את המשוואה — עכשיו הציבו y = 0 ופתרו עבור x.",
         };
       }
-    } else if (/^y=0$/i.test(normPrev)) {
+    } else if (/^y=0$/i.test(normPrev) || eqIsBareAxis(prev, "y")) {
       if (normTyped === normStart) {
         return acceptEq(start, "נכון. עכשיו פתרו את המשוואה (כמו במשוואות בנעלם אחד).");
       }
@@ -4431,7 +5096,8 @@
     if (!A || typeof A.checkStep !== "function") {
       return { ok: false, message: "פתרו את המשוואה " + start + "." };
     }
-    var res = A.checkStep(prev, typed);
+    var algebraPrev = eqIsBareAxis(prev, "y") ? start : prev;
+    var res = A.checkStep(algebraPrev, typed);
     if (!res.ok) {
       if (res.same && !(progress.lastExpr && progress.lastExpr[phit.id])) {
         return acceptEq(start, "נכון. עכשיו פתרו את המשוואה (כמו במשוואות בנעלם אחד).");
@@ -4468,6 +5134,47 @@
     return acceptEq(pretty, res.message || "צעד חוקי. המשיכו לבודד את x.");
   }
 
+  function attachPointRoute(hit, progress, taskId, route) {
+    if (!hit) return hit;
+    var next = Object.assign({}, progress.pointRoute || {});
+    next[taskId] = route;
+    hit.pointRoute = next;
+    return hit;
+  }
+
+  function checkLineEqOnThru(which, typed, parsed, pack, progress, phit, doneMap, partialMap, coordsMap) {
+    var thru = linesThroughTask(pack, phit);
+    var raw = lineForPointTask(pack, progress, phit);
+    if (!thru.length && raw) {
+      thru = [{ key: phit.lineKey || "L", line: raw }];
+    }
+    var pref = preferredInterceptLine(pack, phit);
+    var ordered = [];
+    if (pref) ordered.push(pref);
+    thru.forEach(function (e) {
+      if (!pref || e.key !== pref.key) ordered.push(e);
+    });
+    var saved = phit.lineKey;
+    var i;
+    var hit;
+    for (i = 0; i < ordered.length; i++) {
+      if (ordered[i].key) phit.lineKey = ordered[i].key;
+      hit =
+        which === "y"
+          ? checkLineYEq(typed, parsed, pack, progress, phit, doneMap, partialMap, coordsMap)
+          : checkLineXEq(typed, pack, progress, phit, doneMap, partialMap, coordsMap);
+      if (hit) {
+        if (ordered[i].key) {
+          attachPointRoute(hit, progress, phit.id, { mode: "intercept", lineKey: ordered[i].key });
+        }
+        phit.lineKey = saved;
+        return hit;
+      }
+    }
+    phit.lineKey = saved;
+    return null;
+  }
+
   function checkLinePoint(typed, parsed, pack, progress, pending, doneMap, partialMap, coordsMap) {
     var pts = preferPartTasks(
       pending.filter(function (t) {
@@ -4478,6 +5185,13 @@
     );
     var phit = pts[0];
     if (!phit) return null;
+    if (progress.intersect && progress.intersect.taskId === phit.id && !progress.intersect.yDone) {
+      return null;
+    }
+    var thruPt = linesThroughTask(pack, phit);
+    if (thruPt.length >= 2 && matchEquatePair(typed, pack, progress, thruPt)) {
+      return null;
+    }
     var rawLine = lineForPointTask(pack, progress, phit);
     if (!rawLine) return null;
     var miss = String(phit.missing || "").toLowerCase();
@@ -4497,8 +5211,21 @@
       return null;
     }
     if (cfLine.x && cfLine.y) return null;
+    // יודעים x (תאום / נתון) — מוצאים y מהישר
+    if (cfLine.x && !cfLine.y) {
+      var yAfterX = checkLineEqOnThru("y", typed, parsed, pack, progress, phit, doneMap, partialMap, coordsMap);
+      if (yAfterX) return yAfterX;
+    }
+    if (cfLine.y && !cfLine.x) {
+      var xAfterY = checkLineEqOnThru("x", typed, parsed, pack, progress, phit, doneMap, partialMap, coordsMap);
+      if (xAfterY) return xAfterY;
+    }
+    if (miss === "both" && phit.twinY && !phit.twinX && !cfLine.y && looksLikeLinearEq(typed)) {
+      var xSkipY = checkLineEqOnThru("x", typed, parsed, pack, progress, phit, doneMap, partialMap, coordsMap);
+      if (xSkipY) return xSkipY;
+    }
     if (miss === "y" && phit.intercept === "y") {
-      var yIntHit = checkLineYEq(typed, parsed, pack, progress, phit, doneMap, partialMap, coordsMap);
+      var yIntHit = checkLineEqOnThru("y", typed, parsed, pack, progress, phit, doneMap, partialMap, coordsMap);
       if (yIntHit) return yIntHit;
     }
     if (miss === "y" && looksLikeLinearEq(typed)) {
@@ -4520,29 +5247,33 @@
           message: "אפשר לסדר את המשוואה — עכשיו הציבו x = 0 ומצאו את y.",
         };
       }
-      return {
-        ok: false,
-        message:
-          "יודעים x=" +
-          fmtNum(phit.answerX) +
-          ". הציבו במשוואת הישר " +
-          prettyLineEq(L) +
-          ": y = " +
-          substYRhs(L, phit.answerX) +
-          ".",
-      };
+      if (cfLine.x) {
+        return {
+          ok: false,
+          message:
+            "יודעים x=" +
+            fmtNum(phit.answerX) +
+            ". הציבו במשוואת הישר " +
+            prettyLineEq(L) +
+            ": y = " +
+            substYRhs(L, phit.answerX) +
+            ".",
+        };
+      }
+      return null;
     }
-    if (miss === "x") {
+    if (miss === "x" && !phit.twinX) {
       var normXIn = normEqText(typed);
       var yZeroTry = /^y=0$/i.test(normXIn);
       var hasXProg = !!(progress.lastExpr && progress.lastExpr[phit.id]);
       if (looksLikeLinearEq(typed) || yZeroTry || hasXProg) {
-        var xLineHit = checkLineXEq(typed, pack, progress, phit, doneMap, partialMap, coordsMap);
+        var xLineHit = checkLineEqOnThru("x", typed, parsed, pack, progress, phit, doneMap, partialMap, coordsMap);
         if (xLineHit) return xLineHit;
       }
     }
     if (
       miss === "x" &&
+      !phit.twinX &&
       !(progress.lastExpr && progress.lastExpr[phit.id]) &&
       !(progress.coords && progress.coords[phit.id] && progress.coords[phit.id].x) &&
       parsed &&
@@ -5131,6 +5862,17 @@
       coordsMap
     );
     if (heightFootHit) return heightFootHit;
+    var fromAreaHit = checkSegFromArea(
+      typed,
+      parsed,
+      pack,
+      progress,
+      pending,
+      doneMap,
+      partialMap,
+      coordsMap
+    );
+    if (fromAreaHit) return fromAreaHit;
 
     // —— מציאת נקודה (שיעורים) ——
     var pointPending = preferPartTasks(
@@ -5249,12 +5991,12 @@
       if (parsed.tag) {
         var tagU = String(parsed.tag).toUpperCase();
         var pn = String(phit.point || phit.label || "").toUpperCase();
-        if (tagU === pn + "X" || tagU === "X" + pn) axisFromTag = "x";
-        if (tagU === pn + "Y" || tagU === "Y" + pn) axisFromTag = "y";
+        if (tagU === "X" || tagU === pn + "X" || tagU === "X" + pn) axisFromTag = "x";
+        if (tagU === "Y" || tagU === pn + "Y" || tagU === "Y" + pn) axisFromTag = "y";
       }
       if (parsed.kind === "twin" && parsed.twinAxis) axisFromTag = parsed.twinAxis;
       if (miss === "x" || miss === "y") axisFromTag = miss;
-      if (!axisFromTag) axisFromTag = "x";
+      if (!axisFromTag) axisFromTag = firstUnknownAxis(phit, coordsMap[phit.id]);
 
       var want = missingCoordValue(phit, axisFromTag);
       var got = null;
@@ -5269,6 +6011,41 @@
         got = parsed.twinAxis === "y" ? twin.y : twin.x;
       } else if (parsed.value != null) {
         got = parsed.value;
+      }
+      if (got == null || !nearNum(got, want)) {
+        if (
+          miss === "both" &&
+          phit.twinX &&
+          phit.twinY &&
+          got != null &&
+          !nearNum(phit.answerX, phit.answerY)
+        ) {
+          var otherAx = axisFromTag === "y" ? "x" : "y";
+          if (nearNum(got, missingCoordValue(phit, otherAx))) {
+            axisFromTag = otherAx;
+            want = missingCoordValue(phit, otherAx);
+          }
+        }
+      }
+      if (got == null || !nearNum(got, want)) {
+        var altPi;
+        for (altPi = 0; altPi < pointPending.length; altPi++) {
+          var alt = pointPending[altPi];
+          if (alt === phit) continue;
+          var altAxis = axisFromTag;
+          if (String(alt.missing || "").toLowerCase() === "x" || String(alt.missing || "").toLowerCase() === "y") {
+            altAxis = String(alt.missing).toLowerCase();
+          } else if (!altAxis) {
+            altAxis = firstUnknownAxis(alt, coordsMap[alt.id]);
+          }
+          if (got != null && nearNum(got, missingCoordValue(alt, altAxis))) {
+            phit = alt;
+            miss = String(phit.missing || "x").toLowerCase();
+            axisFromTag = altAxis;
+            want = missingCoordValue(phit, axisFromTag);
+            break;
+          }
+        }
       }
       if (got == null || !nearNum(got, want)) {
         var hintTwin =
@@ -5405,6 +6182,32 @@
           message: "נכון. שני השיעורים ידועים — רשמו " + phit.label + "(x;y).",
         };
       }
+      var missingAxisMsg =
+        midLine && axisFromTag === "x" && !(phit.twinX && phit.twinY)
+          ? "נכון. עכשיו הציבו x = " +
+            fmtNum(want) +
+            " במשוואת הישר " +
+            prettyLineEq(midLine) +
+            " ומצאו את y."
+          : midLine && axisFromTag === "y" && !(phit.twinX && phit.twinY)
+            ? "נכון. עכשיו הציבו y = " +
+              fmtNum(want) +
+              " במשוואת הישר " +
+              prettyLineEq(midLine) +
+              " ופתרו עבור x (כמו משוואה בנעלם אחד)."
+            : phit.twinX && midCoords[phit.id].y && !midCoords[phit.id].x
+              ? "נכון. עכשיו אותו x כמו " +
+                String(phit.twinX).toUpperCase() +
+                " (הישר מקביל לציר ה־y)."
+              : phit.twinY && midCoords[phit.id].x && !midCoords[phit.id].y
+                ? "נכון. עכשיו אותו y כמו " +
+                  String(phit.twinY).toUpperCase() +
+                  " (הישר מקביל לציר ה־x)."
+                : "נכון. עוד חסר שיעור " +
+                  (midCoords[phit.id].x ? "y" : "x") +
+                  " של " +
+                  phit.label +
+                  ".";
       return {
         ok: true,
         solved: false,
@@ -5414,12 +6217,7 @@
         lastExpr: midExpr,
         task: phit,
         show: midShow,
-        message:
-          "נכון. עוד חסר שיעור " +
-          (midCoords[phit.id].x ? "y" : "x") +
-          " של " +
-          phit.label +
-          ".",
+        message: missingAxisMsg,
       };
     }
 
@@ -5619,6 +6417,9 @@
       }
 
       var partTasks = preferPartTasks(pending, pack, progress);
+      var lookingFromArea = partTasks.length && partTasks.some(function (t) {
+        return t.fromArea;
+      });
       var lookingPoint = partTasks.length && partTasks.every(function (t) {
         return t.kind === "point";
       });
@@ -5636,6 +6437,24 @@
         ok: false,
         message: lookingPoint
           ? "רשמו את הנקודה (למשל B(4;−1)). אפשר גם Bx=… או Bx=Ax."
+          : lookingFromArea
+            ? (function () {
+                var faT = partTasks.filter(function (t) {
+                  return t.fromArea;
+                })[0];
+                var unkN = fromAreaUnknownNames(faT)[0];
+                return (
+                  "צלע מתוך שטח: רשמו " +
+                  (faT.fromArea.label || "S") +
+                  "=" +
+                  (fromAreaLetterBody(faT) || "(צלע×צלע)/2") +
+                  " או הציבו ישר " +
+                  fromAreaPlugEq(faT, pack, false) +
+                  ". הנעלם הוא " +
+                  unkN +
+                  " (אפשר גם x)."
+                );
+              })()
           : lookingLineMb
             ? (function () {
                 var mbLine = activeLine(pack, progress) || pack.line;
@@ -5948,18 +6767,36 @@
         return head;
       }
       if (cf.x && !cf.y) {
-        return (
-          head +
-          " בגלל שהקו " +
-          segmentPairName(name, task.twinY) +
-          " מקביל לציר ה־x, לנקודות " +
-          name +
-          " ו־" +
-          String(task.twinY || "").toUpperCase() +
-          " יש אותו ערך y."
-        );
+        if (task.twinY) {
+          return (
+            head +
+            " בגלל שהקו " +
+            segmentPairName(name, task.twinY) +
+            " מקביל לציר ה־x, לנקודות " +
+            name +
+            " ו־" +
+            String(task.twinY || "").toUpperCase() +
+            " יש אותו ערך y."
+          );
+        }
+        return head;
       }
       if (!cf.x && cf.y) {
+        if (task.twinX) {
+          return (
+            head +
+            " בגלל שהקו " +
+            segmentPairName(task.twinX, name) +
+            " מקביל לציר ה־y, לנקודות " +
+            String(task.twinX || "").toUpperCase() +
+            " ו־" +
+            name +
+            " יש אותו ערך x."
+          );
+        }
+        return head;
+      }
+      if (task.twinX && !task.twinY) {
         return (
           head +
           " בגלל שהקו " +
@@ -5968,22 +6805,40 @@
           String(task.twinX || "").toUpperCase() +
           " ו־" +
           name +
-          " יש אותו ערך x."
+          " יש אותו ערך x. אחר כך מציבים במשוואת הישר ומוצאים y."
         );
       }
-      return (
-        head +
-        " כדי למצוא את שני השיעורים נעזרים גם בישר שמקביל לציר ה־y וגם בישר שמקביל לציר ה־x: " +
-        "הקו " +
-        segmentPairName(task.twinX, name) +
-        " מקביל לציר ה־y → אותו x כמו " +
-        String(task.twinX || "").toUpperCase() +
-        "; והקו " +
-        segmentPairName(name, task.twinY) +
-        " מקביל לציר ה־x → אותו y כמו " +
-        String(task.twinY || "").toUpperCase() +
-        "."
-      );
+      if (task.twinY && !task.twinX) {
+        return (
+          head +
+          " בגלל שהקו " +
+          segmentPairName(name, task.twinY) +
+          " מקביל לציר ה־x, לנקודות " +
+          name +
+          " ו־" +
+          String(task.twinY || "").toUpperCase() +
+          " יש אותו ערך y. אחר כך מציבים במשוואת הישר ומוצאים x."
+        );
+      }
+      if (task.intercept === "x") {
+        return head + " " + name + " על ציר ה-x → y = 0. אחר כך x לפי האורך הידוע.";
+      }
+      if (task.twinX && task.twinY) {
+        return (
+          head +
+          " כדי למצוא את שני השיעורים נעזרים גם בישר שמקביל לציר ה־y וגם בישר שמקביל לציר ה־x: " +
+          "הקו " +
+          segmentPairName(task.twinX, name) +
+          " מקביל לציר ה־y → אותו x כמו " +
+          String(task.twinX || "").toUpperCase() +
+          "; והקו " +
+          segmentPairName(name, task.twinY) +
+          " מקביל לציר ה־x → אותו y כמו " +
+          String(task.twinY || "").toUpperCase() +
+          "."
+        );
+      }
+      return head;
     }
     if (progress.partial && progress.partial[task.id]) {
       return head;
@@ -6019,6 +6874,36 @@
 
   function segmentHintMessage(task, map, progress) {
     var name = String(task.label || "").toUpperCase();
+    if (task.fromArea) {
+      var fa = task.fromArea;
+      var unk = fromAreaUnknownNames(task)[0];
+      if (progress.partial && progress.partial[task.id]) {
+        var prevFa = progress.lastExpr && progress.lastExpr[task.id];
+        if (prevFa && fromAreaLooksLikeFormula(prevFa, task, { map: map })) {
+          return (
+            "הציבו את השטח " +
+            fmtNum(fa.value) +
+            " ואת הצלע הידועה, והשאירו את " +
+            unk +
+            " כנעלם (אפשר גם x)."
+          );
+        }
+        return "פתרו את המשוואה — הנעלם הוא " + unk + " (אפשר גם x).";
+      }
+      return (
+        "השטח " +
+        (fa.label || "S") +
+        "=" +
+        fmtNum(fa.value) +
+        " ידוע. רשמו " +
+        (fa.label || "S") +
+        "=" +
+        (fromAreaLetterBody(task) || "(צלע×צלע)/2") +
+        ", או הציבו ישר. הנעלם הוא " +
+        unk +
+        " (אפשר גם x)."
+      );
+    }
     if (progress.partial && progress.partial[task.id]) {
       return "חשבו את אורך הקטע " + name + " — התוצאה של גדול פחות קטן.";
     }
@@ -6268,7 +7153,7 @@
       }
       return { task: t, message: "המשיכו למשוואה הבאה.", step: "", answer: "" };
     }
-    if (t.kind === "lineIntersect") {
+    if (t.kind === "lineIntersect" || (t.kind === "point" && progress.intersect && progress.intersect.taskId === t.id)) {
       var istage = intersectStage(pack, progress);
       if (istage.stage === "rearrange") {
         var rawI = istage.entry.line;
@@ -6421,7 +7306,25 @@
         var Lh = parseLineSpec(hintLine);
         var missH = String(t.missing || "").toLowerCase();
         var cfH = (progress.coords && progress.coords[t.id]) || {};
-        if (missH === "y") {
+        if (missH === "both" && !cfH.x && !cfH.y) {
+          if (t.twinX && !t.twinY) {
+            return {
+              task: t,
+              message: msg,
+              step: "x = " + fmtNum(t.answerX),
+              answer: fullPoint,
+            };
+          }
+          if (t.twinY && !t.twinX) {
+            return {
+              task: t,
+              message: msg,
+              step: "y = " + fmtNum(t.answerY),
+              answer: fullPoint,
+            };
+          }
+        }
+        if (missH === "y" || (cfH.x && !cfH.y)) {
           if (cfH.y) {
             return { task: t, message: "רשמו את הנקודה " + ptName + "(x;y).", step: fullPoint, answer: fullPoint };
           }
@@ -6465,9 +7368,11 @@
             };
           }
           if (t.intercept === "y") {
+            var easyY = preferredInterceptLine(pack, t);
+            var eqY = easyY ? prettyLineEq(easyY.line) : prettyLineEq(Lh);
             return {
               task: t,
-              message: "הציבו x = 0 ומצאו את נקודה " + ptName + ".",
+              message: "הציבו x = 0 במשוואה " + eqY + " ומצאו את y. זו הדרך הקלה.",
               step: "x = 0",
               answer: fullPoint,
               rawStep: true,
@@ -6485,19 +7390,44 @@
             answer: fullPoint,
           };
         }
-        if (missH === "x") {
-          if (cfH.x) {
+        if (missH === "x" || (cfH.y && !cfH.x)) {
+          if (cfH.x && cfH.y) {
             return { task: t, message: "רשמו את הנקודה " + ptName + "(x;y).", step: fullPoint, answer: fullPoint };
+          }
+          if (cfH.x && !cfH.y) {
+            return {
+              task: t,
+              message:
+                "יודעים x=" +
+                fmtNum(t.answerX) +
+                ". הציבו במשוואת הישר " +
+                prettyLineEq(Lh) +
+                ".",
+              step: "y=" + substYRhs(Lh, t.answerX),
+              answer: fullPoint,
+              rawStep: true,
+            };
           }
           var startEq = startPlugYEq(hintLine, t.answerY);
           var curEq = (progress.lastExpr && progress.lastExpr[t.id]) || startEq;
           var prevXExpr = progress.lastExpr && progress.lastExpr[t.id];
-          var linX = teachLinearNext(curEq);
+          if (eqIsBareAxis(prevXExpr, "y")) {
+            return {
+              task: t,
+              message: "הציבו במשוואה ומצאו x.",
+              step: startEq,
+              answer: fullPoint,
+              rawStep: true,
+            };
+          }
+          var linX = teachLinearNext(eqIsBareAxis(curEq, "y") ? startEq : curEq);
           if (!prevXExpr) {
-            if (t.intercept === "x" || nearNum(t.answerY, 0)) {
+            if ((t.intercept === "x" || nearNum(t.answerY, 0)) && !cfH.y && !t.twinY) {
+              var easyX = preferredInterceptLine(pack, t);
+              var eqX = easyX ? prettyLineEq(easyX.line) : prettyLineEq(Lh);
               return {
                 task: t,
-                message: "הציבו y = 0 ומצאו את נקודה " + ptName + ".",
+                message: "הציבו y = 0 במשוואה " + eqX + " ומצאו את x. זו הדרך הקלה.",
                 step: "y = 0",
                 answer: fullPoint,
                 rawStep: true,
@@ -6534,7 +7464,56 @@
               rawStep: true,
             };
           }
+          if (!cfH.x) {
+            return {
+              task: t,
+              message: "חשבו ורשמו x = " + fmtNum(t.answerX) + ".",
+              step: "x=" + fmtNum(t.answerX),
+              answer: fullPoint,
+            };
+          }
           return { task: t, message: "רשמו את הנקודה " + ptName + "(x;y).", step: fullPoint, answer: fullPoint };
+        }
+      }
+      if (!hintLine) {
+        var cfAx = (progress.coords && progress.coords[t.id]) || {};
+        if ((t.intercept === "x" || nearNum(t.answerY, 0)) && !cfAx.y) {
+          return {
+            task: t,
+            message: ptName + " על ציר ה-x → y = 0. אחר כך x לפי האורך הידוע.",
+            step: "y = 0",
+            answer: fullPoint,
+            rawStep: true,
+          };
+        }
+        if ((t.intercept === "x" || nearNum(t.answerY, 0)) && cfAx.y && !cfAx.x) {
+          return {
+            task: t,
+            message: "y = 0. עכשיו x לפי האורך הידוע.",
+            step: "x = " + fmtNum(t.answerX),
+            answer: fullPoint,
+          };
+        }
+        if (t.twinX && !cfAx.x) {
+          return {
+            task: t,
+            message:
+              "הישר מקביל לציר ה-y → ל־" +
+              ptName +
+              " אותו x כמו " +
+              String(t.twinX).toUpperCase() +
+              ".",
+            step: "x = " + fmtNum(t.answerX),
+            answer: fullPoint,
+          };
+        }
+        if (t.twinX && cfAx.x && !cfAx.y) {
+          return {
+            task: t,
+            message: "יודעים x. עכשיו y לפי האורך הידוע.",
+            step: "y = " + fmtNum(t.answerY),
+            answer: fullPoint,
+          };
         }
       }
       var heightSnapped = (progress.draw && progress.draw.heights || []).some(function (h) {
@@ -6585,7 +7564,7 @@
             " ואותו y כמו ל־" +
             String(t.twinY).toUpperCase() +
             ".";
-        } else {
+        } else if (heightFoot) {
           msg =
             "מצאו את הנקודה " +
             ptName +
@@ -6597,6 +7576,23 @@
             String(t.twinY).toUpperCase() +
             (t.outsideBase ? ". זה גובה חיצוני: הרגל על המשך הצלע, לא על הקטע עצמו." : ".");
         }
+      }
+      var cfTwin = (progress.coords && progress.coords[t.id]) || {};
+      if (t.twinX && t.twinY && cfTwin.x && !cfTwin.y) {
+        return {
+          task: t,
+          message: msg,
+          step: "y = " + fmtNum(t.answerY),
+          answer: fullPoint,
+        };
+      }
+      if (t.twinX && t.twinY && cfTwin.y && !cfTwin.x) {
+        return {
+          task: t,
+          message: msg,
+          step: "x = " + fmtNum(t.answerX),
+          answer: fullPoint,
+        };
       }
       // צעד אחד / השלמה: ישר את הנקודה; Bx=… נשאר אופציונלי בהקלדה
       return {
@@ -6612,13 +7608,54 @@
           ? distSegHintMessage(t, pack.map, progress)
           : t.kind === "axis"
             ? axisHintMessage(t, progress)
-            : t.kind === "segment"
+            : t.fromArea || t.kind === "segment"
               ? segmentHintMessage(t, pack.map, progress)
               : progress.partial && progress.partial[t.id]
                 ? "חשבו את התוצאה: " + t.label + " = " + fmtNum(t.answer) + "."
                 : "עבור " +
                   t.label +
                   ": רשמו גדול פחות קטן לפי השיעור המתאים על הציר, ואז את התוצאה.";
+      if (t.fromArea) {
+        var faSteps = fromAreaCanonicalSteps(t, pack);
+        var prevFaH = progress.lastExpr && progress.lastExpr[t.id];
+        if (progress.partial && progress.partial[t.id] && prevFaH) {
+          if (fromAreaLooksLikeFormula(prevFaH, t, pack)) {
+            return {
+              task: t,
+              message: segMsg,
+              step: fromAreaPlugEq(t, pack, fromAreaHasX(prevFaH)),
+              answer: fmtNum(t.answer),
+              rawStep: true,
+            };
+          }
+          var prevXH = fromAreaToXEq(prevFaH, t, pack);
+          var linFa = /=/.test(prevXH) ? teachLinearNext(prevXH) : null;
+          if (linFa && linFa.eq) {
+            var unkH = fromAreaUnknownNames(t)[0];
+            var stepFa = fromAreaHasX(prevFaH) ? linFa.eq : xEqBackToUnknown(linFa.eq, unkH);
+            return {
+              task: t,
+              message: linFa.hint || segMsg,
+              step: stepFa,
+              answer: fmtNum(t.answer),
+              rawStep: true,
+            };
+          }
+          return {
+            task: t,
+            message: segMsg,
+            step: fromAreaUnknownNames(t)[0] + "=" + fmtNum(t.answer),
+            answer: fmtNum(t.answer),
+          };
+        }
+        return {
+          task: t,
+          message: segMsg,
+          step: faSteps[0] || t.label + "=" + fmtNum(t.answer),
+          answer: fmtNum(t.answer),
+          rawStep: true,
+        };
+      }
       if (progress.partial && progress.partial[t.id]) {
         var prevExpr = progress.lastExpr && progress.lastExpr[t.id];
         var simpStep = prevExpr && simplifiedDiffBody(prevExpr);
@@ -6680,7 +7717,12 @@
     };
   }
 
+  function stripExerciseNumberPrefix(text) {
+    return String(text || "").replace(/^תרגיל\s+\d+[א-ת]?[.:]?\s*/, "");
+  }
+
   function formatPartHtml(text) {
+    text = stripExerciseNumberPrefix(text);
     var MathR = global.DoctematicaMath;
     if (MathR && typeof MathR.proseHTML === "function") {
       if (/\n/.test(String(text || ""))) {
@@ -6708,6 +7750,11 @@
         return "הישר " + intersectLineLabel(pack, item.key) + ": " + intersectDisplayEq(pack, progress, item.key);
       });
       return "נתון:\n" + parts.join("\n");
+    }
+    if (pack && pack.givenText) return "נתון: " + pack.givenText;
+    if (pack && pack.givenArea && pack.givenArea.value != null) {
+      var gaLab = pack.givenArea.label || "S";
+      return "נתון: " + gaLab + "=" + fmtNum(pack.givenArea.value);
     }
     var line = activeLine(pack, progress);
     if (line) return "נתון: הישר " + givenLineEqText(line, progress);
@@ -6771,22 +7818,12 @@
       var cax = String(task.axis || "x").toLowerCase() === "y" ? "y" : "x";
       return ["אין חיתוך עם ציר " + cax];
     }
-    var rawLine = lineForTask(pack, task && task.id);
+    var rawLine = lineForPointTask(pack, {}, task) || lineForTask(pack, task && task.id);
     if (!rawLine || task.kind !== "point") return [];
     var L = parseLineSpec(rawLine);
     var miss = String(task.missing || "").toLowerCase();
     var lines = [];
-    if (miss === "y") {
-      if (task.intercept === "y" && nearNum(task.answerX, 0)) lines.push("x = 0");
-      var impY = implicitPlugEq(rawLine, "x");
-      if (impY && task.intercept === "y") lines.push(impY);
-      else lines.push("y = " + substYRhs(L, task.answerX));
-      lines.push("y = " + fmtNum(task.answerY));
-      lines.push(task.label + pointTaskLabel(task));
-      return lines;
-    }
-    if (miss === "x") {
-      if (nearNum(task.answerY, 0)) lines.push("y = 0");
+    function pushSolveXFromKnownY() {
       var eq = startPlugYEq(rawLine, task.answerY);
       lines.push(eq);
       var Teach = global.DoctematicaTeach;
@@ -6804,6 +7841,45 @@
       }
       var last = String(lines[lines.length - 1] || "");
       if (!/x\s*=/i.test(last)) lines.push("x = " + fmtNum(task.answerX));
+    }
+    if (miss === "both" && task.twinY && !task.twinX) {
+      lines.push("y = " + fmtNum(task.answerY));
+      pushSolveXFromKnownY();
+      lines.push(task.label + pointTaskLabel(task));
+      return lines;
+    }
+    if (miss === "both" && (task.twinX || (nearNum(task.answerX, 0) && !task.twinY))) {
+      lines.push("x = " + fmtNum(task.answerX));
+      lines.push("y = " + substYRhs(L, task.answerX));
+      lines.push("y = " + fmtNum(task.answerY));
+      lines.push(task.label + pointTaskLabel(task));
+      return lines;
+    }
+    if (miss === "y") {
+      if (task.intercept === "y" && nearNum(task.answerX, 0)) lines.push("x = 0");
+      var impY = implicitPlugEq(rawLine, "x");
+      if (impY && task.intercept === "y") lines.push(impY);
+      else lines.push("y = " + substYRhs(L, task.answerX));
+      lines.push("y = " + fmtNum(task.answerY));
+      lines.push(task.label + pointTaskLabel(task));
+      return lines;
+    }
+    if (miss === "x") {
+      if (nearNum(task.answerY, 0) && !task.twinX && !task.twinY) lines.push("y = 0");
+      if (task.twinX) {
+        lines.push("x = " + fmtNum(task.answerX));
+        lines.push("y = " + substYRhs(L, task.answerX));
+        lines.push("y = " + fmtNum(task.answerY));
+        lines.push(task.label + pointTaskLabel(task));
+        return lines;
+      }
+      if (task.twinY) {
+        lines.push("y = " + fmtNum(task.answerY));
+        pushSolveXFromKnownY();
+        lines.push(task.label + pointTaskLabel(task));
+        return lines;
+      }
+      pushSolveXFromKnownY();
       lines.push(task.label + pointTaskLabel(task));
       return lines;
     }
@@ -6889,6 +7965,7 @@
     lineMatchOneStep: lineMatchOneStep,
     areaShape: areaShape,
     fmtNum: fmtNum,
+    capsHistoryLetters: capsHistoryLetters,
     coordLabel: coordLabel,
     coordLabelHTML: coordLabelHTML,
     segmentLength: segmentLength,
