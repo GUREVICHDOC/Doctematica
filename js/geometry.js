@@ -54,9 +54,11 @@
 
   function coordLabel(p) {
     if (!p) return "";
-    var xs = p.hideX ? " " : fmtNum(p.x);
-    var ys = p.hideY ? " " : fmtNum(p.y);
-    return p.label + "(" + xs + ";" + ys + ")";
+    var lab = String(p.label || "");
+    if (p.hideX && p.hideY) return lab;
+    var xs = p.hideX ? "?" : fmtNum(p.x);
+    var ys = p.hideY ? "?" : fmtNum(p.y);
+    return lab + "(" + xs + ";" + ys + ")";
   }
 
   function formatPointPair(x, y) {
@@ -81,6 +83,57 @@
     return formatPointPair(task.answerX, task.answerY);
   }
 
+  function pointPairMismatchMessage(task, px, py) {
+    if (!task) {
+      return "השיעורים עדיין לא מדויקים. זכרו: מקביל לציר y → אותו x; מקביל לציר x → אותו y.";
+    }
+    var lab = String(task.point || task.label || "").toUpperCase();
+    var xOk = nearNum(px, task.answerX);
+    var yOk = nearNum(py, task.answerY);
+    if (xOk && !yOk) {
+      return (
+        "ה-x של " +
+        lab +
+        " נכון, אבל ה-y עדיין לא מדויק. זכרו: מקביל לציר x → אותו y (למשל כמו " +
+        String(task.twinY || "נקודה על אותו קו אופקי").toUpperCase() +
+        ")."
+      );
+    }
+    if (!xOk && yOk) {
+      return (
+        "ה-y של " +
+        lab +
+        " נכון, אבל ה-x עדיין לא מדויק. זכרו: מקביל לציר y → אותו x (למשל כמו " +
+        String(task.twinX || "נקודה על אותו קו אנכי").toUpperCase() +
+        ")."
+      );
+    }
+    return (
+      "שני השיעורים של " +
+      lab +
+      " עדיין לא מדויקים. זכרו: מקביל לציר y → אותו x; מקביל לציר x → אותו y."
+    );
+  }
+
+  function pointTaskForPairMismatch(candidates, parsed) {
+    if (!candidates.length || !parsed || !parsed.point) return null;
+    var tagged = null;
+    var partial = null;
+    var pi;
+    if (parsed.tag) {
+      for (pi = 0; pi < candidates.length; pi++) {
+        if (taskMatchesTag(candidates[pi], parsed.tag)) tagged = candidates[pi];
+      }
+    }
+    for (pi = 0; pi < candidates.length; pi++) {
+      var t = candidates[pi];
+      var xOk = nearNum(parsed.point.x, t.answerX);
+      var yOk = nearNum(parsed.point.y, t.answerY);
+      if (xOk !== yOk) partial = t;
+    }
+    return tagged || partial || candidates[0];
+  }
+
   function bigMinusSmall(u, v) {
     var hi = Math.max(u, v);
     var lo = Math.min(u, v);
@@ -91,12 +144,36 @@
     return n < 0 ? "(" + fmtNum(n) + ")" : fmtNum(n);
   }
 
+  function areaShape(task) {
+    if (!task) return "triangle";
+    if (task.shape === "rect" || task.shape === "rectangle") return "rect";
+    if ((task.verts || []).length === 4) return "rect";
+    return "triangle";
+  }
+
+  function areaMark(task) {
+    return areaShape(task) === "rect" ? "□" : "△";
+  }
+
+  function areaFigureWord(task) {
+    return areaShape(task) === "rect" ? "מלבן" : "משולש";
+  }
+
+  function areaFormulaHint(task) {
+    if (areaShape(task) === "rect") return "שטח מלבן: אורך×רוחב.";
+    return "שטח משולש ישר־זווית: (רגל×רגל)/2.";
+  }
+
   function canonicalAreaBody(task, map) {
     if (!task || task.kind !== "area") return "";
+    if (task.diff && task.diff.plus && task.diff.minus) {
+      return areaTriangleName(task.diff.plus) + "−" + areaTriangleName(task.diff.minus);
+    }
     var legs = task.legs || [];
     if (legs.length >= 2) {
       var a = String(legs[0][0] || "").toUpperCase() + String(legs[0][1] || "").toUpperCase();
       var b = String(legs[1][0] || "").toUpperCase() + String(legs[1][1] || "").toUpperCase();
+      if (areaShape(task) === "rect") return a + "×" + b;
       return "(" + a + "×" + b + ")/2";
     }
     return "";
@@ -106,6 +183,15 @@
   function canonicalAreaChain(task, map) {
     if (!task || task.kind !== "area") return "";
     var label = task.label || "S";
+    if (task.diff && task.diff.plus && task.diff.minus) {
+      var p = triangleArea(map, task.diff.plus);
+      var m = triangleArea(map, task.diff.minus);
+      var letters = canonicalAreaBody(task, map);
+      if (p == null || m == null || !isFinite(p) || !isFinite(m)) {
+        return letters ? label + "=" + letters + "=" + fmtNum(task.answer) : label + "=" + fmtNum(task.answer);
+      }
+      return [label, letters, fmtNum(p) + "−" + fmtNum(m), fmtNum(task.answer)].join("=");
+    }
     var legs = task.legs || [];
     if (legs.length < 2) {
       return label + "=" + fmtNum(task.answer);
@@ -118,9 +204,16 @@
       var body = canonicalAreaBody(task, map);
       return body ? label + "=" + body + "=" + fmtNum(task.answer) : label + "=" + fmtNum(task.answer);
     }
+    var prod = l1 * l2;
+    if (areaShape(task) === "rect") {
+      var rLetters = n1 + "×" + n2;
+      var rNums = fmtNum(l1) + "×" + fmtNum(l2);
+      var rParts = [label, rLetters, rNums];
+      if (!isAreaSimplifiedFinal(rNums, task.answer)) rParts.push(fmtNum(task.answer));
+      return rParts.join("=");
+    }
     var letters = "(" + n1 + "×" + n2 + ")/2";
     var nums = "(" + fmtNum(l1) + "×" + fmtNum(l2) + ")/2";
-    var prod = l1 * l2;
     var mid = fmtNum(prod) + "/2";
     var parts = [label, letters, nums];
     // 28/2 → ואז 14; 15/2 → ביניים, ואז 7.5
@@ -162,17 +255,19 @@
     var matched = 0;
     var i;
     for (i = 0; i < bits.length && i < prevParts.length; i++) {
-      if (prettyAreaExpr(prevParts[i]) !== prettyAreaExpr(bits[i])) break;
+      if (areaStageTokenKey(prevParts[i]) !== areaStageTokenKey(bits[i])) break;
       matched += 1;
     }
-    // אם רשמו ביטוי שקול לאחד השלבים (לא בהכרח מההתחלה)
-    if (matched === 0 && prevParts.length) {
-      var last = prettyAreaExpr(prevParts[prevParts.length - 1]);
+    var best = matched;
+    var p;
+    for (p = 0; p < prevParts.length; p++) {
+      var key = areaStageTokenKey(prevParts[p]);
+      if (!key) continue;
       for (i = 0; i < bits.length; i++) {
-        if (prettyAreaExpr(bits[i]) === last) return i + 1;
+        if (areaStageTokenKey(bits[i]) === key && i + 1 > best) best = i + 1;
       }
     }
-    return matched;
+    return best;
   }
 
   function nextAreaStageBit(task, map, progress) {
@@ -180,6 +275,9 @@
     if (!bits.length) return fmtNum(task.answer);
     var prev = (progress && progress.lastExpr && progress.lastExpr[task.id]) || "";
     var matched = countMatchedAreaStages(prev, bits);
+    if (lastAreaTokenLooksNumeric(prev) && matched < 2 && bits.length > 1) {
+      matched = 2;
+    }
     if (matched >= bits.length) return fmtNum(task.answer);
     return bits[matched];
   }
@@ -194,8 +292,16 @@
         break;
       }
     }
+    if (task.diff) {
+      if (idx === 0) return "רשמו את השטח כהפרש בין שני השטחים שכבר מצאתם (למשל " + canonicalAreaBody(task) + ").";
+      if (idx === 1) return "הציבו את שני המספרים: גדול פחות קטן.";
+      return "חשבו את החיסור ורשמו את התוצאה הסופית.";
+    }
     if (idx === 0) return "רשמו את נוסחת השטח עם האותיות (הצלעות).";
     if (idx === 1) return "הציבו את אורכי הצלעות במקום האותיות.";
+    if (areaShape(task) === "rect") {
+      return "חשבו את המכפלה ורשמו את התוצאה הסופית.";
+    }
     if (idx === 2 && bits.length > 3) return "חשבו את מכפלת המונה, ואז השאירו חילוק במכנה.";
     if (idx === bits.length - 1 || prettyAreaExpr(bit) === prettyAreaExpr(fmtNum(task.answer))) {
       return "חשבו את החילוק ורשמו את התוצאה הסופית.";
@@ -354,11 +460,66 @@
     return null;
   }
 
-  function areaTriangleName(verts) {
+  function areaTriangleName(verts, shape) {
     var v = (verts || []).map(function (x) {
       return String(x || "").toUpperCase();
     });
-    return v.length ? "S△" + v.join("") : "S";
+    var mark = shape === "rect" ? "□" : "△";
+    return v.length ? "S" + mark + v.join("") : "S";
+  }
+
+  function sameCyclicVerts(a, b) {
+    var A = (a || [])
+      .map(function (x) {
+        return String(x || "").toUpperCase();
+      })
+      .join("");
+    var B = (b || [])
+      .map(function (x) {
+        return String(x || "").toUpperCase();
+      })
+      .join("");
+    if (!A || A.length !== B.length) return false;
+    if (A.length === 3) {
+      var rot = [A, A[1] + A[2] + A[0], A[2] + A[0] + A[1]];
+      var rev = A.split("").reverse().join("");
+      var rotR = [rev, rev[1] + rev[2] + rev[0], rev[2] + rev[0] + rev[1]];
+      return rot.indexOf(B) >= 0 || rotR.indexOf(B) >= 0;
+    }
+    return (A + A).indexOf(B) >= 0 || (B && (A.split("").reverse().join("") + A.split("").reverse().join("")).indexOf(B) >= 0);
+  }
+
+  function sameTriangleVerts(a, b) {
+    return sameCyclicVerts(a, b);
+  }
+
+  function areaOfNamedTriangle(letters, map, pack) {
+    var verts = String(letters || "")
+      .toUpperCase()
+      .replace(/[^A-Z]/g, "")
+      .split("");
+    if (verts.length !== 3 && verts.length !== 4) return null;
+    if (pack && pack.tasks) {
+      var hit = (pack.tasks || []).filter(function (t) {
+        return t.kind === "area" && sameCyclicVerts(t.verts, verts);
+      })[0];
+      if (hit && hit.answer != null && isFinite(hit.answer)) return hit.answer;
+    }
+    if (verts.length === 4) return rectangleArea(map, verts);
+    return triangleArea(map, verts);
+  }
+
+  function expandAreaNamesInExpr(expr, map, pack) {
+    var t = String(expr || "").replace(/\s+/g, "");
+    return t.replace(
+      /S(?:△|Δ|□|▭)?([A-Za-z]{3,4})|(?:△|Δ|□|▭)([A-Za-z]{3,4})/gi,
+      function (full, a, b) {
+        var letters = a || b;
+        var v = areaOfNamedTriangle(letters, map, pack);
+        if (v == null || !isFinite(v)) return full;
+        return "(" + String(v) + ")";
+      }
+    );
   }
 
   function legLength(map, a, b) {
@@ -418,11 +579,84 @@
     return Math.abs(a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y)) / 2;
   }
 
+  function rectangleArea(map, verts) {
+    var pts = (verts || []).map(function (v) {
+      return getPoint(map, v);
+    });
+    if (pts.length !== 4 || pts.some(function (p) { return !p; })) {
+      if (pts.length === 2 && pts[0] && pts[1]) {
+        return Math.abs(pts[0].x - pts[1].x) * Math.abs(pts[0].y - pts[1].y);
+      }
+      var xs = pts.filter(Boolean).map(function (p) { return p.x; });
+      var ys = pts.filter(Boolean).map(function (p) { return p.y; });
+      if (xs.length < 2 || ys.length < 2) return null;
+      return (Math.max.apply(null, xs) - Math.min.apply(null, xs)) *
+        (Math.max.apply(null, ys) - Math.min.apply(null, ys));
+    }
+    var xs4 = pts.map(function (p) { return p.x; });
+    var ys4 = pts.map(function (p) { return p.y; });
+    return (Math.max.apply(null, xs4) - Math.min.apply(null, xs4)) *
+      (Math.max.apply(null, ys4) - Math.min.apply(null, ys4));
+  }
+
   function prettyAreaExpr(rhs) {
     return normalizeZeroAsO(String(rhs || ""))
+      .replace(/[\u200e\u200f\u202a-\u202e]/g, "")
       .replace(/[−–—]/g, "−")
+      .replace(/Δ/g, "△")
+      .replace(/▭/g, "□")
+      .replace(/[·•∗✕✖]/g, "×")
       .replace(/\*/g, "×")
       .replace(/\s+/g, "");
+  }
+
+  /** (4×2)/2, (4×2)/(2), 4×2/2 ו־(2×4)/2 — אותו שלב */
+  function areaStageTokenKey(s) {
+    var t = prettyAreaExpr(s);
+    t = t.replace(/\/\((-?\d+(?:\.\d+)?)\)/g, "/$1");
+    t = t.replace(/\((-?\d+(?:\.\d+)?)\)/g, "$1");
+    var m =
+      t.match(/^\(([^()/]+)×([^()/]+)\)\/(-?\d+(?:\.\d+)?)$/) ||
+      t.match(/^([^()/]+)×([^()/]+)\/(-?\d+(?:\.\d+)?)$/);
+    if (m) {
+      var a = m[1];
+      var b = m[2];
+      var d = m[3];
+      if (a > b) {
+        var tmp = a;
+        a = b;
+        b = tmp;
+      }
+      return "(" + a + "×" + b + ")/" + d;
+    }
+    return t;
+  }
+
+  function lastAreaTokenLooksNumeric(prevExpr) {
+    var last = String(prevExpr || "").split("=").pop();
+    var t = prettyAreaExpr(last);
+    if (!t) return false;
+    if (/[A-Za-z]/.test(t.replace(/S[△Δ□▭]/g, ""))) return false;
+    return /\d/.test(t) && (/[×/]/.test(t) || /^-?\d+(?:\.\d+)?$/.test(t));
+  }
+
+  /** (4×2)/2 ו־(2×4)/2 ו־4×2/2 נחשבים אותו שלב */
+  function areaStageTokenKey(s) {
+    var t = prettyAreaExpr(s);
+    var m =
+      t.match(/^\(([^()/]+)×([^()/]+)\)\/2$/) ||
+      t.match(/^([^()/]+)×([^()/]+)\/2$/);
+    if (m) {
+      var a = m[1];
+      var b = m[2];
+      if (a > b) {
+        var tmp = a;
+        a = b;
+        b = tmp;
+      }
+      return "(" + a + "×" + b + ")/2";
+    }
+    return t;
   }
 
   function gcdInt(a, b) {
@@ -475,7 +709,7 @@
     if (!prev) return n;
     var p = String(prev);
     var last = p.split("=").pop();
-    if (prettyAreaExpr(last) === prettyAreaExpr(n)) return p;
+    if (areaStageTokenKey(last) === areaStageTokenKey(n)) return p;
     return p + "=" + n;
   }
 
@@ -516,7 +750,7 @@
     });
     areaDone[ahit.id] = true;
     // אחרי שטח נכון — אורכים מומלצים (optional) נסגרים אוטומטית
-    markOptionalDone(pack, areaDone);
+    markOptionalDone(pack, areaDone, ahit);
     var areaPartial = {};
     Object.keys(partialMap).forEach(function (k) {
       if (k !== ahit.id && !areaDone[k]) areaPartial[k] = true;
@@ -570,12 +804,12 @@
     }
   }
 
-  function evalGeoAreaRhs(rhs, map) {
+  function evalGeoAreaRhs(rhs, map, pack) {
     var parts = String(rhs || "").split("=");
     var lastVal = null;
     var i;
     for (i = 0; i < parts.length; i++) {
-      var expanded = expandLegsInExpr(parts[i], map);
+      var expanded = expandLegsInExpr(expandAreaNamesInExpr(parts[i], map, pack), map);
       var v = evalArithExpr(expanded);
       if (v == null) return null;
       if (lastVal != null && !nearNum(lastVal, v)) return null;
@@ -623,12 +857,16 @@
         );
       }
       if (answer == null && t.kind === "area") {
+        var divisor = areaShape(t) === "rect" ? 1 : 2;
         if (t.legs && t.legs.length >= 2) {
           var l1 = legLength(map, t.legs[0][0], t.legs[0][1]);
           var l2 = legLength(map, t.legs[1][0], t.legs[1][1]);
-          if (l1 != null && l2 != null) answer = (l1 * l2) / 2;
+          if (l1 != null && l2 != null) answer = (l1 * l2) / divisor;
         }
-        if (answer == null) answer = triangleArea(map, t.verts);
+        if (answer == null) {
+          answer =
+            areaShape(t) === "rect" ? rectangleArea(map, t.verts) : triangleArea(map, t.verts);
+        }
       }
       var answerX = t.answerX;
       var answerY = t.answerY;
@@ -667,7 +905,7 @@
         if (!label) label = dname;
       }
       if (t.kind === "area") {
-        var aname2 = areaTriangleName(t.verts);
+        var aname2 = areaTriangleName(t.verts, areaShape(t));
         if (!id) id = "S" + (t.verts || []).map(function (v) { return String(v || "").toUpperCase(); }).join("");
         if (!label) label = aname2;
       }
@@ -691,6 +929,9 @@
         answerY: answerY,
         label: label,
         optional: !!t.optional,
+        outsideBase: !!t.outsideBase,
+        diff: t.diff || null,
+        shape: t.shape || null,
       });
     });
     return tasks;
@@ -706,9 +947,17 @@
     });
   }
 
-  function markOptionalDone(pack, doneMap) {
+  function markOptionalDone(pack, doneMap, aroundTask) {
+    var ids = null;
+    if (aroundTask) {
+      (pack.parts || []).forEach(function (p) {
+        if ((p.taskIds || []).indexOf(aroundTask.id) >= 0) ids = p.taskIds;
+      });
+    }
     (pack.tasks || []).forEach(function (t) {
-      if (t.optional) doneMap[t.id] = true;
+      if (!t.optional) return;
+      if (ids && ids.indexOf(t.id) < 0) return;
+      doneMap[t.id] = true;
     });
   }
 
@@ -720,6 +969,7 @@
         y: Number(p.y),
         hideX: !!p.hideX,
         hideY: !!p.hideY,
+        drawOnly: !!p.drawOnly,
       };
     }
     var points = (ex.points || []).map(normalizePoint);
@@ -854,7 +1104,17 @@
       promptHtml: ex.promptHtml || null,
       steps: answerLines,
       answer: answerLines.join(", "),
+      draw: ex.draw || null,
     };
+  }
+
+  function initDrawProgress(pack, progress) {
+    progress = progress || {};
+    if (!pack.draw || !pack.draw.enabled) return { heights: [], auxPoints: [], pickMode: null, note: null };
+    var GD = global.DoctematicaGeoDraw;
+    if (!GD) return { heights: [], auxPoints: [], pickMode: null, note: null };
+    if (progress.draw && Array.isArray(progress.draw.heights)) return progress.draw;
+    return GD.initDrawState(pack.draw, pack.map);
   }
 
   function sceneForProgress(pack, progress) {
@@ -875,6 +1135,7 @@
         y: p.y,
         hideX: !!p.hideX,
         hideY: !!p.hideY,
+        drawOnly: !!p.drawOnly,
       };
       var task = (pack.tasks || []).filter(function (t) {
         if (t.kind !== "point") return false;
@@ -908,12 +1169,43 @@
           else copy.hideX = false;
         }
       }
+      if (copy.drawOnly) {
+        var footTask = (pack.tasks || []).filter(function (t) {
+          return (
+            t.kind === "point" &&
+            String(t.point || "").toUpperCase() === String(p.label || "").toUpperCase()
+          );
+        })[0];
+        if (!footTask || !progress.done || !progress.done[footTask.id]) {
+          copy.hideX = true;
+          copy.hideY = true;
+        }
+      }
       return copy;
+    }).filter(function (p) {
+      if (!p.drawOnly) return true;
+      var footTask = (pack.tasks || []).filter(function (t) {
+        return (
+          t.kind === "point" &&
+          String(t.point || "").toUpperCase() === String(p.label || "").toUpperCase()
+        );
+      })[0];
+      return footTask && progress.done && progress.done[footTask.id];
     });
     return {
       points: points,
       segments: segs,
-      polygons: pack.polygons || [],
+      polygons: (pack.polygons || []).filter(function (poly) {
+        var labs = poly.verts || [];
+        if (labs.length < 3) return false;
+        return labs.every(function (lab) {
+          var key = String(lab || "").toUpperCase();
+          if (key === "O") return true;
+          return points.some(function (p) {
+            return String(p.label || "").toUpperCase() === key;
+          });
+        });
+      }),
       rightAngles: pack.rightAngles || [],
       axisGuides: pack.axisGuides || [],
       distGuides: (function () {
@@ -1057,8 +1349,8 @@
       return { value: v, kind: "diff", display: prettyStepExpr(rhs) };
     }
 
-    // sAOB=... / S△AOB=... / SAOB=...
-    var taggedArea = s.match(/^S(?:△|Δ)?([A-Za-z]{3})(?:=|:)(.+)$/i);
+    // sAOB=... / S△AOB=... / S□ABCD=... / SAOB=...
+    var taggedArea = s.match(/^S(?:△|Δ|□|▭)?([A-Za-z]{3,4})(?:=|:)(.+)$/i);
     if (taggedArea) {
       return {
         tag: normAreaTag(taggedArea[1]),
@@ -1213,13 +1505,7 @@
       }).join("");
       var nt = normAreaTag(tag);
       if (nt === av || normAreaTag(task.id) === nt || normAreaTag(task.label) === nt) return true;
-      // סדר קודקודים מחזורי
-      if (av.length === 3) {
-        var rot = [av, av[1] + av[2] + av[0], av[2] + av[0] + av[1]];
-        var rev = av.split("").reverse().join("");
-        var rotR = [rev, rev[1] + rev[2] + rev[0], rev[2] + rev[0] + rev[1]];
-        if (rot.indexOf(nt) >= 0 || rotR.indexOf(nt) >= 0) return true;
-      }
+      if (sameCyclicVerts(task.verts, nt.split(""))) return true;
     }
     return false;
   }
@@ -1270,12 +1556,20 @@
     );
   }
 
+  function looksLikeAreaDiff(s) {
+    var t = String(s || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "");
+    return /S(?:△|Δ)?[A-Za-z]{3}.+-.*S(?:△|Δ)?[A-Za-z]{3}/i.test(t);
+  }
+
   function looksLikeAreaAttempt(typed, parsed) {
     if (parsed && parsed.kind === "area") return true;
     var s = String(typed || "")
       .replace(/[−–—]/g, "-")
       .replace(/\s+/g, "");
-    if (/^S(?:△|Δ)?[A-Za-z]{3}/i.test(s)) return true;
+    if (/^S(?:△|Δ|□|▭)?[A-Za-z]{3,4}/i.test(s)) return true;
+    if (looksLikeAreaDiff(s)) return true;
     return false;
   }
 
@@ -1284,17 +1578,39 @@
     var s = String(typed || "")
       .replace(/[−–—]/g, "-")
       .replace(/\s+/g, "");
-    var m = s.match(/^S(?:△|Δ)?([A-Za-z]{3})/i);
+    var assign = s.match(/^S(?:△|Δ|□|▭)?([A-Za-z]{3,4})(?:=|:)(.+)$/i);
+    if (assign) return normAreaTag(assign[1]);
+    if (looksLikeAreaDiff(s)) return null;
+    var m = s.match(/^S(?:△|Δ|□|▭)?([A-Za-z]{3,4})/i);
     return m ? normAreaTag(m[1]) : null;
   }
 
   function wrongTriangleMessage(task, gotTag) {
     var want = areaVertsLabel(task);
     var got = normAreaTag(gotTag) || "?";
+    var wantN = want.length;
+    var gotN = got.replace(/[^A-Z]/g, "").length;
+    if (gotN && wantN && gotN !== wantN) {
+      return (
+        "רשמתם " +
+        (gotN === 3 ? "שטח משולש (3 קודקודים)" : "שטח מלבן (4 קודקודים)") +
+        ". כאן צריך שטח " +
+        areaFigureWord(task) +
+        " — " +
+        wantN +
+        " קודקודים, למשל s" +
+        want +
+        "=…."
+      );
+    }
     return (
-      "שם המשולש לא מדויק (△" +
+      "שם ה" +
+      areaFigureWord(task) +
+      " לא מדויק (" +
+      areaMark(task) +
       got +
-      "). חשבו את שטח △" +
+      "). חשבו את שטח " +
+      areaMark(task) +
       want +
       " — רשמו למשל s" +
       want +
@@ -1364,10 +1680,14 @@
           }
         }
         if (!phit) {
+          var mismatchTask = pointTaskForPairMismatch(pointPending, parsed);
           return {
             ok: false,
-            message:
-              "השיעורים עדיין לא מדויקים. זכרו: מקביל לציר y → אותו x; מקביל לציר x → אותו y.",
+            message: pointPairMismatchMessage(
+              mismatchTask,
+              parsed.point.x,
+              parsed.point.y
+            ),
           };
         }
         var pDone = {};
@@ -1457,6 +1777,31 @@
       if (got == null || !nearNum(got, want)) {
         var hintTwin =
           axisFromTag === "y" ? phit.twinY || phit.twin : phit.twinX || phit.twin;
+        var ptLab = String(phit.point || phit.label || "").toUpperCase();
+        var axisName = axisFromTag === "y" ? "y" : "x";
+        if (parsed.kind !== "twin" && parsed.value != null) {
+          var otherAxisOk =
+            miss === "both" &&
+            coordsMap[phit.id] &&
+            (axisFromTag === "y" ? coordsMap[phit.id].x : coordsMap[phit.id].y);
+          if (otherAxisOk) {
+            return {
+              ok: false,
+              message:
+                "ה-" +
+                (axisFromTag === "y" ? "x" : "y") +
+                " של " +
+                ptLab +
+                " כבר נכון, אבל ה-" +
+                axisName +
+                " עדיין לא מדויק.",
+            };
+          }
+          return {
+            ok: false,
+            message: "ה-" + axisName + " של " + ptLab + " עדיין לא מדויק.",
+          };
+        }
         return {
           ok: false,
           message:
@@ -1543,17 +1888,33 @@
       };
     }
 
-    if (parsed.value == null || !isFinite(parsed.value) || !parsed.kind || parsed.kind === "point" || parsed.kind === "twin") {
+    var allAreasEarly = pendingAreaTasks(pending, pack, progress);
+    var partLead = preferPartTasks(pending, pack, progress)[0];
+    var forceAreaRhs =
+      allAreasEarly.length &&
+      (looksLikeAreaDiff(typed) ||
+        (partLead && partLead.kind === "area" && parsed.kind === "diff"));
+    if (parsed.value == null || !isFinite(parsed.value) || !parsed.kind || parsed.kind === "point" || parsed.kind === "twin" || forceAreaRhs) {
       // —— שטח: גם כשהצעד המומלץ הוא צלע — מזהים ניסיון שטח (כולל אותיות שגויות) ——
-      var allAreas = pendingAreaTasks(pending, pack, progress);
+      var allAreas = allAreasEarly;
       if (looksLikeAreaAttempt(typed, parsed) && allAreas.length) {
         var gotAreaTag = extractAreaTagFromTyped(typed, parsed);
         var areaFocus = null;
         var ak;
-        for (ak = 0; ak < allAreas.length; ak++) {
-          if (!gotAreaTag || taskMatchesTag(allAreas[ak], gotAreaTag)) {
-            areaFocus = allAreas[ak];
-            break;
+        if (looksLikeAreaDiff(typed) && !gotAreaTag) {
+          for (ak = 0; ak < allAreas.length; ak++) {
+            if (allAreas[ak].diff) {
+              areaFocus = allAreas[ak];
+              break;
+            }
+          }
+        }
+        if (!areaFocus) {
+          for (ak = 0; ak < allAreas.length; ak++) {
+            if (!gotAreaTag || taskMatchesTag(allAreas[ak], gotAreaTag)) {
+              areaFocus = allAreas[ak];
+              break;
+            }
           }
         }
         if (!areaFocus) {
@@ -1579,19 +1940,29 @@
         if (!areaRhs) {
           return {
             ok: false,
-            message:
-              "רשמו את חישוב השטח אחרי s" +
-              areaVertsLabel(areaFocus) +
-              "=, למשל (AB×BC)/2 או את המכפלה המספרית.",
+            message: areaFocus.diff
+              ? "רשמו " +
+                areaFocus.label +
+                "=" +
+                canonicalAreaBody(areaFocus) +
+                ", או הציבו מספרים (גדול פחות קטן) ואז את התוצאה."
+              : "רשמו את חישוב השטח אחרי s" +
+                areaVertsLabel(areaFocus) +
+                "=, למשל " +
+                (canonicalAreaBody(areaFocus) || "את המכפלה") +
+                " או את המכפלה המספרית.",
             hint: canonicalStep(areaFocus, pack.map),
           };
         }
-        var areaVal = evalGeoAreaRhs(areaRhs, pack.map);
+        var areaVal = evalGeoAreaRhs(areaRhs, pack.map, pack);
         if (areaVal == null) {
           return {
             ok: false,
-            message:
-              "לא הצלחתי לחשב את הביטוי לשטח. בדקו את הנוסחה (רגל×רגל)/2.",
+            message: areaFocus.diff
+              ? "לא הצלחתי לחשב את ההפרש. רשמו למשל " +
+                canonicalAreaBody(areaFocus) +
+                " או את המספרים ואז את התוצאה."
+              : "לא הצלחתי לחשב את הביטוי לשטח. בדקו את הנוסחה. " + areaFormulaHint(areaFocus),
             hint: canonicalStep(areaFocus, pack.map),
           };
         }
@@ -1604,10 +1975,16 @@
         if (!nearNum(areaVal, areaFocus.answer)) {
           return {
             ok: false,
-            message:
-              "עוד לא מדויק עבור " +
-              areaFocus.label +
-              ". שטח משולש ישר־זווית: (רגל×רגל)/2.",
+            message: areaFocus.diff
+              ? "עוד לא מדויק עבור " +
+                areaFocus.label +
+                ". השתמשו בהפרש " +
+                canonicalAreaBody(areaFocus) +
+                "."
+              : "עוד לא מדויק עבור " +
+                areaFocus.label +
+                ". " +
+                areaFormulaHint(areaFocus),
             hint: canonicalStep(areaFocus, pack.map),
           };
         }
@@ -1633,12 +2010,12 @@
         var rawBare = String(typed || "")
           .replace(/[−–—]/g, "-")
           .replace(/\s+/g, "");
-        if (/[*/×·÷()]/.test(rawBare) || (rawBare.indexOf("=") >= 0 && /[A-Za-z]/.test(rawBare))) {
+        if (/[*/×·÷()\-]/.test(rawBare) || (rawBare.indexOf("=") >= 0 && /[A-Za-z]/.test(rawBare))) {
           areaRhsBare = rawBare;
         }
       }
       if (areaPending.length && areaRhsBare) {
-        var areaVal2 = evalGeoAreaRhs(areaRhsBare, pack.map);
+        var areaVal2 = evalGeoAreaRhs(areaRhsBare, pack.map, pack);
         if (areaVal2 != null) {
           var ahit = null;
           var ai;
@@ -1660,7 +2037,8 @@
             message:
               "עוד לא מדויק עבור " +
               areaPending[0].label +
-              ". שטח משולש ישר־זווית: (רגל×רגל)/2.",
+              ". " +
+              areaFormulaHint(areaPending[0]),
             hint: canonicalStep(areaPending[0], pack.map),
           };
         }
@@ -1679,7 +2057,7 @@
         message: lookingPoint
           ? "רשמו את הנקודה (למשל B(4;−1)). אפשר גם Bx=… או Bx=Ax."
           : lookingArea || hasOpenArea
-            ? "רשמו קודם אורך ניצב (גדול פחות קטן) או את שטח המשולש (למשל sABC=(AB×BC)/2)."
+            ? "רשמו קודם אורך צלע (גדול פחות קטן) או את השטח לפי הנוסחה המתאימה."
             : "רשמו קודם גדול פחות קטן (למשל 5−2), או נקודה במבנה B(4;−1).",
       };
     }
@@ -2120,7 +2498,7 @@
       return t.optional && t.kind === "point";
     });
     var recommendedLens = pending.filter(function (t) {
-      return t.optional && (t.kind === "segment" || t.kind === "origin");
+      return t.optional && (t.kind === "segment" || t.kind === "origin" || t.kind === "axis");
     });
     // אחרי מציאת נקודה (כמו D) — עדיף לחשב קטע שיוצא ממנה (AD) לפני בסיס אחר
     var afterFoundPoint = pending.filter(function (t) {
@@ -2134,34 +2512,94 @@
         );
       });
     });
+    // אחרי גובה שננעל — עדיף למצוא את נקודת הרגל (H, D…)
+    var snappedFootPt = null;
+    (progress.draw && progress.draw.heights ? progress.draw.heights : []).some(function (h) {
+      if (!h || !h.snapped || !h.footLabel) return false;
+      var lab = String(h.footLabel).toUpperCase();
+      var cand = pending.filter(function (t) {
+        return t.kind === "point" && String(t.point || "").toUpperCase() === lab;
+      })[0];
+      if (cand) snappedFootPt = cand;
+      return !!cand;
+    });
     var t = inProgress.length
       ? inProgress[0]
-      : recommendedPoints.length
-        ? recommendedPoints[0]
-        : recommendedLens.length
-          ? recommendedLens[0]
-          : afterFoundPoint.length
-            ? afterFoundPoint[0]
-            : pending[0];
+      : snappedFootPt
+        ? snappedFootPt
+        : recommendedPoints.length
+          ? recommendedPoints[0]
+          : recommendedLens.length
+            ? recommendedLens[0]
+            : afterFoundPoint.length
+              ? afterFoundPoint[0]
+              : pending[0];
+    // לא לקפוץ לשטח לפני אורכים מומלצים של אותו סעיף (למשל AE, DF בסעיף ב)
+    if (t && t.kind === "area" && recommendedLens.length && !(progress.partial && progress.partial[t.id])) {
+      t = recommendedLens[0];
+    }
     if (t.kind === "point") {
       var msg = pointHintMessage(t, progress);
-      // רמז לגובה: AD מקביל ל־y ו־D על BC
-      if (
-        String(t.point || "").toUpperCase() === "D" &&
+      var ptName = String(t.point || "").toUpperCase();
+      var heightSnapped = (progress.draw && progress.draw.heights || []).some(function (h) {
+        return h && h.snapped && String(h.footLabel || "").toUpperCase() === ptName;
+      });
+      if (heightSnapped) {
+        msg =
+          "מצאו את הנקודה " +
+          ptName +
+          ". רגל הגובה כבר על הצלע — עכשיו רשמו את שיעוריה (למשל " +
+          ptName +
+          "(x;y) או " +
+          ptName +
+          "x=…).";
+      } else if (
         t.twinX &&
         t.twinY &&
         !(progress.coords && progress.coords[t.id] && (progress.coords[t.id].x || progress.coords[t.id].y))
       ) {
-        msg =
-          "מצאו את הנקודה D. AD מאונך ל־BC (מקביל לציר ה־y) → ל־D אותו x כמו ל־" +
-          String(t.twinX).toUpperCase() +
-          "; D נמצאת על BC → אותו y כמו ל־" +
-          String(t.twinY).toUpperCase() +
-          " (ו־C). אפשר לרשום D(x;y) או Dx=" +
-          String(t.twinX).toUpperCase() +
-          "x ו־Dy=" +
-          String(t.twinY).toUpperCase() +
-          "y.";
+        var heightFoot = (pack.draw && pack.draw.heights || []).some(function (h) {
+          return h && String(h.footLabel || "").toUpperCase() === ptName;
+        });
+        var isRectVertex = (pack.tasks || []).some(function (at) {
+          return at.kind === "area" && areaShape(at) === "rect";
+        });
+        if (ptName === "D" && heightFoot) {
+          msg =
+            "מצאו את הנקודה D. AD מאונך ל־BC (מקביל לציר ה־y) → ל־D אותו x כמו ל־" +
+            String(t.twinX).toUpperCase() +
+            "; D על הישר של BC" +
+            (t.outsideBase ? " (במשולש קהה-זווית הרגל נופלת מחוץ לקטע, על ההמשך)" : "") +
+            " → אותו y כמו ל־" +
+            String(t.twinY).toUpperCase() +
+            " (ו־C). אפשר לרשום D(x;y) או Dx=" +
+            String(t.twinX).toUpperCase() +
+            "x ו־Dy=" +
+            String(t.twinY).toUpperCase() +
+            "y.";
+        } else if (isRectVertex) {
+          msg =
+            "מצאו את הנקודה " +
+            ptName +
+            ". צלעות המלבן מקבילות לצירים → ל־" +
+            ptName +
+            " אותו x כמו ל־" +
+            String(t.twinX).toUpperCase() +
+            " ואותו y כמו ל־" +
+            String(t.twinY).toUpperCase() +
+            ".";
+        } else {
+          msg =
+            "מצאו את הנקודה " +
+            ptName +
+            ". הגובה מאונך לצלע → ל־" +
+            ptName +
+            " אותו x כמו ל־" +
+            String(t.twinX).toUpperCase() +
+            " ואותו y כמו ל־" +
+            String(t.twinY).toUpperCase() +
+            (t.outsideBase ? ". זה גובה חיצוני: הרגל על המשך הצלע, לא על הקטע עצמו." : ".");
+        }
       }
       var fullPoint = t.label + pointTaskLabel(t);
       // צעד אחד / השלמה: ישר את הנקודה; Bx=… נשאר אופציונלי בהקלדה
@@ -2250,7 +2688,7 @@
       .replace(/>/g, "&gt;");
     // ביטויים מתמטיים LTR בתוך טקסט עברי — מונע מינוס מימין (1-)
     return esc.replace(
-      /[A-Za-z]{1,3}(?:→[xyXY]|[xyXY])?\s*=\s*(?:[A-Za-z]{1,3}(?:→[xyXY]|[xyXY])?|\(?[−–—-]?\d+(?:[.,;][−–—-]?\d+)?\)?)|[A-Za-z]→[A-Za-z]{2}|[A-Za-z]\s*\(\s*[−–—-]?\d+\s*[.,;]\s*[−–—-]?\d+\s*\)|\(\s*[−–—-]?\d+\s*[.,;]\s*[−–—-]?\d+\s*\)|[−–—-]\d+(?:\.\d+)?/g,
+      /S(?:△|Δ|□|▭)?[A-Za-z]{3,4}(?:\s*=\s*S(?:△|Δ|□|▭)?[A-Za-z]{3,4}\s*[−–—-]\s*S(?:△|Δ|□|▭)?[A-Za-z]{3,4})?|[A-Za-z]{1,4}(?:→[xyXY]|[xyXY])?\s*=\s*(?:[A-Za-z]{1,3}(?:→[xyXY]|[xyXY])?|\(?[−–—-]?\d+(?:[.,;][−–—-]?\d+)?\)?)|[A-Za-z]→[A-Za-z]{2}|[A-Za-z]\s*\(\s*[−–—-]?\d+\s*[.,;]\s*[−–—-]?\d+\s*\)|\(\s*[−–—-]?\d+\s*[.,;]\s*[−–—-]?\d+\s*\)|[−–—-]\d+(?:\.\d+)?/g,
       function (chunk) {
         return '<span class="m-expr" dir="ltr">' + chunk + "</span>";
       }
@@ -2280,6 +2718,7 @@
 
   global.DoctematicaGeometry = {
     analyzeStart: analyzeStart,
+    initDrawProgress: initDrawProgress,
     checkTyped: checkTyped,
     nextHint: nextHint,
     currentPartText: currentPartText,
@@ -2290,6 +2729,7 @@
     canonicalDiffSteps: canonicalDiffSteps,
     canonicalAreaChain: canonicalAreaChain,
     canonicalAreaSteps: canonicalAreaSteps,
+    areaShape: areaShape,
     fmtNum: fmtNum,
     coordLabel: coordLabel,
     segmentLength: segmentLength,

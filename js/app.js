@@ -3146,6 +3146,33 @@
     }
   }
 
+  function updateGeoFootHint() {
+    if (!state.problem || !state.problem.geo || !hintEl) return;
+    var ds = state.geo.draw || {};
+    var pack = state.problem.geo;
+    var snapped = (ds.heights || []).filter(function (h) {
+      return h && h.snapped && h.footLabel;
+    });
+    if (!snapped.length) return;
+    var h0 = snapped[0];
+    var footId = String(h0.footLabel || "").toUpperCase();
+    var footTask = (pack.tasks || []).filter(function (t) {
+      return t.kind === "point" && String(t.point || "").toUpperCase() === footId;
+    })[0];
+    if (footTask && !(state.geo.done && state.geo.done[footTask.id])) {
+      hintEl.textContent =
+        "מצאו את הנקודה " +
+        footId +
+        " — רשמו " +
+        footId +
+        "(x;y) או " +
+        footId +
+        "x=… ו-" +
+        footId +
+        "y=…";
+    }
+  }
+
   function renderGeoScene(highlight) {
     if (!coordBoard || !state.problem || !state.problem.geo) {
       clearGeoUi();
@@ -3160,13 +3187,27 @@
           segments: pack.segments,
           axisGuides: pack.axisGuides || [],
         };
+    if (DoctematicaGeometry.initDrawProgress) {
+      state.geo.draw = DoctematicaGeometry.initDrawProgress(pack, state.geo);
+    }
+    var drawConfig = pack.draw && pack.draw.enabled ? pack.draw : null;
     coordBoard.render({
       points: scene.points,
       segments: scene.segments,
+      polygons: scene.polygons || pack.polygons || [],
+      rightAngles: scene.rightAngles || pack.rightAngles || [],
       axisGuides: scene.axisGuides || [],
       distGuides: scene.distGuides || [],
       highlight: highlight || null,
+      drawConfig: drawConfig,
+      drawState: state.geo.draw || { heights: [], auxPoints: [] },
+      pointMap: pack.map || {},
+      onDrawChange: function (ds) {
+        state.geo.draw = ds;
+        updateGeoFootHint();
+      },
     });
+    updateGeoFootHint();
   }
 
   function renderGeoPart() {
@@ -3189,7 +3230,7 @@
   }
 
   function startGeoSession() {
-    state.geo = { done: {}, partial: {}, lastExpr: {}, coords: {} };
+    state.geo = { done: {}, partial: {}, lastExpr: {}, coords: {}, draw: null };
     state.history = ["נתון: נקודות על מערכת הצירים"];
     var pack0 = state.problem && state.problem.geo;
     if (pack0) {
@@ -3352,6 +3393,9 @@
     state.geo.done = done;
     state.geo.partial = {};
     state.geo.coords = {};
+    state.geo.draw = DoctematicaGeometry.initDrawProgress
+      ? DoctematicaGeometry.initDrawProgress(pack, {})
+      : null;
     pack.tasks.forEach(function (t) {
       if (t.kind === "point") state.geo.coords[t.id] = { x: true, y: true };
     });
@@ -4107,7 +4151,7 @@
         work: true,
         buttons: true,
         hintText: hasAreaHint
-          ? "אורכים: גדול פחות קטן. שטח: קודם הביטוי (למשל 3×6/2), ואז התוצאה המספרית."
+          ? "אורכים: גדול פחות קטן. שטח: בחרו נוסחה ב«שטחים», רשמו את הקודקודים, ואז את הביטוי והתוצאה."
           : "קטע/ראשית: גדול פחות קטן. מרחק לציר: A→x. מרחק מנקודה לקטע: C→AB או CAB. מציאת נקודה: B(x;y).",
         hint: geoHint,
         oneStep: geoOneStep,
@@ -4373,9 +4417,20 @@
       var hasArea = (geoPack.tasks || []).some(function (t) {
         return t.kind === "area";
       });
+      var hasRect =
+        hasArea &&
+        (geoPack.tasks || []).some(function (t) {
+          return (
+            t.kind === "area" &&
+            (DoctematicaGeometry.areaShape
+              ? DoctematicaGeometry.areaShape(t) === "rect"
+              : (t.verts || []).length === 4)
+          );
+        });
       if (hasArea) {
-        promptEl.textContent =
-          "שטח משולש: מומלץ קודם אורכי הניצבים, אחר כך sABC=(AB×BC)/2 בשלבים. אפשר גם שטח נכון ישירות.";
+        promptEl.textContent = hasRect
+          ? "שטח מלבן: מומלץ קודם אורכי הצלעות (גדול פחות קטן), אחר כך sABCD=AB×BC בשלבים. אם חסרים קודקודים — מצאו אותם קודם."
+          : "שטח משולש: מומלץ קודם אורכי הניצבים, אחר כך sABC=(AB×BC)/2 בשלבים. אפשר גם שטח נכון ישירות.";
       } else if (hasDistSeg && !hasPointTask) {
         promptEl.textContent =
           "מצאו מרחק של נקודה מקטע (ראו שרטוט). רשמו C→AB או CAB. מקביל לציר → גדול פחות קטן בשיעור המתאים.";

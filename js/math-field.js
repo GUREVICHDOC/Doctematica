@@ -228,7 +228,8 @@
     }
     if (part.type === "area") {
       var verts = this.serializeSlot(part.verts).replace(/\s+/g, "").toUpperCase();
-      return "S△" + verts;
+      var mark = part.shape === "rect" ? "□" : "△";
+      return "S" + mark + verts;
     }
     if (part.type === "frac") return this.serializeSlot(part);
     var w = String(part.whole || "").trim();
@@ -495,12 +496,12 @@
     this.focusPath = path;
     this.caretPos = a + String(ch).length;
     if (path[0] === "verts") {
-      var cleaned = this.sanitizeAreaVerts(next);
+      var cleaned = this.sanitizeAreaVerts(next, this.areaVertsNeed(this.parts[partIndex]));
       el.value = cleaned;
       this.setAt(this.parts[partIndex], path, cleaned);
       this.caretPos = cleaned.length;
       this.fitAllSlots();
-      if (cleaned.length >= 3) {
+      if (cleaned.length >= this.areaVertsNeed(this.parts[partIndex])) {
         this.focusAfterAreaVerts(partIndex);
         return;
       }
@@ -532,12 +533,17 @@
     this.focus();
   };
 
-  MathField.prototype.insertArea = function () {
+  MathField.prototype.areaVertsNeed = function (part) {
+    if (part && part.type === "area" && part.shape === "rect") return 4;
+    return 3;
+  };
+
+  MathField.prototype.insertArea = function (shape) {
     if (this.disabled) return;
     var part = this.parts[this.focusPart];
     if (part && part.type !== "text") return;
     var split = this.splitCurrentText();
-    this.insertWithSplit(split, { type: "area", verts: "" });
+    this.insertWithSplit(split, { type: "area", shape: shape === "rect" ? "rect" : "triangle", verts: "" });
     this.normalize();
     this.focusPath = ["verts"];
     this.render();
@@ -713,7 +719,11 @@
   MathField.prototype.fitSlot = function (input) {
     if (!input) return;
     input.style.width = "1px";
-    var minW = input.classList.contains("ml-area-verts") ? 22 : 28;
+    var minW = input.classList.contains("ml-area-verts")
+      ? input.maxLength >= 4
+        ? 34
+        : 22
+      : 28;
     var w = Math.max(minW, input.scrollWidth + 12);
     input.style.width = w + "px";
   };
@@ -733,11 +743,11 @@
     }
   };
 
-  MathField.prototype.sanitizeAreaVerts = function (raw) {
+  MathField.prototype.sanitizeAreaVerts = function (raw, need) {
     return String(raw || "")
       .replace(/[^A-Za-z]/g, "")
       .toUpperCase()
-      .slice(0, 3);
+      .slice(0, need || 4);
   };
 
   MathField.prototype.focusAfterAreaVerts = function (partIndex) {
@@ -761,7 +771,7 @@
     if (!path || path[0] !== "verts") return false;
     var part = this.parts[partIndex];
     if (!part || part.type !== "area") return false;
-    var cleaned = this.sanitizeAreaVerts(el ? el.value : part.verts);
+    var cleaned = this.sanitizeAreaVerts(el ? el.value : part.verts, this.areaVertsNeed(part));
     if (el && el.value !== cleaned) {
       el.value = cleaned;
       try {
@@ -770,7 +780,7 @@
     }
     this.setAt(part, ["verts"], cleaned);
     this.fitAllSlots();
-    if (cleaned.length < 3) return false;
+    if (cleaned.length < this.areaVertsNeed(part)) return false;
     var self = this;
     setTimeout(function () {
       self.focusAfterAreaVerts(partIndex);
@@ -789,7 +799,10 @@
     input.setAttribute("data-part", String(partIndex));
     input.setAttribute("data-path", this.pathKey(path));
     if (cls === "ml-area-verts") {
-      input.maxLength = 3;
+      var need = 3;
+      var areaPart = this.parts[partIndex];
+      if (areaPart && areaPart.type === "area" && areaPart.shape === "rect") need = 4;
+      input.maxLength = need;
       input.setAttribute("inputmode", "text");
       input.setAttribute("autocapitalize", "characters");
     }
@@ -919,20 +932,22 @@
       }
       if (part.type === "area") {
         var area = document.createElement("span");
-        area.className = "ml-area";
+        area.className = "ml-area" + (part.shape === "rect" ? " is-rect" : "");
         var sLetter = document.createElement("span");
         sLetter.className = "ml-area-s";
         sLetter.textContent = "S";
         area.appendChild(sLetter);
-        var tri = document.createElement("span");
-        tri.className = "ml-area-tri";
-        tri.setAttribute("aria-hidden", "true");
-        tri.innerHTML =
-          '<svg viewBox="0 0 14 12" width="0.7em" height="0.6em" focusable="false"><path d="M7 1.2 L12.8 10.8 H1.2 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
-        area.appendChild(tri);
+        var mark = document.createElement("span");
+        mark.className = part.shape === "rect" ? "ml-area-rect" : "ml-area-tri";
+        mark.setAttribute("aria-hidden", "true");
+        mark.innerHTML =
+          part.shape === "rect"
+            ? '<svg viewBox="0 0 14 12" width="0.72em" height="0.58em" focusable="false"><rect x="1.4" y="1.6" width="11.2" height="8.8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>'
+            : '<svg viewBox="0 0 14 12" width="0.7em" height="0.6em" focusable="false"><path d="M7 1.2 L12.8 10.8 H1.2 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+        area.appendChild(mark);
         var vertsInp = self.makeInput(index, ["verts"], part.verts, "ml-area-verts");
-        vertsInp.placeholder = "…";
-        vertsInp.setAttribute("aria-label", "קודקודי המשולש");
+        vertsInp.placeholder = part.shape === "rect" ? "ABCD" : "…";
+        vertsInp.setAttribute("aria-label", part.shape === "rect" ? "קודקודי המלבן" : "קודקודי המשולש");
         area.appendChild(vertsInp);
         run.appendChild(area);
         return;
@@ -1006,14 +1021,6 @@
           self.insertMixed();
         },
       },
-      {
-        label: "שטח",
-        icon:
-          '<span class="area-icon" aria-hidden="true"><b>S</b><svg viewBox="0 0 14 12" width="14" height="12" focusable="false"><path d="M7 1.2 L12.8 10.8 H1.2 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>',
-        run: function () {
-          self.insertArea();
-        },
-      },
     ].forEach(function (spec) {
       var btn = document.createElement("button");
       btn.type = "button";
@@ -1025,6 +1032,74 @@
       btn.addEventListener("click", spec.run);
       self.actionsHost.appendChild(btn);
     });
+    this.buildAreaMenu();
+  };
+
+  MathField.prototype.closeAreaMenu = function () {
+    if (!this.areaMenu) return;
+    this.areaMenu.classList.add("hidden");
+  };
+
+  MathField.prototype.buildAreaMenu = function () {
+    var self = this;
+    var wrap = document.createElement("div");
+    wrap.className = "area-menu-wrap";
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ghost math-action";
+    btn.setAttribute("aria-haspopup", "true");
+    btn.innerHTML =
+      '<span class="area-icon" aria-hidden="true"><b>S</b></span><span>שטחים</span>';
+    var menu = document.createElement("div");
+    menu.className = "area-shape-menu hidden";
+    menu.setAttribute("role", "menu");
+    var items = [
+      {
+        shape: "triangle",
+        label: "משולש",
+        html:
+          '<span class="area-icon"><b>S</b><svg viewBox="0 0 14 12" width="14" height="12" focusable="false"><path d="M7 1.2 L12.8 10.8 H1.2 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span><span>משולש</span><small>3 קודקודים</small>',
+      },
+      {
+        shape: "rect",
+        label: "מלבן",
+        html:
+          '<span class="area-icon"><b>S</b><svg viewBox="0 0 14 12" width="14" height="12" focusable="false"><rect x="1.4" y="1.6" width="11.2" height="8.8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span><span>מלבן</span><small>4 קודקודים</small>',
+      },
+    ];
+    items.forEach(function (item) {
+      var opt = document.createElement("button");
+      opt.type = "button";
+      opt.className = "area-shape-opt";
+      opt.setAttribute("role", "menuitem");
+      opt.innerHTML = item.html;
+      opt.addEventListener("mousedown", function (event) {
+        event.preventDefault();
+      });
+      opt.addEventListener("click", function () {
+        self.closeAreaMenu();
+        self.insertArea(item.shape);
+      });
+      menu.appendChild(opt);
+    });
+    btn.addEventListener("mousedown", function (event) {
+      event.preventDefault();
+    });
+    btn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      menu.classList.toggle("hidden");
+    });
+    wrap.appendChild(btn);
+    wrap.appendChild(menu);
+    this.actionsHost.appendChild(wrap);
+    this.areaMenu = menu;
+    if (!MathField._areaMenuDocBound) {
+      MathField._areaMenuDocBound = true;
+      document.addEventListener("click", function () {
+        var menus = document.querySelectorAll(".area-shape-menu");
+        for (var i = 0; i < menus.length; i++) menus[i].classList.add("hidden");
+      });
+    }
   };
 
   global.DoctematicaMathField = MathField;

@@ -391,6 +391,22 @@
   letter-spacing: 0.02em;
 }
 
+.ml-area.is-rect .ml-area-verts {
+  width: 2.9em;
+}
+
+.ml-area-rect {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  margin: 0 1px 0.12em 0;
+  opacity: 0.95;
+}
+
+.ml-area-rect svg {
+  display: block;
+}
+
 .ml-area-verts:focus {
   outline: none;
   background: #eef6ef;
@@ -413,6 +429,60 @@
 .area-icon svg {
   display: block;
   margin-top: 1px;
+}
+
+.area-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.area-shape-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 11.5rem;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #fffdf8;
+  border: 1px solid #d8cbb8;
+  border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(40, 28, 12, 0.12);
+}
+
+.area-shape-menu.hidden {
+  display: none;
+}
+
+.area-shape-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  text-align: right;
+}
+
+.area-shape-opt small {
+  margin-right: auto;
+  font-weight: 500;
+  opacity: 0.7;
+  font-size: 0.78em;
+}
+
+.area-shape-opt:hover,
+.area-shape-opt:focus {
+  background: #eef6ef;
+  outline: none;
 }
 
 .pm-icon,
