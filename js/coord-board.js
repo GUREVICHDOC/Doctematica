@@ -67,15 +67,16 @@
     return s.length + extra;
   }
 
-  function appendPointLabel(svg, tx, ty, labelText, labelHtml, cls, anchor) {
+  function appendPointLabel(svg, tx, ty, labelText, labelHtml, cls, anchor, below) {
     var MathR = global.DoctematicaMath;
     if (labelHtml && MathR && typeof MathR.toHTML === "function") {
       var foW = Math.max(56, eqLabelVisualLen(labelText) * 6.8);
       var foH = 28;
       var fo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
       var xOff = anchor === "end" ? -foW : 0;
+      var yOff = below ? 2 : -foH + 6;
       fo.setAttribute("x", String(tx + xOff));
-      fo.setAttribute("y", String(ty - foH + 6));
+      fo.setAttribute("y", String(ty + yOff));
       fo.setAttribute("width", String(foW));
       fo.setAttribute("height", String(foH));
       var div = document.createElement("div");
@@ -91,9 +92,70 @@
     el.setAttribute("y", ty);
     el.setAttribute("class", cls);
     if (anchor === "end") el.setAttribute("text-anchor", "end");
+    if (below) el.setAttribute("dominant-baseline", "hanging");
     el.textContent = labelText;
     svg.appendChild(el);
     return el;
+  }
+
+  function onCoordAxis(n) {
+    return Math.abs(n) < 1e-6;
+  }
+
+  function pointLabelSpot(p, points) {
+    var def = {
+      dx: p.x < 0 ? -8 : 8,
+      dy: -10,
+      anchor: p.x < 0 ? "end" : "start",
+      below: false,
+    };
+    if (String(p.label || "").toUpperCase() === "O") return def;
+    if (onCoordAxis(p.y) && !onCoordAxis(p.x)) {
+      var close = (points || []).filter(function (q) {
+        if (q === p) return false;
+        if (String(q.label || "").toUpperCase() === "O") return false;
+        return onCoordAxis(q.y) && Math.abs(q.x - p.x) <= 1.75;
+      });
+      var left = close.some(function (q) {
+        return q.x < p.x;
+      });
+      var right = close.some(function (q) {
+        return q.x > p.x;
+      });
+      if (close.length && !left) {
+        return { dx: -12, dy: 16, anchor: "end", below: true };
+      }
+      if (close.length && !right) {
+        return { dx: 14, dy: -12, anchor: "start", below: false };
+      }
+      return {
+        dx: p.x < 0 ? -8 : 8,
+        dy: 16,
+        anchor: p.x < 0 ? "end" : "start",
+        below: true,
+      };
+    }
+    if (onCoordAxis(p.x) && !onCoordAxis(p.y)) {
+      var closeY = (points || []).filter(function (q) {
+        if (q === p) return false;
+        if (String(q.label || "").toUpperCase() === "O") return false;
+        return onCoordAxis(q.x) && Math.abs(q.y - p.y) <= 1.75;
+      });
+      var belowN = closeY.some(function (q) {
+        return q.y < p.y;
+      });
+      var above = closeY.some(function (q) {
+        return q.y > p.y;
+      });
+      if (closeY.length && !belowN) {
+        return { dx: -10, dy: 14, anchor: "end", below: true };
+      }
+      if (closeY.length && !above) {
+        return { dx: -10, dy: -12, anchor: "end", below: false };
+      }
+      return { dx: p.y < 0 ? -8 : -10, dy: p.y < 0 ? 12 : -10, anchor: "end", below: p.y < 0 };
+    }
+    return def;
   }
 
   function appendLineEqLabel(svg, eq, g, ends, sx, sy, obstacles) {
@@ -523,16 +585,6 @@
     (drawState.heights || []).forEach(function (h) {
       if (h && h.foot) extra.push(h.foot);
     });
-    (scene.graphs || []).forEach(function (g) {
-      if (!g) return;
-      if (g.vertical != null && isFinite(g.vertical)) {
-        extra.push({ x: g.vertical, y: 0 });
-        return;
-      }
-      if (!isFinite(g.m) || !isFinite(g.b)) return;
-      extra.push({ x: 0, y: g.b });
-      if (Math.abs(g.m) > 1e-9) extra.push({ x: -g.b / g.m, y: 0 });
-    });
     var view = this._computeView(points, extra);
     this._view = view;
     var sx = view.sx;
@@ -806,6 +858,22 @@
       return { x: acc.x / acc.n, y: acc.y / acc.n };
     }
     var triC = centroidOfPolys();
+    function centroidToward(lab) {
+      var names = lab && lab.inside;
+      if (names && names.length >= 3) {
+        var pts = names.map(resolvePt).filter(Boolean);
+        if (pts.length >= 3) {
+          var sx0 = 0;
+          var sy0 = 0;
+          pts.forEach(function (p) {
+            sx0 += p.x;
+            sy0 += p.y;
+          });
+          return { x: sx0 / pts.length, y: sy0 / pts.length };
+        }
+      }
+      return triC;
+    }
     (scene.segLabels || []).forEach(function (lab) {
       var a = resolvePt(lab.from);
       var b = resolvePt(lab.to);
@@ -821,16 +889,29 @@
       var my = (a.y + b.y) / 2;
       var nx = -dy / slen;
       var ny = dx / slen;
-      if (triC) {
-        var toC = { x: sx(triC.x) - (p0x + p1x) / 2, y: sy(triC.y) - (p0y + p1y) / 2 };
+      var aim = centroidToward(lab);
+      if (aim) {
+        var toC = { x: sx(aim.x) - (p0x + p1x) / 2, y: sy(aim.y) - (p0y + p1y) / 2 };
         if (nx * toC.x + ny * toC.y < 0) {
           nx = -nx;
           ny = -ny;
         }
       }
-      var angleDeg = readableAngleDeg(dx, dy);
-      var px = (p0x + p1x) / 2 + nx * 16;
-      var py = (p0y + p1y) / 2 + ny * 16;
+      var angleDeg =
+        lab.upright || Math.abs(a.x - b.x) < 1e-6 || Math.abs(a.y - b.y) < 1e-6
+          ? 0
+          : readableAngleDeg(dx, dy);
+      var px = (p0x + p1x) / 2 + nx * 18;
+      var py = (p0y + p1y) / 2 + ny * 18;
+      var onX = Math.abs(a.y) < 1e-6 && Math.abs(b.y) < 1e-6;
+      var onY = Math.abs(a.x) < 1e-6 && Math.abs(b.x) < 1e-6;
+      if (onX) {
+        py = (p0y + p1y) / 2 - 16;
+        px = (p0x + p1x) / 2;
+      } else if (onY) {
+        px = (p0x + p1x) / 2 + (nx >= 0 ? 16 : -16);
+        py = (p0y + p1y) / 2;
+      }
       var wrap = document.createElementNS("http://www.w3.org/2000/svg", "g");
       wrap.setAttribute("class", "coord-seg-len-wrap");
       wrap.setAttribute("transform", "translate(" + px + " " + py + ") rotate(" + angleDeg + ")");
@@ -888,7 +969,21 @@
           return String(p.label || "").toUpperCase() === footKey;
         });
         if (!footKnown) {
-          text(fx + 10, fy - 8, h.footLabel, "coord-point-label is-unknown is-foot-label");
+          var fakeFoot = { label: h.footLabel, x: h.foot.x, y: h.foot.y };
+          var spotH = pointLabelSpot(fakeFoot, points.concat([fakeFoot]));
+          var clsH = "coord-point-label is-unknown is-foot-label";
+          if (spotH.anchor === "end") clsH += " is-left";
+          if (spotH.below) clsH += " is-below";
+          appendPointLabel(
+            svg,
+            fx + spotH.dx,
+            fy + spotH.dy,
+            h.footLabel,
+            null,
+            clsH,
+            spotH.anchor,
+            spotH.below
+          );
         }
       }
     });
@@ -923,13 +1018,14 @@
       var Geo = global.DoctematicaGeometry;
       var label = Geo && Geo.coordLabel ? Geo.coordLabel(p) : p.label;
       var labelHtml = Geo && Geo.coordLabelHTML ? Geo.coordLabelHTML(p) : null;
-      var ty = cy - 10;
-      var tx = cx + 8;
-      if (p.x < 0) tx = cx - 8;
-      var cls = p.x < 0 ? "coord-point-label is-left" : "coord-point-label";
+      var spot = pointLabelSpot(p, points);
+      var tx = cx + spot.dx;
+      var ty = cy + spot.dy;
+      var cls = spot.anchor === "end" ? "coord-point-label is-left" : "coord-point-label";
+      if (spot.below) cls += " is-below";
       if (p.hideX || p.hideY) cls += " is-unknown";
       if (p.revealed) cls += " is-revealed";
-      appendPointLabel(svg, tx, ty, label, labelHtml, cls, p.x < 0 ? "end" : "start");
+      appendPointLabel(svg, tx, ty, label, labelHtml, cls, spot.anchor, spot.below);
     });
 
     this.host.appendChild(svg);

@@ -23,6 +23,7 @@ If both coordinates come from parallels (`twinX` and `twinY`, no line to substit
 - On the y-axis: `x = 0` → plug → y → point.
 - On the x-axis: `y = 0` → plug → solve for x → point.
 - If the point lies on **more than one line**, pick the **easier** equation to plug into (already `y = mx + b`, integer coeffs, positive m, intercept that is already b). That is the site / one-step path.
+- If they plug into a line that is on the figure but **does not contain the point**, reject and name both equations (the one they used, and the one through the point).
 
 ## Other valid paths (always accept)
 
@@ -43,7 +44,31 @@ Hints follow **what the student already typed**. If they equated, continue that 
 
 Right triangle, legs ∥ axes, \(S\) given: optional write \(S△=(leg\times leg)/2\), then plug the known area and the known length, leave the unknown side (`BO` or `x`) and solve as a linear equation (one-sided denom → multiply both sides, e.g. `10=(BO×4)/2` → `20=4BO` → `BO=5`). Direct plug is allowed. Skip to the length is allowed. Then the point (on an axis / from a parallel).
 
-On the figure: given area is labeled `S=…` inside the triangle. Computed (and given) side lengths sit next to that side, rotated with the same slope, offset toward the interior so they do not cover a line equation.
+On the figure: given area is labeled `S=…` inside the triangle. Side lengths are shown only on a side that is axis-aligned (on or ∥ the y-axis, or on or ∥ the x-axis), written horizontally, if the length is given or already found (including a drawn height such as HJ). Diagonal sides stay by their slope (line equation), not a length label.
+
+## Equation of a line (point + slope)
+
+Site path: plug into \(y-y_1=m(x-x_1)\) (also at the origin: `y-0=m(x-0)`), expand, move terms, reach \(y=mx+b\). Example: \((-4,5)\), \(m=2\) → `y-5=2(x-(-4))` → `y-5=2(x+4)` → `y-5=2x+8` → `y=2x+8+5` → `y=2x+13`. If both \(x_1\) and \(y_1\) are negative, turn both `--` into \(+\) in **one** step (`y-(-3)=-(x-(-6))` → `y+3=-(x+6)`). Through the origin, \(m=-4/3\) → `y-0=-(4/3)(x-0)` → `y=-(4/3)x` (open parentheses and drop the zeros in the same step).
+
+Also accept plug into \(y=mx+b\) and solve for \(b\) (`5=2*(-4)+b` → `b=13`), then the line. Any correct rearrange is allowed. Skip to \(y=mx+b\) is allowed.
+
+## Book parts vs steps
+
+Do **not** invent extra א/ב/ג because the student must do two things (point then equation, slope then equation). Keep the book’s parts. Put several `taskIds` in one part; `partStepByTask` sequences them. Hints and the live heading (`taskStepLabel` / «משימה:») follow the **current** action. Skip-ahead is still allowed.
+
+## Hints follow the current state
+
+Before they start the current micro-step, the hint is the **next action** plus why it helps the part’s goal — not the whole solution. Examples: remaining points A and B → find A and B to later get the line; A already found → find B to later get the line; both found → now the slope (then the equation). Once they have typed a computation (`x = 0`, a plug, a slope formula…), drop the path sentence and keep the usual calculation hints. Follow what they already typed (equate vs intercept, etc.).
+
+## Two points — slope then equation
+
+Site path: first the slope of the two points (same as slope), then the equation from one of those points and that \(m\) (same as point+slope). Skip to \(m\), then skip to \(y=mx+b\), is allowed. The equation part stays the existing `lineEq` checker — do not add a second path. Same part unless the book itself splits them.
+
+## Slope from two points
+
+Site path: write \(m_{AB}=(y_2-y_1)/(x_2-x_1)\) (large m, small AB). The subscript must be the two points of that line (AB or BA). Wrong letters (e.g. \(m_{CD}\) when the figure has A and B) are rejected. Later, several slope tasks: the letters choose which line; the numbers must match those two points. Bare \(m=\) or skip to the number still applies to the current line.
+
+Detect: x on top / y on bottom; mixed order (numerator 1−2 and denominator 2−1) which flips the sign.
 
 ## Draw height («+ גובה»)
 

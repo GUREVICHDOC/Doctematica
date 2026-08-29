@@ -125,6 +125,29 @@
   letter-spacing: 0.02em;
 }
 
+.m-slope {
+  display: inline-flex;
+  align-items: flex-end;
+  font-family: "Times New Roman", "David Libre", serif;
+  margin-inline-end: 0.06em;
+}
+
+.m-slope-m {
+  font-size: 1.42em;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 0.85;
+}
+
+.m-slope-pts {
+  font-size: 0.42em;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 0.06em;
+  margin-inline-start: 0.04em;
+  letter-spacing: 0.04em;
+}
+
 .m-mixed {
   display: inline-flex;
   align-items: center;
@@ -393,6 +416,61 @@
 
 .ml-area.is-rect .ml-area-verts {
   width: 2.9em;
+}
+
+.ml-mslope {
+  display: inline-flex;
+  align-items: flex-end;
+  flex: 0 0 auto;
+  margin: 0 2px;
+  font-family: "Times New Roman", "David Libre", serif;
+}
+
+.ml-mslope-m {
+  font-size: 1.45em;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 0.85;
+  padding-bottom: 0.02em;
+}
+
+.ml-mslope-pts {
+  width: 1.6em;
+  min-width: 1.1em;
+  border: 0;
+  border-bottom: 1px dashed #c8bba8;
+  padding: 0;
+  margin: 0 0 0.04em 1px;
+  font: inherit;
+  font-size: 0.48em;
+  font-weight: 700;
+  text-align: center;
+  background: transparent;
+  letter-spacing: 0.04em;
+}
+
+.mslope-action-wrap {
+  display: inline-flex;
+}
+
+.mslope-icon {
+  display: inline-flex;
+  align-items: flex-end;
+  font-family: "Times New Roman", "David Libre", serif;
+  line-height: 1;
+}
+
+.mslope-icon b {
+  font-size: 1.15em;
+  font-style: italic;
+  font-weight: 700;
+}
+
+.mslope-icon small {
+  font-size: 0.45em;
+  font-weight: 700;
+  margin-bottom: 0.08em;
+  margin-inline-start: 0.04em;
 }
 
 .ml-area-rect {

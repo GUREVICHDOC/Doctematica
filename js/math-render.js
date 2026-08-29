@@ -181,6 +181,17 @@
         }
         continue;
       }
+      var mSlopeLab = s.slice(i).match(/^m_?([A-Za-z]{2,3})(?![A-Za-z])/);
+      if (mSlopeLab) {
+        out +=
+          '<span class="m-slope">' +
+          '<span class="m-slope-m">m</span>' +
+          '<span class="m-slope-pts">' +
+          escapeHtml(mSlopeLab[1]) +
+          "</span></span>";
+        i += mSlopeLab[0].length;
+        continue;
+      }
       var mixed = s.slice(i).match(/^(-?\d+)\s+(\d+)\s*\/\s*(\d+)/);
       if (mixed) {
         out += mixedHTML(mixed[1], mixed[2], mixed[3]);
@@ -402,6 +413,8 @@
   var RE_SLOPE_TEMPLATE = /y\s*=\s*mx\s*[+−–—-]\s*b/gi;
   var RE_SLOPE_YX =
     /[yY]\s*=\s*[−–—-]?(?:(?:\(\s*\d+(?:\.\d+)?\s*\/\s*\d+(?:\.\d+)?\s*\)\s*[xX]|\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?\s*[xX])|[xX])(?:\s*[+−–—-]\s*\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)?/gi;
+  var RE_M_EQ =
+    /\bm\s*=\s*[−–—-]?(?:\d+\s+\d+\s*\/\s*\d+|\(\d+\s*\/\s*\d+\)|\d+\s*\/\s*\d+|\d+(?:\.\d+)?)/gi;
   var RE_PROSE_MATH =
     /S(?:△|Δ|□|▭)?[A-Za-z]{3,4}(?:\s*=\s*S(?:△|Δ|□|▭)?[A-Za-z]{3,4}\s*[−–—-]\s*S(?:△|Δ|□|▭)?[A-Za-z]{3,4})?|[A-Za-z]→[A-Za-z]{2}|[A-Za-z]\s*\(\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*[.,;]\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*\)|\(\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*[.,;]\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*\)|[−–—-]?\d+(?:\.\d+)?[xX](?!\w)/g;
 
@@ -425,6 +438,7 @@
       );
       return id;
     }
+    src = src.replace(RE_M_EQ, stash);
     src = src.replace(RE_SLOPE_TEMPLATE, stash);
     src = src.replace(RE_LINEAR_EQ, function (chunk, offset, full) {
       if (offset > 0 && /[xX0-9)]\s*[+−–—-]\s*$/.test(full.slice(0, offset))) return chunk;
@@ -432,6 +446,12 @@
     });
     src = src.replace(RE_SLOPE_YX, stash);
     src = src.replace(RE_PROSE_MATH, stash);
+    src = src.replace(
+      /(^|[^A-Za-z0-9])([−–—-]\s*(?:\d+\s+\d+\s*\/\s*\d+|\(\d+\s*\/\s*\d+\)|\d+\s*\/\s*\d+|\d+(?:\.\d+)?))/g,
+      function (_, pre, num) {
+        return pre + stash(num);
+      }
+    );
     var esc = escapeHtml(src);
     slots.forEach(function (html, i) {
       esc = esc.split("\x00M" + i + "\x00").join(html);

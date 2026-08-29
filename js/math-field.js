@@ -19,6 +19,10 @@
     return v && typeof v === "object" && v.type === "area";
   }
 
+  function isMSlopeNode(v) {
+    return v && typeof v === "object" && v.type === "mslope";
+  }
+
   /** Plain "x^3" / "2^4" → pow node (for radicands that stored caret as text). */
   function tryParsePowText(s) {
     var t = String(s || "").replace(/\s+/g, "");
@@ -166,6 +170,10 @@
       out.push({ path: path.concat("verts") });
       return;
     }
+    if (node.type === "mslope") {
+      out.push({ path: path.concat("pts") });
+      return;
+    }
     if (node.type === "mixed") out.push({ path: path.concat("whole") });
     var self = this;
     ["num", "den"].forEach(function (field) {
@@ -230,6 +238,10 @@
       var verts = this.serializeSlot(part.verts).replace(/\s+/g, "").toUpperCase();
       var mark = part.shape === "rect" ? "□" : "△";
       return "S" + mark + verts;
+    }
+    if (part.type === "mslope") {
+      var pts = this.serializeSlot(part.pts).replace(/\s+/g, "").toUpperCase();
+      return "m" + pts;
     }
     if (part.type === "frac") return this.serializeSlot(part);
     var w = String(part.whole || "").trim();
@@ -550,6 +562,45 @@
     this.focus();
   };
 
+  MathField.prototype.insertMSlope = function (pts) {
+    if (this.disabled) return;
+    var part = this.parts[this.focusPart];
+    if (part && part.type !== "text") return;
+    var split = this.splitCurrentText();
+    var labels = String(pts || this.mSlopePts || "AB")
+      .replace(/[^A-Za-z]/g, "")
+      .toUpperCase()
+      .slice(0, 2);
+    this.insertWithSplit(split, { type: "mslope", pts: labels });
+    this.normalize();
+    var i;
+    for (i = 0; i < this.parts.length; i++) {
+      if (this.parts[i].type === "mslope") break;
+    }
+    var right = this.parts[i + 1];
+    if (right && right.type === "text" && !/^\s*=/.test(right.value || "")) {
+      right.value = " = " + (right.value || "");
+    }
+    if (labels.length >= 2) {
+      this.focusPart = Math.min(i + 1, this.parts.length - 1);
+      this.focusPath = ["value"];
+      this.caretPos = (this.parts[this.focusPart].value || "").length;
+    } else {
+      this.focusPart = i;
+      this.focusPath = ["pts"];
+    }
+    this.render();
+    this.focus();
+  };
+
+  MathField.prototype.setMSlopeEnabled = function (enabled, pts) {
+    this.mSlopePts = String(pts || "AB")
+      .replace(/[^A-Za-z]/g, "")
+      .toUpperCase()
+      .slice(0, 2);
+    if (this.mSlopeWrap) this.mSlopeWrap.classList.toggle("hidden", !enabled);
+  };
+
   MathField.prototype.insertMixed = function () {
     if (this.disabled) return;
     var part = this.parts[this.focusPart];
@@ -723,13 +774,15 @@
       ? input.maxLength >= 4
         ? 34
         : 22
+      : input.classList.contains("ml-mslope-pts")
+        ? 18
       : 28;
     var w = Math.max(minW, input.scrollWidth + 12);
     input.style.width = w + "px";
   };
 
   MathField.prototype.fitAllSlots = function () {
-    var slots = this.host.querySelectorAll(".ml-slot, .ml-base, .ml-exp, .ml-whole, .ml-area-verts");
+    var slots = this.host.querySelectorAll(".ml-slot, .ml-base, .ml-exp, .ml-whole, .ml-area-verts, .ml-mslope-pts");
     var i;
     for (i = 0; i < slots.length; i++) this.fitSlot(slots[i]);
     var fracs = this.host.querySelectorAll(".ml-frac");
@@ -788,6 +841,30 @@
     return true;
   };
 
+  MathField.prototype.maybeAdvanceMSlopePts = function (partIndex, path, el) {
+    if (!path || path[0] !== "pts") return false;
+    var part = this.parts[partIndex];
+    if (!part || part.type !== "mslope") return false;
+    var cleaned = String(el ? el.value : part.pts || "")
+      .replace(/[^A-Za-z]/g, "")
+      .toUpperCase()
+      .slice(0, 2);
+    if (el && el.value !== cleaned) {
+      el.value = cleaned;
+      try {
+        el.setSelectionRange(cleaned.length, cleaned.length);
+      } catch (e) {}
+    }
+    this.setAt(part, ["pts"], cleaned);
+    this.fitAllSlots();
+    if (cleaned.length < 2) return false;
+    var self = this;
+    setTimeout(function () {
+      self.focusAfterAreaVerts(partIndex);
+    }, 0);
+    return true;
+  };
+
   MathField.prototype.makeInput = function (partIndex, path, value, cls) {
     var self = this;
     var input = document.createElement("input");
@@ -806,12 +883,20 @@
       input.setAttribute("inputmode", "text");
       input.setAttribute("autocapitalize", "characters");
     }
+    if (cls === "ml-mslope-pts") {
+      input.maxLength = 2;
+      input.setAttribute("inputmode", "text");
+      input.setAttribute("autocapitalize", "characters");
+    }
     if (this.focusPart === partIndex && this.pathKey(this.focusPath) === this.pathKey(path)) {
       input.setAttribute("data-active", "1");
     }
     input.addEventListener("input", function () {
       if (self.parts[partIndex]) self.setAt(self.parts[partIndex], path, input.value);
       if (path[0] === "verts" && self.maybeAdvanceAreaVerts(partIndex, path, input)) {
+        return;
+      }
+      if (path[0] === "pts" && self.maybeAdvanceMSlopePts(partIndex, path, input)) {
         return;
       }
       if (path.length === 1 && path[0] === "value") {
@@ -952,6 +1037,20 @@
         run.appendChild(area);
         return;
       }
+      if (part.type === "mslope") {
+        var msl = document.createElement("span");
+        msl.className = "ml-mslope";
+        var mLet = document.createElement("span");
+        mLet.className = "ml-mslope-m";
+        mLet.textContent = "m";
+        msl.appendChild(mLet);
+        var ptsInp = self.makeInput(index, ["pts"], part.pts, "ml-mslope-pts");
+        ptsInp.placeholder = "AB";
+        ptsInp.setAttribute("aria-label", "נקודות השיפוע");
+        msl.appendChild(ptsInp);
+        run.appendChild(msl);
+        return;
+      }
       if (part.type === "mixed") {
         var whole = self.makeInput(index, ["whole"], part.whole, "ml-whole");
         whole.placeholder = "□";
@@ -1032,7 +1131,28 @@
       btn.addEventListener("click", spec.run);
       self.actionsHost.appendChild(btn);
     });
+    this.buildMSlopeButton();
     this.buildAreaMenu();
+  };
+
+  MathField.prototype.buildMSlopeButton = function () {
+    var self = this;
+    var wrap = document.createElement("div");
+    wrap.className = "mslope-action-wrap hidden";
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ghost math-action";
+    btn.innerHTML =
+      '<span class="mslope-icon" aria-hidden="true"><b>m</b><small>AB</small></span><span>שיפוע</span>';
+    btn.addEventListener("mousedown", function (event) {
+      event.preventDefault();
+    });
+    btn.addEventListener("click", function () {
+      self.insertMSlope(self.mSlopePts);
+    });
+    wrap.appendChild(btn);
+    this.actionsHost.appendChild(wrap);
+    this.mSlopeWrap = wrap;
   };
 
   MathField.prototype.closeAreaMenu = function () {

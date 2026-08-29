@@ -47,8 +47,9 @@
   stroke: #c45a2a;
 }
 
-.coord-line-c {
-  stroke: #6b4fa0;
+.coord-line.is-dashed {
+  stroke-dasharray: 8 6;
+  stroke-linecap: round;
 }
 
 .coord-line-name {
@@ -332,6 +333,14 @@
   line-height: 1.1;
   pointer-events: none;
   white-space: nowrap;
+}
+
+.coord-point-label.is-below {
+  fill: var(--ink, #14241a);
+}
+
+.coord-point-label-html.is-below {
+  align-items: flex-start;
 }
 
 .coord-point-label-html.is-left {

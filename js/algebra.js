@@ -357,6 +357,13 @@
     return isolatedRhsKind(raw, "x") === "value";
   }
 
+  function otherHasUnknown(other, v) {
+    var t = String(other || "");
+    if (v === "x2" || v === "x^2") return /x\^2|x²/i.test(t);
+    if (!v) return /x/i.test(t);
+    return new RegExp(v, "i").test(t);
+  }
+
   function isolatedRhsKind(text, v) {
     var eq = rewriteFractions(asEquation(String(text).trim()));
     var parts = eq.split("=");
@@ -365,6 +372,7 @@
     if (isBareLetter(parts[0], v)) other = parts[1];
     else if (isBareLetter(parts[1], v)) other = parts[0];
     else return null;
+    if (otherHasUnknown(other, v)) return null;
     if (isSimpleNumber(other)) return "value";
     if (isUnreducedFraction(other)) return "unreduced";
     return "expr";
