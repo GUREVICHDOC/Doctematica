@@ -567,10 +567,7 @@
     var part = this.parts[this.focusPart];
     if (part && part.type !== "text") return;
     var split = this.splitCurrentText();
-    var labels = String(pts || this.mSlopePts || "AB")
-      .replace(/[^A-Za-z]/g, "")
-      .toUpperCase()
-      .slice(0, 2);
+    var labels = this.cleanMSlopePts(pts || this.mSlopePts || "AB") || "AB";
     this.insertWithSplit(split, { type: "mslope", pts: labels });
     this.normalize();
     var i;
@@ -593,12 +590,20 @@
     this.focus();
   };
 
-  MathField.prototype.setMSlopeEnabled = function (enabled, pts) {
-    this.mSlopePts = String(pts || "AB")
+  MathField.prototype.cleanMSlopePts = function (pts) {
+    return String(pts || "")
       .replace(/[^A-Za-z]/g, "")
       .toUpperCase()
-      .slice(0, 2);
-    if (this.mSlopeWrap) this.mSlopeWrap.classList.toggle("hidden", !enabled);
+      .slice(0, 4);
+  };
+
+  MathField.prototype.setMSlopeEnabled = function (enabled, pts) {
+    this.mSlopePts = this.cleanMSlopePts(pts || "AB") || "AB";
+    if (this.mSlopeWrap) {
+      this.mSlopeWrap.classList.toggle("hidden", !enabled);
+      var lab = this.mSlopeWrap.querySelector(".mslope-icon small");
+      if (lab) lab.textContent = this.mSlopePts || "AB";
+    }
   };
 
   MathField.prototype.insertMixed = function () {
@@ -845,10 +850,7 @@
     if (!path || path[0] !== "pts") return false;
     var part = this.parts[partIndex];
     if (!part || part.type !== "mslope") return false;
-    var cleaned = String(el ? el.value : part.pts || "")
-      .replace(/[^A-Za-z]/g, "")
-      .toUpperCase()
-      .slice(0, 2);
+    var cleaned = this.cleanMSlopePts(el ? el.value : part.pts || "");
     if (el && el.value !== cleaned) {
       el.value = cleaned;
       try {
@@ -1045,8 +1047,8 @@
         mLet.textContent = "m";
         msl.appendChild(mLet);
         var ptsInp = self.makeInput(index, ["pts"], part.pts, "ml-mslope-pts");
-        ptsInp.placeholder = "AB";
-        ptsInp.setAttribute("aria-label", "נקודות השיפוע");
+        ptsInp.placeholder = this.mSlopePts || "AB";
+        ptsInp.setAttribute("aria-label", "שם הישר או שתי נקודות לשיפוע");
         msl.appendChild(ptsInp);
         run.appendChild(msl);
         return;

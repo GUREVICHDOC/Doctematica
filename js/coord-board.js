@@ -258,7 +258,28 @@
     this._keyBound = false;
   };
 
-  CoordBoard.prototype._computeView = function (points, extra) {
+  CoordBoard.prototype._graphFitPoints = function (graphs) {
+    var out = [];
+    var cap = 24;
+    function push(x, y) {
+      if (!isFinite(x) || !isFinite(y)) return;
+      if (Math.abs(x) > cap || Math.abs(y) > cap) return;
+      out.push({ x: x, y: y });
+    }
+    (graphs || []).forEach(function (g) {
+      if (!g) return;
+      if (g.vertical != null && isFinite(g.vertical)) {
+        push(g.vertical, 0);
+        return;
+      }
+      if (!isFinite(g.m) || !isFinite(g.b)) return;
+      push(0, g.b);
+      if (Math.abs(g.m) > 1e-9) push(-g.b / g.m, 0);
+    });
+    return out;
+  };
+
+  CoordBoard.prototype._computeView = function (points, extra, graphs) {
     var xs = [0];
     var ys = [0];
     (points || []).forEach(function (p) {
@@ -267,6 +288,10 @@
     });
     (extra || []).forEach(function (p) {
       if (!p || !isFinite(p.x) || !isFinite(p.y)) return;
+      xs.push(p.x);
+      ys.push(p.y);
+    });
+    this._graphFitPoints(graphs).forEach(function (p) {
       xs.push(p.x);
       ys.push(p.y);
     });
@@ -585,7 +610,7 @@
     (drawState.heights || []).forEach(function (h) {
       if (h && h.foot) extra.push(h.foot);
     });
-    var view = this._computeView(points, extra);
+    var view = this._computeView(points, extra, scene.graphs);
     this._view = view;
     var sx = view.sx;
     var sy = view.sy;
@@ -901,15 +926,15 @@
         lab.upright || Math.abs(a.x - b.x) < 1e-6 || Math.abs(a.y - b.y) < 1e-6
           ? 0
           : readableAngleDeg(dx, dy);
-      var px = (p0x + p1x) / 2 + nx * 18;
-      var py = (p0y + p1y) / 2 + ny * 18;
+      var px = (p0x + p1x) / 2 + nx * 9;
+      var py = (p0y + p1y) / 2 + ny * 9;
       var onX = Math.abs(a.y) < 1e-6 && Math.abs(b.y) < 1e-6;
       var onY = Math.abs(a.x) < 1e-6 && Math.abs(b.x) < 1e-6;
       if (onX) {
-        py = (p0y + p1y) / 2 - 16;
+        py = (p0y + p1y) / 2 - 10;
         px = (p0x + p1x) / 2;
       } else if (onY) {
-        px = (p0x + p1x) / 2 + (nx >= 0 ? 16 : -16);
+        px = (p0x + p1x) / 2 + (nx >= 0 ? 10 : -10);
         py = (p0y + p1y) / 2;
       }
       var wrap = document.createElementNS("http://www.w3.org/2000/svg", "g");

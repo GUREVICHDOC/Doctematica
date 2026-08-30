@@ -181,7 +181,7 @@
         }
         continue;
       }
-      var mSlopeLab = s.slice(i).match(/^m_?([A-Za-z]{2,3})(?![A-Za-z])/);
+      var mSlopeLab = s.slice(i).match(/^m_?((?:III|II|I)|[A-Za-z]{2,4}|\d+)(?![A-Za-z])/);
       if (mSlopeLab) {
         out +=
           '<span class="m-slope">' +
@@ -405,7 +405,7 @@
   }
 
   var LIN_X_TERM =
-    "[−–—-]?(?:(?:\\(\\s*\\d+(?:\\.\\d+)?\\s*\\/\\s*\\d+(?:\\.\\d+)?\\s*\\)\\s*)|\\d+(?:\\.\\d+)?(?:\\/\\d+(?:\\.\\d+)?)?\\s*)?[xX]";
+    "[−–—-]?(?:(?:\\(\\s*\\d+(?:\\.\\d+)?\\s*\\/\\s*\\d+(?:\\.\\d+)?\\s*\\)\\s*)|\\d+(?:\\.\\d+)?(?:\\/\\d+(?:\\.\\d+)?)?\\s*)?[xXyY]";
   var LIN_TERM =
     "(?:" + LIN_X_TERM + "|[−–—-]?\\d+(?:\\.\\d+)?(?:\\/\\d+(?:\\.\\d+)?)?|[a-zA-Z])";
   var LIN_SIDE = "(?:" + LIN_TERM + "(?:\\s*[+−–—-]\\s*" + LIN_TERM + ")*)";

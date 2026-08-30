@@ -20,9 +20,8 @@ If both coordinates come from parallels (`twinX` and `twinY`, no line to substit
 
 ## Intercepts — site path
 
-- On the y-axis: `x = 0` → plug → y → point.
-- On the x-axis: `y = 0` → plug → solve for x → point.
-- If the point lies on **more than one line**, pick the **easier** equation to plug into (already `y = mx + b`, integer coeffs, positive m, intercept that is already b). That is the site / one-step path.
+- On the y-axis: `x = 0` → plug into the given equation (also if it is not `y=mx+b`, e.g. `3x−4y=12` → `−4y=12` or `3·0−4y=12`) → isolate y (`y=−3`) → point. Same for the x-axis: `y = 0` → `3x=12` → `x=4` → point. Any equivalent rearrange is accepted; skip to y, to x, or to the point.
+- If the point lies on **more than one line**, pick the **easier** equation. If one line is ∥ x-axis (`y = k`) or ∥ y-axis (`x = k`), site path: write that coordinate first, then plug into the other line. Equating the two lines is also accepted.
 - If they plug into a line that is on the figure but **does not contain the point**, reject and name both equations (the one they used, and the one through the point).
 
 ## Other valid paths (always accept)
@@ -37,8 +36,8 @@ Hints follow **what the student already typed**. If they equated, continue that 
 ## Area
 
 - Right triangle with legs ∥ axes: optional leg lengths, then \(S=(leg\times leg)/2\) in stages. Direct area is allowed.
-- Base ∥ x-axis (not necessarily right-angled): AB (large x minus small x), height from a vertex to that line (= \(|y|\) of the base; foot G). Then \(S=(AB\times h)/2\) in stages. Splitting into two right triangles is also allowed. The foot may fall outside the segment (continue the line).
-- Base ∥ y-axis: same with large y minus small y, height = \(|x|\) of that vertical line.
+- Base ∥ x-axis (not necessarily right-angled): AB (large x minus small x), height from a vertex to that line (= \(|y|\) of the base; foot G). Then \(S=(AB\times h)/2\) in stages. Splitting into two right triangles is also allowed. The foot may fall outside the segment (continue the line). Hints, «צעד אחד», and «פתרון מלא» must show those length steps **before** plugging numbers into \(S\). Direct \(S=\) is still accepted if the student types it.
+- Base ∥ y-axis: same with large y minus small y, height = \(|x|\) of that vertical line. Lengths first in the site path, then \(S\).
 
 ## Side from a given area
 
@@ -51,6 +50,26 @@ On the figure: given area is labeled `S=…` inside the triangle. Side lengths a
 Site path: plug into \(y-y_1=m(x-x_1)\) (also at the origin: `y-0=m(x-0)`), expand, move terms, reach \(y=mx+b\). Example: \((-4,5)\), \(m=2\) → `y-5=2(x-(-4))` → `y-5=2(x+4)` → `y-5=2x+8` → `y=2x+8+5` → `y=2x+13`. If both \(x_1\) and \(y_1\) are negative, turn both `--` into \(+\) in **one** step (`y-(-3)=-(x-(-6))` → `y+3=-(x+6)`). Through the origin, \(m=-4/3\) → `y-0=-(4/3)(x-0)` → `y=-(4/3)x` (open parentheses and drop the zeros in the same step).
 
 Also accept plug into \(y=mx+b\) and solve for \(b\) (`5=2*(-4)+b` → `b=13`), then the line. Any correct rearrange is allowed. Skip to \(y=mx+b\) is allowed.
+
+## Midpoint of a segment
+
+Site path: \(x=(x_1+x_2)/2\) (order of the two endpoints does not matter), add the numerator, then divide; same for \(y\); then \(M(x;y)\). One-step does x then y then the point. Skip to the summed numerator (`8/2`), to a coordinate (`x=4`), or to the point (`M(4;5)` / `(4;5)`). First term of the numerator, if negative, is written without extra parentheses (`-4 + 6`, not `(-4) + 6`).
+
+Known midpoint, missing endpoint: plug \(x_m=(x_1+x)/2\) (e.g. `3=(1+x)/2`), multiply the left side by 2 (`6=1+x`), then isolate \(x\). Same for \(y\), then \(B(x;y)\). The unknown may be any of \(x_M, x_1, x_2\) (and the same for \(y\)). Skip to any correct later equation or to the point. Detect: missing `/2`, copying the midpoint or the given end, \(2m+x_1\) instead of \(2m-x_1\).
+
+If the missing end is on an axis and the other end on the other axis, and a given point is the midpoint (`AC = CB` means C is the midpoint): site path A first — `x_A=0`, then x of B from the midpoint (`3=(0+x)/2`, ×2, isolate), then y of A (`5=(y+0)/2`). Reverse is equally valid: `y_B=0`, then y of A, then `x_A=0`, then x of B. `y_B=0` may be written anytime. Skip to either point. Headings (`נקודה A` / `נקודה B`) appear only after a step toward that point. `B_x=0` is wrong: B is on the x-axis so `y_B=0`; x of B comes from the midpoint.
+
+Missing ends on **given lines** (not necessarily axes): e.g. A on \(y=x\), B on \(x=9\), C midpoint. Site path: \(x_B=9\) from the vertical line, then \(x_A\) from the midpoint, then \(y_A=x_A\), then \(y_B\) from the midpoint. Other orders are accepted (`y=x` first, \(x_B=9\) later). Do not use \(y=9\) because B is on \(x=9\). Do not give A the \(x\) of the vertical line.
+
+Trisect a segment (`AB=BC=CD`): B is midpoint of AC (find A), C is midpoint of BD (find D). Either end first; either coordinate first.
+
+Given line + segment AB, intersection, then prove the line **bisects** AB: site path rearrange the given equation → slope of AB → equation of AB → equate → intersection. Then midpoint of AB and compare (or show the midpoint lies on the given line). The student may skip rearrange, do slope/equation first, or equate without \(y=mx+b\). Headings follow the **current action** (rearrange, slope, equation, intersection, midpoint, proof), not a fixed step index. Do not reject a correct step because it is not the next site step.
+
+∥ an axis gives a coordinate before the other is known: \(AE\parallel y\) and \(A(4,-1)\) ⇒ \(x_E=4\) and also \(x_M=4\) if M is on AE, even before \(y_E\) is found. Then plug \(x\) into the line through E. Area of a triangle with a vertical base: existing length/height/\(S\) path (`ME` large \(y\) minus small \(y\); height \(|x|\) of that vertical line).
+
+Intercepts then midpoint of that segment: y-axis `x = 0` → plug; x-axis `y = 0` → plug; then the midpoint. Skip to the midpoint is allowed.
+
+Midpoint then line through the origin (and the midpoint): site path is both coordinates of C from the midpoint formula, then the line OC (slope then `lineEq`, or skip to `y=mx`). Also accept: after x of C, equation of AB (slope of AB, then point+slope / `y=mx+b`), plug that x, get y of C, then OC. Do not send `y=(y₁+y₂)/2` to the line-equation checker.
 
 ## Book parts vs steps
 
@@ -74,7 +93,21 @@ Detect: x on top / y on bottom; mixed order (numerator 1−2 and denominator 2�
 
 Offer «+ גובה» in the **current part** whenever the student is asked for a height: its length, its foot, a perpendicular to a side/axis, or an area that uses that height. Do not wait for the area part (e.g. «מצאו את אורך הגובה» before \(S\)). Foot may fall outside the segment. Drawing is optional — a correct length or area without drawing is still accepted. Do not offer it while they are only finding a vertex or a side that is not the altitude.
 
-## Engine
+## Parallel lines
+
+Yes/no: if an equation is not \(y=mx+b\), rearrange first; then כן/לא by whether slopes are equal. The site notes «ישרים מקבילים — שיפועים שווים» (or that they differ); the student may also reason, optionally.
+
+A line parallel to a given line through a point: slope is copied (`m_{II}=m_I=2`, `m_{II}=2`, or `m=2`), then the equation (`lineEq`). Skip to the equation is allowed (`y-y₁=m(x-x₁)` or `y=mx+b`) without writing the slope first — they already have \(m\) from the given parallel line. If the given equation is not \(y=mx+b\), rearrange first (site path); skip to the slope number is allowed. Book א/ב stay if the book has them; a single book item stays one part with `taskIds` slope then equation.
+
+Prove two lines are parallel: compute the two slopes (or one slope and a given \(m\)), then write \(m_{AB}=m_{CD}\) (or \(m_1=m_2\)). The site then adds «ולכן הישרים מקבילים». The note stays «ישרים בעלי אותו שיפוע מקבילים». Not parallel: \(m_{BC}\neq m_{AD}\), then «ולכן הישרים לא מקבילים». Skip to כן/לא still fills the same two lines.
+
+## Lines parallel / perpendicular to the axes
+
+- ∥ x-axis (or ⊥ y-axis): \(y =\) the shared \(y\) (of the point, or of both points).
+- ∥ y-axis (or ⊥ x-axis): \(x =\) the shared \(x\).
+- Parallel to a given axis-parallel line (`y = 2` or `x = 1`): same kind of equation, using the known point’s matching coordinate. Skip to the equation is allowed.
+- Student may skip to the equation. Site hint names the reason (same coordinate, or given ∥ / ⊥, or given line that is already ∥ an axis).
+- Yes/no (e.g. perpendicular to an axis, or a false slope claim): כן/לא only — no reason step.
 
 - Discover lines through `(answerX, answerY)` from `pack.lines`. Do not hard-code only `lineKey`.
 - `y = 3` / tag `Y` is the y-axis, never a wrong x.

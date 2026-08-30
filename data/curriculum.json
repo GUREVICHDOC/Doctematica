@@ -14750,6 +14750,4195 @@
           ]
         }
       ]
+    },
+    {
+      "id": "geo-parallel-1",
+      "topic": "analytic",
+      "subtopic": "line",
+      "mode": "geo-length",
+      "title": "ישרים מקבילים",
+      "instruction": "ישרים מקבילים: שיפועים שווים. אם המשוואה לא ב־y = mx + b — סדרו קודם (אפשר גם לרשום ישר את השיפוע). אחר כך ענו כן או לא. דרך נקודה: אותו שיפוע, ואז משוואת הישר; אפשר לדלג ישר למשוואה.",
+      "exercises": [
+        {
+          "n": 1,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "L1",
+              "line": {
+                "m": 3,
+                "b": 4,
+                "eqText": "y = 3x + 4"
+              }
+            },
+            {
+              "key": "L2",
+              "line": {
+                "m": 3,
+                "b": -5,
+                "eqText": "y = 3x − 5"
+              }
+            }
+          ],
+          "parts": [
+            {
+              "text": "קבעו אם הישרים y = 3x + 4 ו־y = 3x − 5 מקבילים זה לזה.",
+              "taskIds": [
+                "par"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "par",
+              "kind": "parallel",
+              "answer": true,
+              "reason": "שיפועים שווים (שניהם 3) — הישרים מקבילים."
+            }
+          ]
+        },
+        {
+          "n": 2,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "L1",
+              "line": {
+                "m": 1,
+                "b": -5,
+                "eqText": "y = x − 5"
+              }
+            },
+            {
+              "key": "L2",
+              "line": {
+                "m": -1,
+                "b": -5,
+                "eqText": "y = −x − 5"
+              }
+            }
+          ],
+          "parts": [
+            {
+              "text": "קבעו אם הישרים y = x − 5 ו־y = −x − 5 מקבילים זה לזה.",
+              "taskIds": [
+                "par"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "par",
+              "kind": "parallel",
+              "answer": false,
+              "reason": "שיפועים שונים (1 ו־−1) — הישרים לא מקבילים."
+            }
+          ]
+        },
+        {
+          "n": 3,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "L1",
+              "line": {
+                "m": -1.5,
+                "mn": -3,
+                "md": 2,
+                "b": 5,
+                "eqText": "y = −1.5x + 5"
+              }
+            },
+            {
+              "key": "L2",
+              "line": {
+                "m": -1.5,
+                "mn": -3,
+                "md": 2,
+                "b": -7,
+                "eqText": "y = −(3/2)x − 7"
+              }
+            }
+          ],
+          "parts": [
+            {
+              "text": "קבעו אם הישרים y = −1.5x + 5 ו־y = −(3/2)x − 7 מקבילים זה לזה.",
+              "taskIds": [
+                "par"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "par",
+              "kind": "parallel",
+              "answer": true,
+              "reason": "שיפועים שווים (−3/2) — הישרים מקבילים."
+            }
+          ]
+        },
+        {
+          "n": 4,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "L1",
+              "line": {
+                "m": -2,
+                "b": 4,
+                "eqText": "y + 2x = 4"
+              }
+            },
+            {
+              "key": "L2",
+              "line": {
+                "m": -2,
+                "b": 0,
+                "eqText": "y = −2x"
+              }
+            }
+          ],
+          "parts": [
+            {
+              "text": "קבעו אם הישרים y + 2x = 4 ו־y = −2x מקבילים זה לזה.",
+              "taskIds": [
+                "par"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "par",
+              "kind": "parallel",
+              "answer": true,
+              "reason": "אחרי סידור: y = −2x + 4 ו־y = −2x. שיפועים שווים (−2)."
+            }
+          ]
+        },
+        {
+          "n": 5,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "L1",
+              "line": {
+                "m": 1,
+                "b": 0,
+                "eqText": "y = x"
+              }
+            },
+            {
+              "key": "L2",
+              "line": {
+                "m": 1,
+                "b": 3,
+                "eqText": "y − x = 3"
+              }
+            }
+          ],
+          "parts": [
+            {
+              "text": "קבעו אם הישרים y = x ו־y − x = 3 מקבילים זה לזה.",
+              "taskIds": [
+                "par"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "par",
+              "kind": "parallel",
+              "answer": true,
+              "reason": "אחרי סידור: y = x + 3. שיפועים שווים (1)."
+            }
+          ]
+        },
+        {
+          "n": 6,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "L1",
+              "line": {
+                "m": 0,
+                "b": 2,
+                "eqText": "y = 2"
+              }
+            },
+            {
+              "key": "L2",
+              "line": {
+                "m": 2,
+                "b": 7,
+                "eqText": "y = 2x + 7"
+              }
+            }
+          ],
+          "parts": [
+            {
+              "text": "קבעו אם הישרים y = 2 ו־y = 2x + 7 מקבילים זה לזה.",
+              "taskIds": [
+                "par"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "par",
+              "kind": "parallel",
+              "answer": false,
+              "reason": "שיפועים שונים (0 ו־2) — הישרים לא מקבילים."
+            }
+          ]
+        },
+        {
+          "n": 7,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "L1",
+              "line": {
+                "m": 3,
+                "b": 3.5,
+                "eqText": "2y = 6x + 7"
+              }
+            },
+            {
+              "key": "L2",
+              "line": {
+                "m": 3,
+                "b": -2,
+                "eqText": "y = 3x − 2"
+              }
+            }
+          ],
+          "parts": [
+            {
+              "text": "קבעו אם הישרים 2y = 6x + 7 ו־y = 3x − 2 מקבילים זה לזה.",
+              "taskIds": [
+                "par"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "par",
+              "kind": "parallel",
+              "answer": true,
+              "reason": "אחרי סידור: y = 3x + 3½. שיפועים שווים (3)."
+            }
+          ]
+        },
+        {
+          "n": 8,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "L1",
+              "line": {
+                "m": -0.75,
+                "mn": -3,
+                "md": 4,
+                "b": 3,
+                "eqText": "3x + 4y = 12"
+              }
+            },
+            {
+              "key": "L2",
+              "line": {
+                "m": 0.75,
+                "mn": 3,
+                "md": 4,
+                "b": 4,
+                "eqText": "y = (3/4)x + 4"
+              }
+            }
+          ],
+          "parts": [
+            {
+              "text": "קבעו אם הישרים 3x + 4y = 12 ו־y = (3/4)x + 4 מקבילים זה לזה.",
+              "taskIds": [
+                "par"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "par",
+              "kind": "parallel",
+              "answer": false,
+              "reason": "אחרי סידור: y = −(3/4)x + 3. שיפועים שונים."
+            }
+          ]
+        },
+        {
+          "n": 9,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "I",
+              "label": "I",
+              "line": {
+                "m": 2,
+                "b": -3,
+                "eqText": "y = 2x − 3"
+              }
+            },
+            {
+              "key": "II",
+              "label": "II",
+              "line": {
+                "m": 2,
+                "b": -8,
+                "hideEq": true,
+                "dashed": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 5,
+              "y": 2
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "נתון הישר I שמשוואתו y = 2x − 3. הישר II מקביל לישר I ועובר דרך הנקודה A(5;2). מצאו את שיפועו של הישר II.",
+              "taskIds": [
+                "mII"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "מצאו את משוואתו של הישר II.",
+              "taskIds": [
+                "eqII"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "mII",
+              "kind": "slope",
+              "parallel": true,
+              "m": 2,
+              "label": "II"
+            },
+            {
+              "id": "eqII",
+              "kind": "lineEq",
+              "point": "A",
+              "x": 5,
+              "y": 2,
+              "m": 2,
+              "label": "II"
+            }
+          ]
+        },
+        {
+          "n": 10,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "I",
+              "label": "",
+              "line": {
+                "m": -1,
+                "b": 5,
+                "eqText": "y = −x + 5"
+              }
+            },
+            {
+              "key": "II",
+              "label": "",
+              "line": {
+                "m": -1,
+                "b": 2,
+                "hideEq": true,
+                "dashed": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 1,
+              "y": 1
+            }
+          ],
+          "parts": [
+            {
+              "text": "מצאו את משוואת הישר המקביל לישר y = −x + 5 והעובר דרך הנקודה (1;1).",
+              "taskIds": [
+                "mII",
+                "eqII"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "mII",
+              "kind": "slope",
+              "parallel": true,
+              "m": -1,
+              "label": "II"
+            },
+            {
+              "id": "eqII",
+              "kind": "lineEq",
+              "point": "A",
+              "x": 1,
+              "y": 1,
+              "m": -1,
+              "label": "II"
+            }
+          ]
+        },
+        {
+          "n": 11,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "line": {
+            "m": 3,
+            "b": 8,
+            "eqText": "y = 3x + 8"
+          },
+          "lines": [
+            {
+              "key": "AB",
+              "label": "AB",
+              "line": {
+                "m": 3,
+                "b": 8,
+                "eqText": "y = 3x + 8"
+              }
+            },
+            {
+              "key": "II",
+              "label": "",
+              "line": {
+                "m": 3,
+                "b": 0,
+                "hideEq": true,
+                "dashed": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 0,
+              "y": 8
+            },
+            {
+              "label": "B",
+              "x": -2.6666666666666665,
+              "y": 0
+            }
+          ],
+          "parts": [
+            {
+              "text": "הישר AB הוא גרף הפונקציה y = 3x + 8. מצאו את משוואת הישר המקביל לישר AB והעובר דרך ראשית הצירים.",
+              "taskIds": [
+                "mII",
+                "eqII"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "mII",
+              "kind": "slope",
+              "parallel": true,
+              "m": 3,
+              "label": "II"
+            },
+            {
+              "id": "eqII",
+              "kind": "lineEq",
+              "point": "O",
+              "x": 0,
+              "y": 0,
+              "m": 3,
+              "label": "II"
+            }
+          ]
+        },
+        {
+          "n": 12,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "line": {
+            "m": 3,
+            "b": 12,
+            "eqText": "y − 3x = 12"
+          },
+          "lines": [
+            {
+              "key": "I",
+              "label": "",
+              "line": {
+                "m": 3,
+                "b": 12,
+                "eqText": "y − 3x = 12"
+              }
+            },
+            {
+              "key": "II",
+              "label": "",
+              "line": {
+                "m": 3,
+                "b": -2,
+                "hideEq": true,
+                "dashed": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 2,
+              "y": 4
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "נתון הישר y − 3x = 12. מצאו את שיפוע הישר.",
+              "taskIds": [
+                "mI"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "מצאו את משוואת הישר המקביל לישר הנתון והעובר דרך הנקודה (2;4).",
+              "taskIds": [
+                "eqII"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "mI",
+              "kind": "lineMb",
+              "param": "m",
+              "label": "m"
+            },
+            {
+              "id": "eqII",
+              "kind": "lineEq",
+              "point": "A",
+              "x": 2,
+              "y": 4,
+              "m": 3,
+              "label": "II"
+            }
+          ]
+        },
+        {
+          "n": 13,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "line": {
+            "m": -8,
+            "b": 13,
+            "eqText": "y + 8x − 13 = 0"
+          },
+          "lines": [
+            {
+              "key": "I",
+              "label": "",
+              "line": {
+                "m": -8,
+                "b": 13,
+                "eqText": "y + 8x − 13 = 0"
+              }
+            },
+            {
+              "key": "II",
+              "label": "",
+              "line": {
+                "m": -8,
+                "b": 28,
+                "hideEq": true,
+                "dashed": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 4,
+              "y": -4
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "נתון ישר שמשוואתו y + 8x − 13 = 0. מצאו את שיפוע הישר.",
+              "taskIds": [
+                "mI"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "מצאו את משוואת הישר המקביל לישר הנתון והעובר דרך הנקודה (4;−4).",
+              "taskIds": [
+                "eqII"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "mI",
+              "kind": "lineMb",
+              "param": "m",
+              "label": "m"
+            },
+            {
+              "id": "eqII",
+              "kind": "lineEq",
+              "point": "A",
+              "x": 4,
+              "y": -4,
+              "m": -8,
+              "label": "II"
+            }
+          ]
+        },
+        {
+          "n": 14,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "line": {
+            "m": 2,
+            "b": 8,
+            "eqText": "y = 2x + 8"
+          },
+          "lines": [
+            {
+              "key": "I",
+              "label": "",
+              "line": {
+                "m": 2,
+                "b": 8,
+                "eqText": "y = 2x + 8"
+              }
+            },
+            {
+              "key": "II",
+              "label": "",
+              "line": {
+                "m": 3,
+                "b": 8,
+                "hideEq": true,
+                "dashed": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 0,
+              "y": 8,
+              "hideY": true
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "נתון הישר y = 2x + 8. מצאו את נקודת החיתוך של הישר הנתון עם ציר y.",
+              "taskIds": [
+                "A"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "מצאו משוואת ישר המקביל לישר y = 3x + 2 והעובר בנקודה שמצאתם בסעיף א'.",
+              "taskIds": [
+                "mII",
+                "eqII"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "A",
+              "label": "A",
+              "kind": "point",
+              "point": "A",
+              "missing": "y",
+              "intercept": "y"
+            },
+            {
+              "id": "mII",
+              "kind": "lineMb",
+              "param": "m",
+              "label": "m",
+              "line": {
+                "m": 3,
+                "b": 2,
+                "eqText": "y = 3x + 2"
+              }
+            },
+            {
+              "id": "eqII",
+              "kind": "lineEq",
+              "point": "A",
+              "x": 0,
+              "y": 8,
+              "m": 3,
+              "label": "II"
+            }
+          ]
+        },
+        {
+          "n": 15,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "line": {
+            "m": 3,
+            "b": -9,
+            "eqText": "y = 3x − 9"
+          },
+          "lines": [
+            {
+              "key": "I",
+              "label": "",
+              "line": {
+                "m": 3,
+                "b": -9,
+                "eqText": "y = 3x − 9"
+              }
+            },
+            {
+              "key": "II",
+              "label": "",
+              "line": {
+                "m": -2,
+                "b": 6,
+                "hideEq": true,
+                "dashed": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 3,
+              "y": 0,
+              "hideX": true
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "נתון הישר y = 3x − 9. מצאו את נקודת החיתוך של הישר הנתון עם ציר x.",
+              "taskIds": [
+                "A"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "מצאו את משוואת הישר המקביל לישר y + 2x = 16 והעובר בנקודה שמצאתם בסעיף א'.",
+              "taskIds": [
+                "mII",
+                "eqII"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "A",
+              "label": "A",
+              "kind": "point",
+              "point": "A",
+              "missing": "x",
+              "intercept": "x"
+            },
+            {
+              "id": "mII",
+              "kind": "lineMb",
+              "param": "m",
+              "label": "m",
+              "line": {
+                "m": -2,
+                "b": 16,
+                "eqText": "y + 2x = 16"
+              }
+            },
+            {
+              "id": "eqII",
+              "kind": "lineEq",
+              "point": "A",
+              "x": 3,
+              "y": 0,
+              "m": -2,
+              "label": "II"
+            }
+          ]
+        },
+        {
+          "n": 16,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "L1",
+              "label": "",
+              "line": {
+                "m": 2,
+                "b": 4,
+                "eqText": "y = 2x + 4"
+              }
+            },
+            {
+              "key": "L2",
+              "label": "",
+              "line": {
+                "m": -1,
+                "b": 10,
+                "eqText": "y = −x + 10"
+              }
+            }
+          ],
+          "extraLines": [
+            {
+              "m": 5,
+              "b": -2,
+              "hideEq": true,
+              "dashed": true
+            }
+          ],
+          "points": [
+            {
+              "label": "P",
+              "x": 2,
+              "y": 8,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "נתונים הישרים y = 2x + 4 ו־y = −x + 10. מצאו את שיעורי נקודת החיתוך של שני הישרים.",
+              "taskIds": [
+                "P"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "מצאו את משוואת הישר המקביל לישר y = 5x + 23 והעובר בנקודה שמצאתם בסעיף א'.",
+              "taskIds": [
+                "mII",
+                "eqII"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "P",
+              "kind": "lineIntersect",
+              "point": "P",
+              "label": "P"
+            },
+            {
+              "id": "mII",
+              "kind": "lineMb",
+              "param": "m",
+              "label": "m",
+              "line": {
+                "m": 5,
+                "b": 23,
+                "eqText": "y = 5x + 23"
+              }
+            },
+            {
+              "id": "eqII",
+              "kind": "lineEq",
+              "point": "P",
+              "x": 2,
+              "y": 8,
+              "m": 5,
+              "label": "II"
+            }
+          ]
+        },
+        {
+          "n": 17,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "AB",
+              "label": "",
+              "line": {
+                "m": 2,
+                "b": 5,
+                "hideEq": true
+              }
+            },
+            {
+              "key": "CD",
+              "label": "",
+              "line": {
+                "m": 2,
+                "b": 0,
+                "hideEq": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 4,
+              "y": 13
+            },
+            {
+              "label": "B",
+              "x": 1,
+              "y": 7
+            },
+            {
+              "label": "C",
+              "x": 5,
+              "y": 10
+            },
+            {
+              "label": "D",
+              "x": -2,
+              "y": -4
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "from": "C",
+              "to": "D"
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "מצאו את שיפוע הישר העובר דרך הנקודות (4;13) ו־(1;7).",
+              "taskIds": [
+                "mAB"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "מצאו את שיפוע הישר העובר דרך הנקודות (5;10) ו־(−2;−4).",
+              "taskIds": [
+                "mCD"
+              ]
+            },
+            {
+              "label": "ג",
+              "text": "האם הישרים מקבילים? נמקו.",
+              "taskIds": [
+                "par"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "mAB",
+              "label": "m",
+              "kind": "slope",
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "id": "mCD",
+              "label": "m",
+              "kind": "slope",
+              "from": "C",
+              "to": "D"
+            },
+            {
+              "id": "par",
+              "kind": "parallel",
+              "answer": true,
+              "slopeIds": [
+                "mAB",
+                "mCD"
+              ],
+              "reason": "ישרים בעלי אותו שיפוע מקבילים."
+            }
+          ]
+        },
+        {
+          "n": 18,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": 2,
+              "y": 5
+            },
+            {
+              "label": "B",
+              "x": 8,
+              "y": 8
+            },
+            {
+              "label": "C",
+              "x": 11,
+              "y": 5
+            },
+            {
+              "label": "D",
+              "x": 1,
+              "y": 0
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "from": "B",
+              "to": "C"
+            },
+            {
+              "from": "C",
+              "to": "D"
+            },
+            {
+              "from": "D",
+              "to": "A"
+            }
+          ],
+          "polygons": [
+            {
+              "verts": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "הקודקודים של מרובע ABCD הם A(2;5), B(8;8), C(11;5) ו־D(1;0). הוכיחו ש־AB ∥ DC.",
+              "taskIds": [
+                "mAB",
+                "mCD",
+                "parAB"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "הראו ש־BC אינו מקביל ל־AD.",
+              "taskIds": [
+                "mBC",
+                "mAD",
+                "parBC"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "mAB",
+              "label": "m",
+              "kind": "slope",
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "id": "mCD",
+              "label": "m",
+              "kind": "slope",
+              "from": "C",
+              "to": "D"
+            },
+            {
+              "id": "parAB",
+              "kind": "parallel",
+              "answer": true,
+              "slopeIds": [
+                "mAB",
+                "mCD"
+              ],
+              "reason": "ישרים בעלי אותו שיפוע מקבילים."
+            },
+            {
+              "id": "mBC",
+              "label": "m",
+              "kind": "slope",
+              "from": "B",
+              "to": "C"
+            },
+            {
+              "id": "mAD",
+              "label": "m",
+              "kind": "slope",
+              "from": "A",
+              "to": "D"
+            },
+            {
+              "id": "parBC",
+              "kind": "parallel",
+              "answer": false,
+              "slopeIds": [
+                "mBC",
+                "mAD"
+              ],
+              "reason": "שיפועים שונים — הישרים לא מקבילים."
+            }
+          ]
+        },
+        {
+          "n": 19,
+          "hideLineEq": true,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "I",
+              "label": "I",
+              "line": {
+                "m": 2,
+                "b": 6,
+                "hideEq": true
+              }
+            },
+            {
+              "key": "II",
+              "label": "II",
+              "line": {
+                "m": -1,
+                "b": 3,
+                "hideEq": true
+              }
+            }
+          ],
+          "extraLines": [
+            {
+              "m": -1,
+              "b": 0,
+              "hideEq": true,
+              "dashed": true
+            }
+          ],
+          "points": [
+            {
+              "label": "P",
+              "x": -1,
+              "y": 4,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "לפניך שרטוט של שני ישרים, I ו־II. נתונות שלוש משוואות: (1) y = −x + 6, (2) y = 2x + 6, (3) y = −x + 3. שתיים מבין שלוש המשוואות הן של הישרים I ו־II. לכל אחד מן הישרים I ו־II, מצאו את המשוואה המתאימה מבין המשוואות (1), (2), (3). נמקו.",
+              "taskIds": [
+                "eq1",
+                "eq2",
+                "eq3"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "מצאו את משוואת הישר העובר דרך ראשית הצירים (0;0) ומקביל לישר II.",
+              "taskIds": [
+                "mO",
+                "eqO"
+              ]
+            },
+            {
+              "label": "ג",
+              "text": "מצאו את שיעורי נקודת החיתוך של הישרים I ו־II.",
+              "taskIds": [
+                "P"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "eq1",
+              "kind": "lineMatch",
+              "eqNum": 1,
+              "eqText": "y = −x + 6",
+              "answerKey": "none"
+            },
+            {
+              "id": "eq2",
+              "kind": "lineMatch",
+              "eqNum": 2,
+              "eqText": "y = 2x + 6",
+              "answerKey": "I"
+            },
+            {
+              "id": "eq3",
+              "kind": "lineMatch",
+              "eqNum": 3,
+              "eqText": "y = −x + 3",
+              "answerKey": "II"
+            },
+            {
+              "id": "mO",
+              "kind": "slope",
+              "parallel": true,
+              "m": -1,
+              "label": "II"
+            },
+            {
+              "id": "eqO",
+              "kind": "lineEq",
+              "point": "O",
+              "x": 0,
+              "y": 0,
+              "m": -1,
+              "label": "ישר"
+            },
+            {
+              "id": "P",
+              "kind": "lineIntersect",
+              "point": "P",
+              "label": "P"
+            }
+          ]
+        },
+        {
+          "n": 20,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "CD",
+              "label": "CD",
+              "line": {
+                "m": 1,
+                "b": -4,
+                "eqText": "y = x − 4"
+              }
+            },
+            {
+              "key": "AB",
+              "label": "AB",
+              "line": {
+                "m": -1,
+                "b": 10,
+                "eqText": "y = 10 − x"
+              }
+            }
+          ],
+          "extraLines": [
+            {
+              "m": 1,
+              "b": 10,
+              "hideEq": true,
+              "dashed": true
+            },
+            {
+              "m": -1,
+              "b": -4,
+              "hideEq": true,
+              "dashed": true
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 0,
+              "y": 10,
+              "hideY": true
+            },
+            {
+              "label": "B",
+              "x": 10,
+              "y": 0
+            },
+            {
+              "label": "C",
+              "x": 0,
+              "y": -4
+            },
+            {
+              "label": "D",
+              "x": 4,
+              "y": 0
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "הישר CD הוא גרף הפונקציה y = x − 4. הישר AB הוא גרף הפונקציה y = 10 − x. מצאו את שיעורי הנקודה A.",
+              "taskIds": [
+                "A"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "מצאו את משוואת הישר העובר דרך הנקודה A ומקביל לישר CD.",
+              "taskIds": [
+                "mA",
+                "eqA"
+              ]
+            },
+            {
+              "label": "ג",
+              "text": "מצאו את משוואת הישר העובר דרך הנקודה C ומקביל לישר AB.",
+              "taskIds": [
+                "mC",
+                "eqC"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "A",
+              "label": "A",
+              "kind": "point",
+              "point": "A",
+              "missing": "y",
+              "intercept": "y"
+            },
+            {
+              "id": "mA",
+              "kind": "slope",
+              "parallel": true,
+              "m": 1,
+              "label": "2",
+              "givenLabel": "CD"
+            },
+            {
+              "id": "eqA",
+              "kind": "lineEq",
+              "point": "A",
+              "x": 0,
+              "y": 10,
+              "m": 1,
+              "label": "ישר"
+            },
+            {
+              "id": "mC",
+              "kind": "slope",
+              "parallel": true,
+              "m": -1,
+              "label": "2",
+              "givenLabel": "AB"
+            },
+            {
+              "id": "eqC",
+              "kind": "lineEq",
+              "point": "C",
+              "x": 0,
+              "y": -4,
+              "m": -1,
+              "label": "ישר"
+            }
+          ]
+        },
+        {
+          "n": 21,
+          "hideLineEq": false,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "line": {
+            "m": 3,
+            "b": 1,
+            "eqText": "y = 3x + 1"
+          },
+          "lines": [
+            {
+              "key": "L",
+              "label": "",
+              "line": {
+                "m": 3,
+                "b": 1,
+                "eqText": "y = 3x + 1"
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 4,
+              "y": 11
+            },
+            {
+              "label": "B",
+              "x": 1,
+              "y": 2
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "הוכיחו שהישר המחבר את הנקודות (4;11) ו־(1;2) מקביל לישר y = 3x + 1.",
+              "taskIds": [
+                "mAB",
+                "par"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "mAB",
+              "label": "m",
+              "kind": "slope",
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "id": "par",
+              "kind": "parallel",
+              "answer": true,
+              "slopeIds": [
+                "mAB"
+              ],
+              "givenM": 3,
+              "reason": "ישרים בעלי אותו שיפוע מקבילים."
+            }
+          ]
+        },
+        {
+          "n": 22,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": 3,
+              "y": 4
+            },
+            {
+              "label": "B",
+              "x": 1,
+              "y": 8
+            },
+            {
+              "label": "C",
+              "x": 4,
+              "y": 1
+            },
+            {
+              "label": "D",
+              "x": 0,
+              "y": 9
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "from": "C",
+              "to": "D"
+            }
+          ],
+          "parts": [
+            {
+              "text": "הוכיחו כי הישר העובר דרך הנקודות (3;4) ו־(1;8) מקביל לישר העובר דרך הנקודות (4;1) ו־(0;9).",
+              "taskIds": [
+                "mAB",
+                "mCD",
+                "par"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "mAB",
+              "label": "m",
+              "kind": "slope",
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "id": "mCD",
+              "label": "m",
+              "kind": "slope",
+              "from": "C",
+              "to": "D"
+            },
+            {
+              "id": "par",
+              "kind": "parallel",
+              "answer": true,
+              "slopeIds": [
+                "mAB",
+                "mCD"
+              ],
+              "reason": "ישרים בעלי אותו שיפוע מקבילים."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "geo-axis-lines-1",
+      "topic": "analytic",
+      "subtopic": "line",
+      "mode": "geo-length",
+      "title": "ישרים מקבילים לצירים",
+      "instruction": "מקביל לציר x (או מאונך לציר y): y = שיעור ה-y של הנקודה (או של שתי נקודות עם אותו y). מקביל לציר y (או מאונך לציר x): x = שיעור ה-x. אפשר לרשום ישר את המשוואה. בשאלות כן/לא — רק כן או לא, בלי נימוק.",
+      "exercises": [
+        {
+          "n": 1,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "L",
+              "label": "",
+              "line": {
+                "m": 0,
+                "b": 4,
+                "hideEq": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 3,
+              "y": 4
+            }
+          ],
+          "parts": [
+            {
+              "text": "בציור שלפניכם מתואר ישר המקביל לציר ה-x. הישר עובר בנקודה A(3;4). מהי משוואת הישר?",
+              "taskIds": [
+                "eq"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "eq",
+              "kind": "lineEq",
+              "axisParallel": "x",
+              "point": "A",
+              "x": 3,
+              "y": 4,
+              "m": 0,
+              "b": 4
+            }
+          ]
+        },
+        {
+          "n": 2,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "L",
+              "label": "",
+              "line": {
+                "vertical": 5,
+                "hideEq": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 5,
+              "y": -2
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "בציור מתואר ישר המקביל לציר ה-y. הישר עובר בנקודה A(5;−2). מהי משוואת הישר?",
+              "taskIds": [
+                "eq"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "האם הישר מאונך לציר ה-x?",
+              "taskIds": [
+                "yn"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "eq",
+              "kind": "lineEq",
+              "axisParallel": "y",
+              "axisPerp": "x",
+              "point": "A",
+              "x": 5,
+              "y": -2,
+              "vertical": 5
+            },
+            {
+              "id": "yn",
+              "kind": "yesNo",
+              "answer": true,
+              "question": "האם הישר מאונך לציר ה-x?"
+            }
+          ]
+        },
+        {
+          "n": 3,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "V",
+              "label": "",
+              "line": {
+                "vertical": -3,
+                "hideEq": true
+              }
+            },
+            {
+              "key": "H",
+              "label": "",
+              "line": {
+                "m": 0,
+                "b": 2,
+                "hideEq": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": -3,
+              "y": 7
+            },
+            {
+              "label": "B",
+              "x": 5,
+              "y": 2
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "מצאו משוואת ישר המאונך לציר ה-x ועובר דרך הנקודה (−3;7).",
+              "taskIds": [
+                "eqA"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "מצאו משוואת ישר המאונך לציר ה-y ועובר דרך הנקודה (5;2).",
+              "taskIds": [
+                "eqB"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "eqA",
+              "kind": "lineEq",
+              "axisParallel": "y",
+              "axisPerp": "x",
+              "point": "A",
+              "x": -3,
+              "y": 7,
+              "vertical": -3
+            },
+            {
+              "id": "eqB",
+              "kind": "lineEq",
+              "axisParallel": "x",
+              "axisPerp": "y",
+              "point": "B",
+              "x": 5,
+              "y": 2,
+              "m": 0,
+              "b": 2
+            }
+          ]
+        },
+        {
+          "n": 4,
+          "hideLineEq": false,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "L",
+              "label": "",
+              "line": {
+                "m": 0,
+                "b": 6,
+                "hideEq": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 5,
+              "y": 6
+            },
+            {
+              "label": "B",
+              "x": -2,
+              "y": 6
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "בציור מתואר ישר העובר דרך הנקודות A(5;6) ו־B(−2;6). מהו שיפוע הישר?",
+              "taskIds": [
+                "mAB"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "כתבו את משוואת הישר.",
+              "taskIds": [
+                "eq"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "mAB",
+              "label": "m",
+              "kind": "slope",
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "id": "eq",
+              "kind": "lineEq",
+              "axisParallel": "x",
+              "from": "A",
+              "to": "B",
+              "point": "A",
+              "x": 5,
+              "y": 6,
+              "m": 0,
+              "b": 6
+            }
+          ]
+        },
+        {
+          "n": 5,
+          "hideLineEq": false,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "L",
+              "label": "",
+              "line": {
+                "vertical": 5,
+                "hideEq": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 5,
+              "y": 1
+            },
+            {
+              "label": "B",
+              "x": 5,
+              "y": -5
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "בציור שלפניכם מתואר ישר העובר דרך הנקודות A(5;1) ו־B(5;−5). כתבו את משוואת הישר.",
+              "taskIds": [
+                "eq"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "דניאל טוען ששיפוע הישר הוא אפס. האם הוא צודק?",
+              "taskIds": [
+                "yn"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "eq",
+              "kind": "lineEq",
+              "axisParallel": "y",
+              "from": "A",
+              "to": "B",
+              "point": "A",
+              "x": 5,
+              "y": 1,
+              "vertical": 5
+            },
+            {
+              "id": "yn",
+              "kind": "yesNo",
+              "answer": false,
+              "question": "דניאל טוען ששיפוע הישר הוא אפס. האם הוא צודק?"
+            }
+          ]
+        },
+        {
+          "n": 6,
+          "hideLineEq": false,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "AB",
+              "label": "",
+              "line": {
+                "m": 0,
+                "b": -9,
+                "hideEq": true
+              }
+            },
+            {
+              "key": "CD",
+              "label": "",
+              "line": {
+                "vertical": -5,
+                "hideEq": true
+              }
+            },
+            {
+              "key": "EF",
+              "label": "",
+              "line": {
+                "m": 0,
+                "b": 0,
+                "hideEq": true
+              }
+            },
+            {
+              "key": "GH",
+              "label": "",
+              "line": {
+                "vertical": 0,
+                "hideEq": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 2,
+              "y": -9
+            },
+            {
+              "label": "B",
+              "x": -4,
+              "y": -9
+            },
+            {
+              "label": "C",
+              "x": -5,
+              "y": -8
+            },
+            {
+              "label": "D",
+              "x": -5,
+              "y": -12
+            },
+            {
+              "label": "E",
+              "x": 7,
+              "y": 0
+            },
+            {
+              "label": "F",
+              "x": -5,
+              "y": 0
+            },
+            {
+              "label": "G",
+              "x": 0,
+              "y": 8
+            },
+            {
+              "label": "H",
+              "x": 0,
+              "y": 4
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "from": "C",
+              "to": "D"
+            },
+            {
+              "from": "E",
+              "to": "F"
+            },
+            {
+              "from": "G",
+              "to": "H"
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "מצאו את משוואת הישר העובר דרך שתי הנקודות הנתונות: (2;−9) ו־(−4;−9).",
+              "taskIds": [
+                "eqAB"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "מצאו את משוואת הישר העובר דרך שתי הנקודות הנתונות: (−5;−8) ו־(−5;−12).",
+              "taskIds": [
+                "eqCD"
+              ]
+            },
+            {
+              "label": "ג",
+              "text": "מצאו את משוואת הישר העובר דרך שתי הנקודות הנתונות: (7;0) ו־(−5;0).",
+              "taskIds": [
+                "eqEF"
+              ]
+            },
+            {
+              "label": "ד",
+              "text": "מצאו את משוואת הישר העובר דרך שתי הנקודות הנתונות: (0;8) ו־(0;4).",
+              "taskIds": [
+                "eqGH"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "eqAB",
+              "kind": "lineEq",
+              "axisParallel": "x",
+              "from": "A",
+              "to": "B",
+              "point": "A",
+              "x": 2,
+              "y": -9,
+              "m": 0,
+              "b": -9
+            },
+            {
+              "id": "eqCD",
+              "kind": "lineEq",
+              "axisParallel": "y",
+              "from": "C",
+              "to": "D",
+              "point": "C",
+              "x": -5,
+              "y": -8,
+              "vertical": -5
+            },
+            {
+              "id": "eqEF",
+              "kind": "lineEq",
+              "axisParallel": "x",
+              "from": "E",
+              "to": "F",
+              "point": "E",
+              "x": 7,
+              "y": 0,
+              "m": 0,
+              "b": 0
+            },
+            {
+              "id": "eqGH",
+              "kind": "lineEq",
+              "axisParallel": "y",
+              "from": "G",
+              "to": "H",
+              "point": "G",
+              "x": 0,
+              "y": 8,
+              "vertical": 0
+            }
+          ]
+        },
+        {
+          "n": 7,
+          "hideLineEq": false,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "AB",
+              "label": "AB",
+              "line": {
+                "m": 0,
+                "b": 2,
+                "eqText": "y = 2"
+              }
+            },
+            {
+              "key": "BC",
+              "label": "BC",
+              "line": {
+                "m": 1,
+                "b": -3,
+                "eqText": "y = x − 3"
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 0,
+              "y": 2,
+              "hideY": true
+            },
+            {
+              "label": "B",
+              "x": 5,
+              "y": 2,
+              "hideX": true,
+              "hideY": true
+            },
+            {
+              "label": "C",
+              "x": 0,
+              "y": -3
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "from": "B",
+              "to": "C"
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "משוואת הישר AB היא y = 2 ומשוואת הישר BC היא y = x − 3. נקודה A נמצאת על ציר ה-y. מצאו את שיעורי הנקודות A ו־B.",
+              "taskIds": [
+                "A",
+                "B"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "מצאו את משוואת הישר: (1) העובר בנקודה B ומקביל לציר ה-y. (2) העובר בנקודה C ומקביל לציר ה-x.",
+              "taskIds": [
+                "eqB",
+                "eqC"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "A",
+              "label": "A",
+              "kind": "point",
+              "point": "A",
+              "missing": "y",
+              "intercept": "y"
+            },
+            {
+              "id": "B",
+              "kind": "lineIntersect",
+              "point": "B",
+              "label": "B"
+            },
+            {
+              "id": "eqB",
+              "kind": "lineEq",
+              "axisParallel": "y",
+              "point": "B",
+              "x": 5,
+              "y": 2,
+              "vertical": 5
+            },
+            {
+              "id": "eqC",
+              "kind": "lineEq",
+              "axisParallel": "x",
+              "point": "C",
+              "x": 0,
+              "y": -3,
+              "m": 0,
+              "b": -3
+            }
+          ]
+        },
+        {
+          "n": 8,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "G",
+              "label": "",
+              "line": {
+                "m": 0,
+                "b": 2,
+                "eqText": "y = 2"
+              }
+            },
+            {
+              "key": "L",
+              "label": "",
+              "line": {
+                "m": 0,
+                "b": 5,
+                "hideEq": true,
+                "dashed": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 3,
+              "y": 5
+            }
+          ],
+          "parts": [
+            {
+              "text": "מצאו את משוואת הישר העובר בנקודה A(3;5) ומקביל לישר y = 2.",
+              "taskIds": [
+                "eq"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "eq",
+              "kind": "lineEq",
+              "axisParallel": "x",
+              "point": "A",
+              "x": 3,
+              "y": 5,
+              "m": 0,
+              "b": 5,
+              "givenEq": "y = 2"
+            }
+          ]
+        },
+        {
+          "n": 9,
+          "hideLineEq": false,
+          "showSegments": false,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "G1",
+              "label": "",
+              "line": {
+                "m": 0,
+                "b": -5,
+                "eqText": "y = −5"
+              }
+            },
+            {
+              "key": "G2",
+              "label": "",
+              "line": {
+                "vertical": 1,
+                "eqText": "x = 1"
+              }
+            },
+            {
+              "key": "L1",
+              "label": "",
+              "line": {
+                "m": 0,
+                "b": -3,
+                "hideEq": true,
+                "dashed": true
+              }
+            },
+            {
+              "key": "L2",
+              "label": "",
+              "line": {
+                "vertical": -2,
+                "hideEq": true,
+                "dashed": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 1,
+              "y": -3
+            },
+            {
+              "label": "B",
+              "x": -2,
+              "y": 0
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "מצאו את משוואת הישר העובר בנקודה (1;−3) ומקביל לישר y = −5.",
+              "taskIds": [
+                "eqA"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "מצאו את משוואת הישר העובר בנקודה (−2;0) ומקביל לישר x = 1.",
+              "taskIds": [
+                "eqB"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "eqA",
+              "kind": "lineEq",
+              "axisParallel": "x",
+              "point": "A",
+              "x": 1,
+              "y": -3,
+              "m": 0,
+              "b": -3,
+              "givenEq": "y = −5"
+            },
+            {
+              "id": "eqB",
+              "kind": "lineEq",
+              "axisParallel": "y",
+              "point": "B",
+              "x": -2,
+              "y": 0,
+              "vertical": -2,
+              "givenEq": "x = 1"
+            }
+          ]
+        },
+        {
+          "n": 17,
+          "hideLineEq": false,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "AB",
+              "label": "",
+              "line": {
+                "m": 0,
+                "b": 3,
+                "hideEq": true
+              }
+            },
+            {
+              "key": "BC",
+              "label": "",
+              "line": {
+                "m": -2,
+                "b": -1,
+                "eqText": "y = −2x − 1"
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 8,
+              "y": 3
+            },
+            {
+              "label": "B",
+              "x": -2,
+              "y": 3,
+              "hideX": true,
+              "hideY": true
+            },
+            {
+              "label": "C",
+              "x": -0.5,
+              "y": 0,
+              "hideX": true
+            },
+            {
+              "label": "G",
+              "x": -0.5,
+              "y": 3,
+              "hideX": true,
+              "hideY": true,
+              "drawOnly": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "from": "B",
+              "to": "C"
+            },
+            {
+              "from": "C",
+              "to": "A"
+            }
+          ],
+          "polygons": [
+            {
+              "verts": [
+                "A",
+                "B",
+                "C"
+              ]
+            }
+          ],
+          "draw": {
+            "enabled": true,
+            "hintText": "לחצו «+ גובה», בחרו קודקוד C, וגררו את רגל הגובה אל AB.",
+            "triangle": [
+              "A",
+              "B",
+              "C"
+            ],
+            "heights": [
+              {
+                "id": "hABC",
+                "from": "C",
+                "base": [
+                  "A",
+                  "B"
+                ],
+                "footLabel": "G",
+                "recommended": true
+              }
+            ]
+          },
+          "parts": [
+            {
+              "text": "במשולש ABC נתונים שיעורי הנקודה A(8;3). הצלע BC מונחת על הישר y = −2x − 1. הצלע AB מקבילה לציר ה-x. הקודקוד C נמצא על ציר ה-x. חשבו את שטח המשולש ABC.",
+              "taskIds": [
+                "B",
+                "C",
+                "AB",
+                "CG",
+                "SABC"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "B",
+              "label": "B",
+              "kind": "point",
+              "point": "B",
+              "missing": "both",
+              "twinY": "A",
+              "lineKey": "BC"
+            },
+            {
+              "id": "C",
+              "label": "C",
+              "kind": "point",
+              "point": "C",
+              "missing": "x",
+              "intercept": "x",
+              "lineKey": "BC"
+            },
+            {
+              "id": "AB",
+              "kind": "segment",
+              "from": "A",
+              "to": "B",
+              "optional": true
+            },
+            {
+              "id": "CG",
+              "kind": "segment",
+              "from": "C",
+              "to": "G",
+              "optional": true,
+              "drawHeight": true
+            },
+            {
+              "id": "SABC",
+              "label": "S△ABC",
+              "kind": "area",
+              "verts": [
+                "A",
+                "B",
+                "C"
+              ],
+              "legs": [
+                [
+                  "A",
+                  "B"
+                ],
+                [
+                  "C",
+                  "G"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "n": 18,
+          "hideLineEq": false,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "AC",
+              "label": "",
+              "line": {
+                "m": 1,
+                "b": 3,
+                "eqText": "y = x + 3"
+              }
+            },
+            {
+              "key": "AB",
+              "label": "",
+              "line": {
+                "vertical": 2,
+                "hideEq": true
+              }
+            },
+            {
+              "key": "BC",
+              "label": "",
+              "line": {
+                "mn": -4,
+                "md": 5,
+                "bn": -12,
+                "bd": 5,
+                "b": -2.4,
+                "hideEq": true
+              }
+            },
+            {
+              "key": "AD",
+              "label": "",
+              "line": {
+                "m": 0,
+                "b": 5,
+                "hideEq": true,
+                "dashed": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 2,
+              "y": 5,
+              "hideX": true,
+              "hideY": true
+            },
+            {
+              "label": "B",
+              "x": 2,
+              "y": -4
+            },
+            {
+              "label": "C",
+              "x": -3,
+              "y": 0,
+              "hideX": true
+            },
+            {
+              "label": "D",
+              "x": -9.25,
+              "y": 5,
+              "hideX": true,
+              "hideY": true
+            },
+            {
+              "label": "H",
+              "x": 2,
+              "y": 0,
+              "hideX": true,
+              "hideY": true,
+              "drawOnly": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "from": "B",
+              "to": "C"
+            },
+            {
+              "from": "C",
+              "to": "A"
+            }
+          ],
+          "polygons": [
+            {
+              "verts": [
+                "A",
+                "B",
+                "C"
+              ]
+            }
+          ],
+          "draw": {
+            "enabled": true,
+            "hintText": "לחצו «+ גובה», בחרו קודקוד C, וגררו את רגל הגובה אל AB.",
+            "triangle": [
+              "A",
+              "B",
+              "C"
+            ],
+            "heights": [
+              {
+                "id": "hABC",
+                "from": "C",
+                "base": [
+                  "A",
+                  "B"
+                ],
+                "footLabel": "H",
+                "recommended": true
+              }
+            ]
+          },
+          "parts": [
+            {
+              "label": "א",
+              "text": "משוואת הישר AC היא y = x + 3. נקודה C נמצאת על ציר ה-x. הישר AB מקביל לציר ה-y. שיעורי הנקודה B הם (2;−4). חשבו את שטח המשולש ABC.",
+              "taskIds": [
+                "A",
+                "C",
+                "AB",
+                "CH",
+                "SABC"
+              ]
+            },
+            {
+              "label": "ב",
+              "text": "ישר העובר בנקודה A ומקביל לציר ה-x חותך את הישר BC בנקודה D. (1) מצאו את משוואת הישר BC. (2) מצאו את שיעורי הנקודה D.",
+              "taskIds": [
+                "mBC",
+                "eqBC",
+                "D"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "A",
+              "label": "A",
+              "kind": "point",
+              "point": "A",
+              "missing": "both",
+              "twinX": "B",
+              "lineKey": "AC"
+            },
+            {
+              "id": "C",
+              "label": "C",
+              "kind": "point",
+              "point": "C",
+              "missing": "x",
+              "intercept": "x",
+              "lineKey": "AC"
+            },
+            {
+              "id": "AB",
+              "kind": "segment",
+              "from": "A",
+              "to": "B",
+              "optional": true
+            },
+            {
+              "id": "CH",
+              "kind": "segment",
+              "from": "C",
+              "to": "H",
+              "optional": true,
+              "drawHeight": true
+            },
+            {
+              "id": "SABC",
+              "label": "S△ABC",
+              "kind": "area",
+              "verts": [
+                "A",
+                "B",
+                "C"
+              ],
+              "legs": [
+                [
+                  "A",
+                  "B"
+                ],
+                [
+                  "C",
+                  "H"
+                ]
+              ]
+            },
+            {
+              "id": "mBC",
+              "label": "m",
+              "kind": "slope",
+              "from": "B",
+              "to": "C"
+            },
+            {
+              "id": "eqBC",
+              "kind": "lineEq",
+              "point": "B",
+              "from": "B",
+              "to": "C",
+              "x": 2,
+              "y": -4,
+              "mn": -4,
+              "md": 5,
+              "label": "BC"
+            },
+            {
+              "id": "D",
+              "label": "D",
+              "kind": "point",
+              "point": "D",
+              "missing": "both",
+              "twinY": "A",
+              "lineKey": "BC"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "geo-midpoint-1",
+      "topic": "analytic",
+      "subtopic": "line",
+      "mode": "geo-length",
+      "title": "אמצע קטע",
+      "instruction": "אמצע קטע: x = (x₁ + x₂)/2 ו־y = (y₁ + y₂)/2. הציבו, חברו את איברי המונה, ואז חלקו. אפשר לדלג למונה או ישר לנקודה.",
+      "exercises": [
+        {
+          "n": 1,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": 2,
+              "y": 7
+            },
+            {
+              "label": "B",
+              "x": 6,
+              "y": 3
+            },
+            {
+              "label": "M",
+              "x": 4,
+              "y": 5,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "קצות הקטע AB הם בנקודות A(2;7) ו־B(6;3). נקודה M היא אמצע הקטע AB. מצאו את שיעורי הנקודה M.",
+              "taskIds": [
+                "M"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "M",
+              "kind": "midpoint",
+              "point": "M",
+              "from": "A",
+              "to": "B"
+            }
+          ]
+        },
+        {
+          "n": 2,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": 5,
+              "y": 4
+            },
+            {
+              "label": "B",
+              "x": 11,
+              "y": 14
+            },
+            {
+              "label": "M",
+              "x": 8,
+              "y": 9,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "מצאו את אמצע הקטע שקצותיו (5;4) ו־(11;14).",
+              "taskIds": [
+                "M"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "M",
+              "kind": "midpoint",
+              "point": "M",
+              "from": "A",
+              "to": "B"
+            }
+          ]
+        },
+        {
+          "n": 3,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": -4,
+              "y": 7
+            },
+            {
+              "label": "B",
+              "x": 6,
+              "y": 1
+            },
+            {
+              "label": "M",
+              "x": 1,
+              "y": 4,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "מצאו את אמצע הקטע שקצותיו (−4;7) ו־(6;1).",
+              "taskIds": [
+                "M"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "M",
+              "kind": "midpoint",
+              "point": "M",
+              "from": "A",
+              "to": "B"
+            }
+          ]
+        },
+        {
+          "n": 4,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": 1,
+              "y": -6
+            },
+            {
+              "label": "B",
+              "x": -5,
+              "y": 8
+            },
+            {
+              "label": "M",
+              "x": -2,
+              "y": 1,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "מצאו את אמצע הקטע שקצותיו (1;−6) ו־(−5;8).",
+              "taskIds": [
+                "M"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "M",
+              "kind": "midpoint",
+              "point": "M",
+              "from": "A",
+              "to": "B"
+            }
+          ]
+        },
+        {
+          "n": 5,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": 8,
+              "y": 9
+            },
+            {
+              "label": "B",
+              "x": 8,
+              "y": -3
+            },
+            {
+              "label": "M",
+              "x": 8,
+              "y": 3,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "מצאו את אמצע הקטע שקצותיו (8;9) ו־(8;−3).",
+              "taskIds": [
+                "M"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "M",
+              "kind": "midpoint",
+              "point": "M",
+              "from": "A",
+              "to": "B"
+            }
+          ]
+        },
+        {
+          "n": 6,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": -5,
+              "y": -4
+            },
+            {
+              "label": "B",
+              "x": 6,
+              "y": -8
+            },
+            {
+              "label": "M",
+              "x": 0.5,
+              "y": -6,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "מצאו את אמצע הקטע שקצותיו (−5;−4) ו־(6;−8).",
+              "taskIds": [
+                "M"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "M",
+              "kind": "midpoint",
+              "point": "M",
+              "from": "A",
+              "to": "B"
+            }
+          ]
+        },
+        {
+          "n": 7,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": 7,
+              "y": -6
+            },
+            {
+              "label": "B",
+              "x": 14,
+              "y": -11
+            },
+            {
+              "label": "M",
+              "x": 10.5,
+              "y": -8.5,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "מצאו את אמצע הקטע שקצותיו (7;−6) ו־(14;−11).",
+              "taskIds": [
+                "M"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "M",
+              "kind": "midpoint",
+              "point": "M",
+              "from": "A",
+              "to": "B"
+            }
+          ]
+        },
+        {
+          "n": 8,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": 1,
+              "y": 2
+            },
+            {
+              "label": "M",
+              "x": 3,
+              "y": 4
+            },
+            {
+              "label": "B",
+              "x": 5,
+              "y": 6,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "נתון הקטע AB. קצהו האחד של הקטע הוא בנקודה A(1;2) ונקודת האמצע שלו היא M(3;4). מצאו את שיעורי הנקודה B.",
+              "taskIds": [
+                "B"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "B",
+              "kind": "midpoint",
+              "point": "B",
+              "from": "A",
+              "mid": "M"
+            }
+          ]
+        },
+        {
+          "n": 9,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": 7,
+              "y": 4
+            },
+            {
+              "label": "P",
+              "x": 5,
+              "y": 9
+            },
+            {
+              "label": "B",
+              "x": 3,
+              "y": 14,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "נתון הקטע AB שבו נקודת הקצה האחד היא A(7;4). נקודת האמצע של הקטע היא P(5;9). מצאו את שיעורי נקודת הקצה B.",
+              "taskIds": [
+                "B"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "B",
+              "kind": "midpoint",
+              "point": "B",
+              "from": "A",
+              "mid": "P"
+            }
+          ]
+        },
+        {
+          "n": 10,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": 0,
+              "y": 3
+            },
+            {
+              "label": "P",
+              "x": 5,
+              "y": 1
+            },
+            {
+              "label": "B",
+              "x": 10,
+              "y": -1,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "נקודה P היא אמצע הקטע AB. נתונים A(0;3) ו־P(5;1). מצאו את שיעורי הנקודה B.",
+              "taskIds": [
+                "B"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "B",
+              "kind": "midpoint",
+              "point": "B",
+              "from": "A",
+              "mid": "P"
+            }
+          ]
+        },
+        {
+          "n": 11,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": -3,
+              "y": 8
+            },
+            {
+              "label": "P",
+              "x": 11,
+              "y": -6
+            },
+            {
+              "label": "B",
+              "x": 25,
+              "y": -20,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "נקודה P היא אמצע הקטע AB. נתונים A(−3;8) ו־P(11;−6). מצאו את שיעורי הנקודה B.",
+              "taskIds": [
+                "B"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "B",
+              "kind": "midpoint",
+              "point": "B",
+              "from": "A",
+              "mid": "P"
+            }
+          ]
+        },
+        {
+          "n": 12,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": -3,
+              "y": -7
+            },
+            {
+              "label": "P",
+              "x": -5.5,
+              "y": 3.25
+            },
+            {
+              "label": "B",
+              "x": -8,
+              "y": 13.5,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "נקודה P היא אמצע הקטע AB. נתונים A(−3;−7) ו־P(−5 1/2; 3 1/4). מצאו את שיעורי הנקודה B.",
+              "taskIds": [
+                "B"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "B",
+              "kind": "midpoint",
+              "point": "B",
+              "from": "A",
+              "mid": "P"
+            }
+          ]
+        },
+        {
+          "n": 13,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "polygons": [
+            {
+              "verts": [
+                "A",
+                "B",
+                "C"
+              ]
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 2,
+              "y": 5
+            },
+            {
+              "label": "B",
+              "x": -2,
+              "y": 0
+            },
+            {
+              "label": "C",
+              "x": 4,
+              "y": 2
+            },
+            {
+              "label": "D",
+              "x": 0,
+              "y": 2.5,
+              "hideX": true,
+              "hideY": true
+            },
+            {
+              "label": "E",
+              "x": 1,
+              "y": 1,
+              "hideX": true,
+              "hideY": true
+            },
+            {
+              "label": "F",
+              "x": 3,
+              "y": 3.5,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "from": "B",
+              "to": "C"
+            },
+            {
+              "from": "A",
+              "to": "C"
+            }
+          ],
+          "parts": [
+            {
+              "text": "קדקודיו של משולש ABC הם A(2;5), B(−2;0), C(4;2). מצאו את שיעורי נקודת האמצע של כל אחת מצלעות המשולש: D אמצע AB, E אמצע BC, F אמצע AC.",
+              "taskIds": [
+                "D",
+                "E",
+                "F"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "D",
+              "kind": "midpoint",
+              "point": "D",
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "id": "E",
+              "kind": "midpoint",
+              "point": "E",
+              "from": "B",
+              "to": "C"
+            },
+            {
+              "id": "F",
+              "kind": "midpoint",
+              "point": "F",
+              "from": "A",
+              "to": "C"
+            }
+          ]
+        },
+        {
+          "n": 14,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "polygons": [
+            {
+              "verts": [
+                "A",
+                "B",
+                "C"
+              ]
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 6,
+              "y": 4
+            },
+            {
+              "label": "D",
+              "x": 3,
+              "y": 3
+            },
+            {
+              "label": "C",
+              "x": 8,
+              "y": 3
+            },
+            {
+              "label": "B",
+              "x": 0,
+              "y": 2,
+              "hideX": true,
+              "hideY": true
+            },
+            {
+              "label": "E",
+              "x": 4,
+              "y": 2.5,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "from": "B",
+              "to": "C"
+            },
+            {
+              "from": "A",
+              "to": "C"
+            }
+          ],
+          "parts": [
+            {
+              "text": "D(3;3) היא נקודת אמצע הצלע AB במשולש ABC. נתון A(6;4), C(8;3). מצאו את שיעורי הקדקוד B ואת נקודת האמצע של הצלע BC (נקודה E).",
+              "taskIds": [
+                "B",
+                "E"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "B",
+              "kind": "midpoint",
+              "point": "B",
+              "from": "A",
+              "mid": "D"
+            },
+            {
+              "id": "E",
+              "kind": "midpoint",
+              "point": "E",
+              "from": "B",
+              "to": "C"
+            }
+          ]
+        },
+        {
+          "n": 15,
+          "hideLineEq": false,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "line": {
+            "m": 0.75,
+            "b": -3,
+            "eqText": "3x − 4y = 12",
+            "implicit": {
+              "ax": 3,
+              "ay": -4,
+              "c": 12
+            }
+          },
+          "points": [
+            {
+              "label": "A",
+              "x": 0,
+              "y": -3,
+              "hideY": true
+            },
+            {
+              "label": "B",
+              "x": 4,
+              "y": 0,
+              "hideX": true
+            },
+            {
+              "label": "M",
+              "x": 2,
+              "y": -1.5,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "הישר 3x − 4y = 12 חותך את ציר y בנקודה A ואת ציר x בנקודה B. מצאו את שיעורי נקודת האמצע של הקטע AB.",
+              "taskIds": [
+                "A",
+                "B",
+                "M"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "A",
+              "label": "A",
+              "kind": "point",
+              "point": "A",
+              "missing": "y",
+              "intercept": "y"
+            },
+            {
+              "id": "B",
+              "label": "B",
+              "kind": "point",
+              "point": "B",
+              "missing": "x",
+              "intercept": "x"
+            },
+            {
+              "id": "M",
+              "kind": "midpoint",
+              "point": "M",
+              "from": "A",
+              "to": "B"
+            }
+          ]
+        },
+        {
+          "n": 16,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": 0,
+              "y": 10,
+              "hideX": true,
+              "hideY": true
+            },
+            {
+              "label": "C",
+              "x": 3,
+              "y": 5
+            },
+            {
+              "label": "B",
+              "x": 6,
+              "y": 0,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "נקודה A נמצאת על ציר y. נקודה B נמצאת על ציר x. הנקודה C(3;5) נמצאת על הקטע AB. נתון AC = CB. מצאו את שיעורי הנקודות A ו־B.",
+              "taskIds": [
+                "A",
+                "B"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "A",
+              "kind": "midpoint",
+              "point": "A",
+              "mid": "C",
+              "onAxis": "y",
+              "otherAxis": "x"
+            },
+            {
+              "id": "B",
+              "kind": "midpoint",
+              "point": "B",
+              "mid": "C",
+              "onAxis": "x",
+              "otherAxis": "y"
+            }
+          ]
+        },
+        {
+          "n": 17,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "line": {
+            "m": -0.5,
+            "b": 0,
+            "mn": -1,
+            "md": 2
+          },
+          "points": [
+            {
+              "label": "A",
+              "x": 1,
+              "y": 5
+            },
+            {
+              "label": "B",
+              "x": 3,
+              "y": -7
+            },
+            {
+              "label": "C",
+              "x": 2,
+              "y": -1,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "text": "נתונות הנקודות A(1;5), B(3;−7). C היא נקודת אמצע הקטע AB. מצאו את משוואת הישר העובר דרך ראשית הצירים ודרך הנקודה C.",
+              "taskIds": [
+                "C",
+                "mOC",
+                "eq"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "C",
+              "kind": "midpoint",
+              "point": "C",
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "id": "mOC",
+              "label": "m",
+              "kind": "slope",
+              "from": "O",
+              "to": "C"
+            },
+            {
+              "id": "eq",
+              "kind": "lineEq",
+              "point": "O",
+              "x": 0,
+              "y": 0,
+              "mn": -1,
+              "md": 2,
+              "label": "ישר"
+            }
+          ]
+        },
+        {
+          "n": 18,
+          "hideLineEq": false,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "L",
+              "label": "",
+              "line": {
+                "unsorted": true,
+                "eqText": "2x + y = 8",
+                "implicit": {
+                  "ax": 2,
+                  "ay": 1,
+                  "c": 8
+                },
+                "m": -2,
+                "b": 8
+              }
+            },
+            {
+              "key": "AB",
+              "label": "AB",
+              "line": {
+                "m": 1,
+                "b": 5,
+                "hideEq": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 3,
+              "y": 8
+            },
+            {
+              "label": "B",
+              "x": -1,
+              "y": 4
+            },
+            {
+              "label": "P",
+              "x": 1,
+              "y": 6,
+              "hideX": true,
+              "hideY": true
+            },
+            {
+              "label": "M",
+              "x": 1,
+              "y": 6,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "AB הוא קטע שקצותיו בנקודות A(3;8) ו־B(−1;4). נתון הישר 2x + y = 8. מצאו את נקודת החיתוך בין הישר הנתון לבין הקטע AB.",
+              "taskIds": [
+                "mAB",
+                "eqAB",
+                "P"
+              ],
+              "stepByTask": false
+            },
+            {
+              "label": "ב",
+              "text": "הוכיחו שהישר 2x + y = 8 חוצה את הקטע AB.",
+              "taskIds": [
+                "M",
+                "prove"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "mAB",
+              "label": "m",
+              "kind": "slope",
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "id": "eqAB",
+              "kind": "lineEq",
+              "point": "A",
+              "x": 3,
+              "y": 8,
+              "m": 1,
+              "b": 5,
+              "label": "AB"
+            },
+            {
+              "id": "P",
+              "kind": "lineIntersect",
+              "point": "P",
+              "label": "P",
+              "lineKey": "L"
+            },
+            {
+              "id": "M",
+              "kind": "midpoint",
+              "point": "M",
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "id": "prove",
+              "kind": "yesNo",
+              "answer": true,
+              "proveBisect": true,
+              "question": "האם הישר חוצה את הקטע AB?"
+            }
+          ]
+        },
+        {
+          "n": 19,
+          "hideLineEq": true,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "points": [
+            {
+              "label": "A",
+              "x": 2,
+              "y": 11,
+              "hideX": true,
+              "hideY": true
+            },
+            {
+              "label": "B",
+              "x": 4,
+              "y": 8
+            },
+            {
+              "label": "C",
+              "x": 6,
+              "y": 5
+            },
+            {
+              "label": "D",
+              "x": 8,
+              "y": 2,
+              "hideX": true,
+              "hideY": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "B"
+            },
+            {
+              "from": "B",
+              "to": "C"
+            },
+            {
+              "from": "C",
+              "to": "D"
+            }
+          ],
+          "parts": [
+            {
+              "text": "בשרטוט שלפניכם, הנקודות B(4;8) ו־C(6;5) מחלקות את הקטע AD לשלושה חלקים שווים: AB = BC = CD. מצאו את שיעורי הנקודות A ו־D בקצות הקטע.",
+              "taskIds": [
+                "A",
+                "D"
+              ],
+              "stepByTask": false
+            }
+          ],
+          "tasks": [
+            {
+              "id": "A",
+              "kind": "midpoint",
+              "point": "A",
+              "from": "C",
+              "mid": "B"
+            },
+            {
+              "id": "D",
+              "kind": "midpoint",
+              "point": "D",
+              "from": "B",
+              "mid": "C"
+            }
+          ]
+        },
+        {
+          "n": 20,
+          "hideLineEq": false,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "CE",
+              "label": "",
+              "line": {
+                "mn": 3,
+                "md": 2,
+                "b": 1,
+                "eqText": "y = (3/2)x + 1"
+              }
+            },
+            {
+              "key": "AE",
+              "label": "",
+              "line": {
+                "vertical": 4,
+                "hideEq": true
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 4,
+              "y": -1
+            },
+            {
+              "label": "E",
+              "x": 4,
+              "y": 7,
+              "hideX": true,
+              "hideY": true
+            },
+            {
+              "label": "C",
+              "x": 0,
+              "y": 1
+            },
+            {
+              "label": "M",
+              "x": 4,
+              "y": 3,
+              "hideX": true,
+              "hideY": true
+            },
+            {
+              "label": "H",
+              "x": 4,
+              "y": 1,
+              "hideX": true,
+              "hideY": true,
+              "drawOnly": true
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "E"
+            },
+            {
+              "from": "C",
+              "to": "E"
+            },
+            {
+              "from": "C",
+              "to": "M",
+              "dashed": true
+            }
+          ],
+          "polygons": [
+            {
+              "verts": [
+                "C",
+                "M",
+                "E"
+              ]
+            }
+          ],
+          "draw": {
+            "enabled": true,
+            "hintText": "לחצו «+ גובה», בחרו קודקוד C, וגררו את רגל הגובה אל AE.",
+            "triangle": [
+              "C",
+              "M",
+              "E"
+            ],
+            "heights": [
+              {
+                "id": "hCME",
+                "from": "C",
+                "base": [
+                  "M",
+                  "E"
+                ],
+                "footLabel": "H",
+                "recommended": true
+              }
+            ]
+          },
+          "parts": [
+            {
+              "label": "א",
+              "text": "הישר AE מקביל לציר y. נתון: A(4;−1). הישר y = (3/2)x + 1 עובר דרך הנקודה E וחותך את ציר y בנקודה C. M היא אמצע הקטע AE. מצאו את שיעורי הנקודה E.",
+              "taskIds": [
+                "E",
+                "M"
+              ],
+              "stepByTask": false
+            },
+            {
+              "label": "ב",
+              "text": "חשבו את שטח המשולש CME.",
+              "taskIds": [
+                "M",
+                "ME",
+                "CH",
+                "SCME"
+              ]
+            }
+          ],
+          "tasks": [
+            {
+              "id": "E",
+              "label": "E",
+              "kind": "point",
+              "point": "E",
+              "missing": "both",
+              "twinX": "A",
+              "lineKey": "CE",
+              "answerX": 4,
+              "answerY": 7
+            },
+            {
+              "id": "M",
+              "kind": "midpoint",
+              "point": "M",
+              "from": "A",
+              "to": "E"
+            },
+            {
+              "id": "ME",
+              "kind": "segment",
+              "from": "M",
+              "to": "E",
+              "optional": true
+            },
+            {
+              "id": "CH",
+              "kind": "segment",
+              "from": "C",
+              "to": "H",
+              "optional": true,
+              "drawHeight": true
+            },
+            {
+              "id": "SCME",
+              "label": "S△CME",
+              "kind": "area",
+              "verts": [
+                "C",
+                "M",
+                "E"
+              ],
+              "legs": [
+                [
+                  "M",
+                  "E"
+                ],
+                [
+                  "C",
+                  "H"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "n": 21,
+          "hideLineEq": false,
+          "showSegments": true,
+          "showAxisGuides": false,
+          "lines": [
+            {
+              "key": "vert",
+              "label": "",
+              "line": {
+                "vertical": 9,
+                "eqText": "x = 9"
+              }
+            },
+            {
+              "key": "diag",
+              "label": "",
+              "line": {
+                "m": 1,
+                "b": 0,
+                "eqText": "y = x"
+              }
+            }
+          ],
+          "points": [
+            {
+              "label": "A",
+              "x": 5,
+              "y": 5,
+              "hideX": true,
+              "hideY": true
+            },
+            {
+              "label": "B",
+              "x": 9,
+              "y": 3,
+              "hideX": true,
+              "hideY": true
+            },
+            {
+              "label": "C",
+              "x": 7,
+              "y": 4
+            }
+          ],
+          "segments": [
+            {
+              "from": "A",
+              "to": "C",
+              "dashed": true
+            },
+            {
+              "from": "C",
+              "to": "B",
+              "dashed": true
+            }
+          ],
+          "parts": [
+            {
+              "label": "א",
+              "text": "בשרטוט מתוארים הישרים x = 9 ו־y = x. דרך הנקודה C(7;4) עובר קטע AB כך שהוא חותך את הישרים בנקודות B ו־A בהתאמה, ונקודה C היא אמצע הקטע AB. מצאו את שיעור ה-x של הנקודה A.",
+              "taskIds": [
+                "A",
+                "B"
+              ],
+              "stepByTask": false,
+              "untilCoord": { "id": "A", "axis": "x" }
+            },
+            {
+              "label": "ב",
+              "text": "מצאו את שיעורי הנקודות A ו־B.",
+              "taskIds": [
+                "A",
+                "B"
+              ],
+              "stepByTask": false
+            }
+          ],
+          "tasks": [
+            {
+              "id": "A",
+              "kind": "midpoint",
+              "point": "A",
+              "from": "B",
+              "mid": "C",
+              "onLine": {
+                "m": 1,
+                "b": 0
+              }
+            },
+            {
+              "id": "B",
+              "kind": "midpoint",
+              "point": "B",
+              "from": "A",
+              "mid": "C",
+              "onLine": {
+                "vertical": 9
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }

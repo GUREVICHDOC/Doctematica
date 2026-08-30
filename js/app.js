@@ -86,7 +86,12 @@
 
   function typedAnswer() {
     if (domainPending() && domainMulti()) return readDomainCellTyped();
-    if (isGuidedMode()) return mathField.serialize();
+    if (isGuidedMode()) {
+      var fromField = mathField.serialize();
+      if (fromField) return fromField;
+      var live = mathFieldEl && mathFieldEl.querySelector("input.ml-text, input");
+      return live ? String(live.value || "").trim() : "";
+    }
     return answerEl.value;
   }
 
@@ -2185,8 +2190,20 @@
     ) {
       return;
     }
-    var focus = DoctematicaGeometry.currentFocusTask(pack, geo || state.geo);
-    if (focus) ensureGeoTaskHeader(focus);
+    var g = geo || state.geo;
+    var focus = DoctematicaGeometry.currentFocusTask(pack, g);
+    if (!focus) return;
+    var pair =
+      DoctematicaGeometry.axisMidPairTasks && DoctematicaGeometry.axisMidPairTasks(pack, g);
+    if (pair && DoctematicaGeometry.taskWorkStarted && !DoctematicaGeometry.taskWorkStarted(g, focus)) {
+      return;
+    }
+    var pairL =
+      DoctematicaGeometry.lineMidPairTasks && DoctematicaGeometry.lineMidPairTasks(pack, g);
+    if (pairL && DoctematicaGeometry.taskWorkStarted && !DoctematicaGeometry.taskWorkStarted(g, focus)) {
+      return;
+    }
+    ensureGeoTaskHeader(focus);
   }
 
   function lastHistoryStepIndex() {
@@ -3495,6 +3512,7 @@
         : null;
     if (res.lineMatch) state.geo.lineMatch = res.lineMatch;
     if (res.done) state.geo.done = res.done;
+    if (res.lineEq) state.geo.lineEq = Object.assign({}, state.geo.lineEq || {}, res.lineEq);
     renderGeoScene(null);
     if (res.show) {
       state.history.push(res.userStep || res.show);
@@ -3513,6 +3531,7 @@
         autoResults.forEach(function (ar) {
           if (ar.done) state.geo.done = ar.done;
           if (ar.lineMatch) state.geo.lineMatch = ar.lineMatch;
+          if (ar.lineEq) state.geo.lineEq = Object.assign({}, state.geo.lineEq || {}, ar.lineEq);
           if (ar.show) {
             state.history.push(ar.userStep || ar.show);
             if (ar.lineMatchNote) {
@@ -3719,12 +3738,46 @@
   function applyGeoTyped(typed) {
     var pack = state.problem && state.problem.geo;
     if (!typed) {
-      var emptyMsg =
+      var emptyMsg = "כתבו תשובה או צעד.";
+      if (
         pack &&
         DoctematicaGeometry.lineMatchPartActive &&
         DoctematicaGeometry.lineMatchPartActive(pack, state.geo)
-          ? "בחרו ישר ליד המשוואה, ואז לחצו «לנמק»."
-          : "כתבו תשובה או צעד (גדול פחות קטן).";
+      ) {
+        emptyMsg = "בחרו ישר ליד המשוואה, ואז לחצו «לנמק».";
+      } else if (pack && DoctematicaGeometry.currentPartText) {
+        var emptyPart = DoctematicaGeometry.currentPartText(pack, state.geo);
+        var emptyIds = (emptyPart && emptyPart.taskIds) || [];
+        var emptyKinds = emptyIds
+          .map(function (id) {
+            return (pack.tasks || []).filter(function (t) {
+              return t.id === id;
+            })[0];
+          })
+          .filter(Boolean);
+        if (
+          emptyKinds.length &&
+          emptyKinds.every(function (t) {
+            return t.kind === "lineIntersect";
+          })
+        ) {
+          emptyMsg = "השוו את שתי המשוואות, או רשמו את נקודת החיתוך.";
+        } else if (
+          emptyKinds.length &&
+          emptyKinds.every(function (t) {
+            return t.kind === "lineEq";
+          })
+        ) {
+          emptyMsg = "רשמו משוואת ישר או צעד (למשל y − y₁ = m(x − x₁)).";
+        } else if (
+          emptyKinds.length &&
+          emptyKinds.every(function (t) {
+            return t.kind === "slope";
+          })
+        ) {
+          emptyMsg = "רשמו את השיפוע, או m = (y₂ − y₁)/(x₂ − x₁).";
+        }
+      }
       showFeedback(false, "<strong>עוד לא.</strong> " + emptyMsg);
       return false;
     }
@@ -3761,7 +3814,18 @@
     }
     if (res.mbRearrangeExpr) state.geo.mbRearrangeExpr = res.mbRearrangeExpr;
     if (res.show) {
+      if (res.task) ensureGeoTaskHeader(res.task);
       var last = state.history[state.history.length - 1];
+      if (res.prefixShow && res.prefixShow.length) {
+        res.prefixShow.forEach(function (line) {
+          var pre = String(line || "");
+          if (DoctematicaGeometry.capsHistoryLetters) {
+            pre = DoctematicaGeometry.capsHistoryLetters(pre);
+          }
+          if (pre) state.history.push(pre);
+        });
+        last = state.history[state.history.length - 1];
+      }
       var historyLine = res.show;
       if (
         res.task &&
@@ -3804,12 +3868,23 @@
       } else {
         state.history.push(historyLine);
       }
+      if (res.extraShow && res.extraShow.length) {
+        res.extraShow.forEach(function (line) {
+          var extra = String(line || "");
+          if (DoctematicaGeometry.capsHistoryLetters) {
+            extra = DoctematicaGeometry.capsHistoryLetters(extra);
+          }
+          state.history.push(extra);
+        });
+      }
       if (res.plugStep && DoctematicaGeometry.onLinePlugReason) {
         attachStepNote(DoctematicaGeometry.onLinePlugReason());
       }
+      if (res.siteNote) attachStepNote(res.siteNote);
     }
     var partAfter = DoctematicaGeometry.currentPartText(pack, state.geo);
     if (
+      !res.solved &&
       partAfter &&
       partAfter.label &&
       (!partBefore || partAfter.label !== partBefore.label)
@@ -3926,7 +4001,8 @@
     var ask =
       DoctematicaGeometry.lineAsk && DoctematicaGeometry.lineAsk(pack, state.geo);
     if (ask && ask.stage === "yesno") {
-      applyGeoTyped(ask.task.on ? "כן" : "לא");
+      var yesAns = ask.task && ask.task.kind === "parallel" ? !!ask.task.answer : !!ask.task.on;
+      applyGeoTyped(yesAns ? "כן" : "לא");
       return;
     }
     if (ask && ask.stage === "reason") {
@@ -3948,7 +4024,13 @@
       showFeedback(true, "<strong>נכון.</strong> " + heightMsg);
       return;
     }
-    if (!h.task) return;
+    if (!h.task) {
+      var doneMsg = h.message || "התרגיל כבר נפתר.";
+      if (DoctematicaMath && DoctematicaMath.proseHTML) doneMsg = DoctematicaMath.proseHTML(doneMsg);
+      else if (DoctematicaGeometry.formatPartHtml) doneMsg = DoctematicaGeometry.formatPartHtml(doneMsg);
+      showFeedback(true, "<strong>רמז.</strong> " + doneMsg, "tip");
+      return;
+    }
     var typed = h.step || h.answer;
     if (h.rawStep) typed = h.step;
     // בסגירת קטע שהתחיל: עדיף מספר מתויג כדי לא להתבלבל עם סעיפים אחרים
@@ -3983,11 +4065,51 @@
     if (parts.length) {
       parts.forEach(function (part) {
         if (part.label) state.history.push("סעיף:" + part.label);
+        if (DoctematicaGeometry.canonicalGivenLineRearrangeSteps) {
+          var rearrLines = DoctematicaGeometry.canonicalGivenLineRearrangeSteps(pack) || [];
+          if (rearrLines.length && (part.taskIds || []).some(function (id) {
+            var tt = (pack.tasks || []).filter(function (u) { return u.id === id; })[0];
+            return tt && (tt.kind === "lineIntersect" || tt.kind === "slope" || tt.kind === "lineEq");
+          })) {
+            state.history.push("משימה:סידור משוואת הישר");
+            rearrLines.forEach(function (line) {
+              state.history.push(line);
+            });
+          }
+        }
         (part.taskIds || []).forEach(function (id) {
           var task = (pack.tasks || []).filter(function (t) {
             return t.id === id;
           })[0];
           if (task) {
+            var pairSol =
+              DoctematicaGeometry.axisMidPairTasks &&
+              DoctematicaGeometry.axisMidPairTasks(pack, {});
+            var pairSolL =
+              DoctematicaGeometry.lineMidPairTasks &&
+              DoctematicaGeometry.lineMidPairTasks(pack, {});
+            if (
+              pairSol &&
+              (task.id === pairSol.yEnd.id || task.id === pairSol.xEnd.id)
+            ) {
+              if (task.id === pairSol.yEnd.id && DoctematicaGeometry.canonicalAxisMidPairSteps) {
+                DoctematicaGeometry.canonicalAxisMidPairSteps(pack, {}).forEach(function (line) {
+                  state.history.push(line);
+                });
+              }
+              return;
+            }
+            if (
+              pairSolL &&
+              (task.id === pairSolL.yEnd.id || task.id === pairSolL.xEnd.id)
+            ) {
+              if (task.id === pairSolL.yEnd.id && DoctematicaGeometry.canonicalLineMidPairSteps) {
+                DoctematicaGeometry.canonicalLineMidPairSteps(pack, {}).forEach(function (line) {
+                  state.history.push(line);
+                });
+              }
+              return;
+            }
             if (
               DoctematicaGeometry.partStepByTask &&
               DoctematicaGeometry.partStepByTask(part, pack)
@@ -4011,14 +4133,33 @@
               if (task.reason) {
                 state.geo.notes[state.history.length - 1] = task.reason;
               }
+            } else if (task.kind === "midpoint" && DoctematicaGeometry.canonicalMidpointSteps) {
+              DoctematicaGeometry.canonicalMidpointSteps(task, pack, state.geo).forEach(function (line) {
+                state.history.push(line);
+              });
             } else if (task.kind === "slope" && DoctematicaGeometry.canonicalSlopeSteps) {
+              var slopeIdx = state.history.length;
               DoctematicaGeometry.canonicalSlopeSteps(task, pack).forEach(function (line) {
                 state.history.push(line);
               });
+              if (task.parallel) {
+                if (!state.geo.notes) state.geo.notes = {};
+                state.geo.notes[slopeIdx] = "ישרים מקבילים — שיפועים שווים.";
+              }
             } else if (task.kind === "lineMb" && DoctematicaGeometry.canonicalLineMbSteps) {
               DoctematicaGeometry.canonicalLineMbSteps(task, pack).forEach(function (line) {
                 state.history.push(line);
               });
+            } else if (task.kind === "parallel" && DoctematicaGeometry.canonicalParallelSteps) {
+              var parSteps = DoctematicaGeometry.canonicalParallelSteps(task, pack);
+              var parIdx = state.history.length;
+              parSteps.forEach(function (line) {
+                state.history.push(line);
+              });
+              if (!state.geo.notes) state.geo.notes = {};
+              if (task.reason) state.geo.notes[state.history.length - 1] = task.reason;
+            } else if (task.kind === "yesNo") {
+              state.history.push(task.answer ? "כן" : "לא");
             } else if (task.kind === "lineEq" && DoctematicaGeometry.canonicalLineEqSteps) {
               DoctematicaGeometry.canonicalLineEqSteps(task).forEach(function (line) {
                 state.history.push(line);
@@ -4087,7 +4228,7 @@
       state.geo.draw = DoctematicaGeometry.siteAddAllHeights(pack, state.geo);
     }
     pack.tasks.forEach(function (t) {
-      if (t.kind === "point") state.geo.coords[t.id] = { x: true, y: true };
+      if (t.kind === "point" || t.kind === "midpoint") state.geo.coords[t.id] = { x: true, y: true };
     });
     renderSteps();
     renderGeoPart();
@@ -4854,8 +4995,38 @@
           ? DoctematicaGeometry.currentFocusTask(geoPackHint, state.geo)
           : null;
       var hasOnLineHint = geoPartHasKind("onLine");
+      var hasParallelHint = geoFocus ? geoFocus.kind === "parallel" : geoPartHasKind("parallel");
       var hasSlopeHint = geoFocus ? geoFocus.kind === "slope" : geoPartHasKind("slope");
+      var hasMidpointHint = geoFocus ? geoFocus.kind === "midpoint" : geoPartHasKind("midpoint");
+      var midEndHint = !!(
+        (geoFocus && geoFocus.kind === "midpoint" && geoFocus.mid) ||
+        (hasMidpointHint &&
+          geoPackHint &&
+          (geoPackHint.tasks || []).some(function (t) {
+            if (t.kind !== "midpoint" || !t.mid) return false;
+            return !geoPartHintIds.length || geoPartHintIds.indexOf(t.id) >= 0;
+          }))
+      );
+      var slopeIsParallel = !!(
+        (geoFocus && geoFocus.kind === "slope" && geoFocus.parallel) ||
+        (!geoFocus &&
+          geoPackHint &&
+          (geoPackHint.tasks || []).some(function (t) {
+            if (t.kind !== "slope" || !t.parallel) return false;
+            return !geoPartHintIds.length || geoPartHintIds.indexOf(t.id) >= 0;
+          }))
+      );
       var hasLineEqHint = geoFocus ? geoFocus.kind === "lineEq" : geoPartHasKind("lineEq");
+      var axisLineHint = !!(
+        (geoFocus && geoFocus.kind === "lineEq" && geoFocus.axisParallel) ||
+        (!geoFocus &&
+          geoPackHint &&
+          (geoPackHint.tasks || []).some(function (t) {
+            if (t.kind !== "lineEq" || !t.axisParallel) return false;
+            return !geoPartHintIds.length || geoPartHintIds.indexOf(t.id) >= 0;
+          }))
+      );
+      var hasYesNoHint = geoFocus ? geoFocus.kind === "yesNo" : geoPartHasKind("yesNo");
       var hasIntersectHint = geoFocus
         ? geoFocus.kind === "lineIntersect"
         : geoPartHasKind("lineIntersect");
@@ -4881,12 +5052,26 @@
           ? "שייכו כל משוואה לישר בציור (I, II…) ונמקו לפי השיפוע או לפי b."
           : hasOnLineHint
           ? "שתי דרכים: הציבו x ו־y והראו אם האגפים שווים, או הציבו רק x וחשבו y. בשאלות כן/לא — אחרי החישוב ענו כן או לא. אפשר לנמק."
+          : hasParallelHint
+          ? "ישרים מקבילים: שיפועים שווים. אם המשוואה לא ב־y = mx + b — סדרו קודם. אחר כך ענו כן או לא. נימוק באתר; אפשר לנמק אם תרצו."
+          : hasMidpointHint
+          ? midEndHint
+            ? geoFocus && geoFocus.onAxis
+              ? "הנקודה על ציר: רשמו את השיעור 0. AC = CB אומר ש־C אמצע — הציבו בנוסחה, הכפילו ב־2, ובודדו. אפשר גם ישר את הנקודה."
+              : "אמצע ידוע, קצה חסר: הציבו xₘ = (x₁ + x)/2, הכפילו את אגף שמאל ב־2, ובודדו את x. אותו דבר ל־y. אפשר גם ישר את הנקודה."
+            : "אמצע קטע: x = (x₁ + x₂)/2 ו־y = (y₁ + y₂)/2. הציבו, חברו את המונה, ואז חלקו. אפשר לדלג למונה או ישר לנקודה."
           : hasSlopeHint
-          ? "שיפוע: כפתור «שיפוע» לרשום mAB = (y₂ − y₁)/(x₂ − x₁). לא משנה איזו נקודה היא 1 — אותו סדר במונה ובמכנה. אפשר גם m = … או ישר את המספר."
+          ? slopeIsParallel
+            ? "לישרים מקבילים שיפועים שווים. רשמו m2 = mCD = … (או mII = mI), או m = …."
+            : "שיפוע: כפתור «שיפוע» לרשום mAB = (y₂ − y₁)/(x₂ − x₁). לא משנה איזו נקודה היא 1 — אותו סדר במונה ובמכנה. אפשר גם m = … או ישר את המספר."
+          : hasYesNoHint
+          ? "ענו כן או לא. אין צורך לנמק."
           : hasLineEqHint
-          ? "משוואת ישר: הציבו y − y₁ = m(x − x₁) והביאו ל־y = mx + b, או הציבו את הנקודה ב־y = mx + b ומצאו את b."
+          ? axisLineHint
+            ? "מקביל לציר x (או מאונך לציר y): y = שיעור ה-y. מקביל לציר y (או מאונך לציר x): x = שיעור ה-x. אם נתון ישר שכבר מקביל לציר — גם הישר המבוקש מקביל לאותו ציר. אפשר לרשום ישר את המשוואה."
+            : "משוואת ישר: הציבו y − y₁ = m(x − x₁) והביאו ל־y = mx + b, או הציבו את הנקודה ב־y = mx + b ומצאו את b."
           : hasIntersectHint
-          ? "נקודת חיתוך: השוו את שתי המשוואות, מצאו x ואז y, ורשמו את הנקודה."
+          ? "נקודת חיתוך: אם אחד הישרים מקביל לציר — רשמו את השיעור הידוע (y או x) והציבו במשוואה השנייה. אפשר גם להשוות בין שתי המשוואות."
           : hasLineHint
           ? "נתון x: הציבו ב־y = … וחשבו. נתון y: הציבו ופתרו משוואה בנעלם אחד, ואז רשמו את הנקודה (x;y)."
           : hasAreaHint
@@ -5022,7 +5207,9 @@
       if (slopeTask) {
         mathField.setMSlopeEnabled(
           true,
-          String(slopeTask.from || "A") + String(slopeTask.to || "B")
+          slopeTask.parallel
+            ? String(slopeTask.label || "II")
+            : String(slopeTask.from || "A") + String(slopeTask.to || "B")
         );
       } else {
         mathField.setMSlopeEnabled(false);
