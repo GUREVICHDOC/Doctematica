@@ -2125,6 +2125,10 @@
     applySysOutcome(result);
   }
 
+  function isGeoQuestionHeader(line) {
+    return /^שאלה:/.test(String(line || ""));
+  }
+
   function isGeoPartHeader(line) {
     return /^סעיף:/.test(String(line || ""));
   }
@@ -2134,7 +2138,7 @@
   }
 
   function isGeoSectionHeader(line) {
-    return isGeoPartHeader(line) || isGeoTaskHeader(line);
+    return isGeoPartHeader(line) || isGeoTaskHeader(line) || isGeoQuestionHeader(line);
   }
 
   function geoPartHeaderLabel(line) {
@@ -2164,6 +2168,19 @@
 
   function geoTaskHeaderLabel(line) {
     return String(line || "").replace(/^משימה:/, "");
+  }
+
+  function ensureGeoQuestionRow(pack) {
+    var parts = (pack && pack.parts) || [];
+    var i;
+    for (i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (!p || p.label || !String(p.text || "").trim()) continue;
+      var marker = "שאלה:" + String(p.text).trim();
+      if (state.history.indexOf(marker) >= 0) return;
+      state.history.push(marker);
+      return;
+    }
   }
 
   function ensureGeoPartHeader(label) {
@@ -2208,8 +2225,10 @@
 
   function lastHistoryStepIndex() {
     var i;
-    for (i = state.history.length - 1; i >= 1; i--) {
-      if (!isGeoSectionHeader(state.history[i])) return i;
+    for (i = state.history.length - 1; i >= 0; i--) {
+      if (isGeoSectionHeader(state.history[i])) continue;
+      if (i === 0 && /^נתון/.test(String(state.history[i] || ""))) continue;
+      return i;
     }
     return -1;
   }
@@ -2313,6 +2332,15 @@
             body.textContent = plab ? "סעיף " + plab : "סעיף";
             li.classList.add("geo-section-row");
           }
+        } else if (isGeoQuestionHeader(line)) {
+          n.textContent = "שאלה";
+          var qText = String(line).replace(/^שאלה:/, "");
+          if (DoctematicaGeometry.formatPartHtml) {
+            body.innerHTML = DoctematicaGeometry.formatPartHtml(qText);
+          } else {
+            body.textContent = qText;
+          }
+          li.classList.add("geo-section-row", "geo-part-row");
         } else if (isGeoTaskHeader(line)) {
           n.textContent = "▸";
           body.textContent = geoTaskHeaderLabel(line);
@@ -2328,13 +2356,22 @@
         }
         li.appendChild(n);
         li.appendChild(body);
-        if (index > 0 && !isGeoSectionHeader(line)) {
+        var isGivenRow =
+          index === 0 &&
+          !isLineMatch &&
+          !isGeoSectionHeader(line) &&
+          /^נתון/.test(String(line || ""));
+        if (!isGivenRow && !isGeoSectionHeader(line)) {
           var noteWrap = document.createElement("div");
           noteWrap.className = "step-note";
           var saved = state.geo && state.geo.notes && state.geo.notes[index];
           if (saved) {
             noteWrap.classList.add("has-text");
-            noteWrap.textContent = saved;
+            if (DoctematicaMath && DoctematicaMath.proseHTML) {
+              noteWrap.innerHTML = DoctematicaMath.proseHTML(saved);
+            } else {
+              noteWrap.textContent = saved;
+            }
           } else if (!state.locked) {
             var askReason =
               DoctematicaGeometry.lineAsk &&
@@ -3432,7 +3469,7 @@
     if (pack.showBoard === false) {
       coordBoard.clear();
       if (geoBoardEl) geoBoardEl.classList.add("hidden");
-      if (solveWrap) solveWrap.classList.add("has-geo");
+      if (solveWrap) solveWrap.classList.remove("has-geo");
       return;
     }
     if (solveWrap) solveWrap.classList.add("has-geo");
@@ -3484,13 +3521,22 @@
       }
       return;
     }
-    var part = DoctematicaGeometry.currentPartText(state.problem.geo, state.geo);
-    if (!part || part.label) {
+    var pack = state.problem.geo;
+    var part = DoctematicaGeometry.currentPartText(pack, state.geo);
+    var showPart = part && !part.label ? part : null;
+    if (!showPart) {
+      var unlabeled = (pack.parts || []).filter(function (p) {
+        return p && !p.label && String(p.text || "").trim();
+      });
+      if (!part && unlabeled.length) showPart = unlabeled[0];
+    }
+    if (showPart && (state.history || []).some(isGeoQuestionHeader)) showPart = null;
+    if (!showPart) {
       geoPartEl.classList.add("hidden");
       geoPartEl.innerHTML = "";
     } else {
       geoPartEl.classList.remove("hidden");
-      geoPartEl.innerHTML = DoctematicaGeometry.formatPartHtml(part.text || "");
+      geoPartEl.innerHTML = DoctematicaGeometry.formatPartHtml(showPart.text || "");
     }
     renderLineMatchPanel();
   }
@@ -3510,8 +3556,8 @@
       pack && DoctematicaGeometry.currentPartText
         ? DoctematicaGeometry.currentPartText(pack, state.geo)
         : null;
-    if (res.lineMatch) state.geo.lineMatch = res.lineMatch;
     if (res.done) state.geo.done = res.done;
+    if (res.lineMatch) state.geo.lineMatch = res.lineMatch;
     if (res.lineEq) state.geo.lineEq = Object.assign({}, state.geo.lineEq || {}, res.lineEq);
     renderGeoScene(null);
     if (res.show) {
@@ -3693,8 +3739,8 @@
     });
   }
 
-  function startGeoSession() {
-    state.geo = {
+  function createEmptyGeoState() {
+    return {
       done: {},
       partial: {},
       lastExpr: {},
@@ -3708,6 +3754,23 @@
       pointRoute: {},
       lineMatch: {},
     };
+  }
+
+  function applyGeoResultState(res) {
+    if (!res || !state.geo) return;
+    state.geo.done = res.done || state.geo.done || {};
+    state.geo.partial = res.partial !== undefined ? res.partial : state.geo.partial || {};
+    state.geo.lastExpr = res.lastExpr || state.geo.lastExpr || {};
+    state.geo.coords = res.coords !== undefined ? res.coords : state.geo.coords || {};
+    if (res.lineEqDisplay) state.geo.lineEqDisplay = res.lineEqDisplay;
+    if (res.lineEq) state.geo.lineEq = Object.assign({}, state.geo.lineEq || {}, res.lineEq);
+    if (res.intersect) state.geo.intersect = res.intersect;
+    if (res.pointRoute) state.geo.pointRoute = Object.assign({}, state.geo.pointRoute || {}, res.pointRoute);
+    if (res.footCoords) state.geo.footCoords = res.footCoords;
+  }
+
+  function startGeoSession() {
+    state.geo = createEmptyGeoState();
     var pack0 = state.problem && state.problem.geo;
     var lineMatchStart =
       pack0 &&
@@ -3728,6 +3791,7 @@
     if (pack0) {
       var firstPart = DoctematicaGeometry.currentPartText(pack0, state.geo);
       if (firstPart && firstPart.label) ensureGeoPartHeader(firstPart.label);
+      else ensureGeoQuestionRow(pack0);
       ensureGeoFocusTaskHeader(pack0, state.geo);
     }
     renderGeoScene(null);
@@ -3775,7 +3839,9 @@
             return t.kind === "slope";
           })
         ) {
-          emptyMsg = "רשמו את השיפוע, או m = (y₂ − y₁)/(x₂ − x₁).";
+          emptyMsg = emptyKinds[0] && emptyKinds[0].perpendicular
+            ? "רשמו m₁ · m₂ = −1, הציבו את השיפוע הנתון, או ישר את השיפוע המאונך."
+            : "רשמו את השיפוע, או m = (y₂ − y₁)/(x₂ − x₁).";
         }
       }
       showFeedback(false, "<strong>עוד לא.</strong> " + emptyMsg);
@@ -3799,15 +3865,7 @@
       return false;
     }
     if (partBefore && partBefore.label) ensureGeoPartHeader(partBefore.label);
-    state.geo.done = res.done || state.geo.done || {};
-    state.geo.partial = res.partial !== undefined ? res.partial : state.geo.partial || {};
-    state.geo.lastExpr = res.lastExpr || state.geo.lastExpr || {};
-    state.geo.coords = res.coords !== undefined ? res.coords : state.geo.coords || {};
-    if (res.lineEqDisplay) state.geo.lineEqDisplay = res.lineEqDisplay;
-    if (res.lineEq) state.geo.lineEq = Object.assign({}, state.geo.lineEq || {}, res.lineEq);
-    if (res.intersect) state.geo.intersect = res.intersect;
-    if (res.pointRoute) state.geo.pointRoute = Object.assign({}, state.geo.pointRoute || {}, res.pointRoute);
-    if (res.footCoords) state.geo.footCoords = res.footCoords;
+    applyGeoResultState(res);
     if (res.mbRearranged) {
       state.geo.mbRearranged = true;
       state.geo.mbRearrangeExpr = null;
@@ -4001,7 +4059,10 @@
     var ask =
       DoctematicaGeometry.lineAsk && DoctematicaGeometry.lineAsk(pack, state.geo);
     if (ask && ask.stage === "yesno") {
-      var yesAns = ask.task && ask.task.kind === "parallel" ? !!ask.task.answer : !!ask.task.on;
+      var yesAns =
+        ask.task && (ask.task.kind === "parallel" || ask.task.kind === "perpendicular")
+          ? !!ask.task.answer
+          : !!ask.task.on;
       applyGeoTyped(yesAns ? "כן" : "לא");
       return;
     }
@@ -4065,6 +4126,7 @@
     if (parts.length) {
       parts.forEach(function (part) {
         if (part.label) state.history.push("סעיף:" + part.label);
+        else if (String(part.text || "").trim()) state.history.push("שאלה:" + String(part.text).trim());
         if (DoctematicaGeometry.canonicalGivenLineRearrangeSteps) {
           var rearrLines = DoctematicaGeometry.canonicalGivenLineRearrangeSteps(pack) || [];
           if (rearrLines.length && (part.taskIds || []).some(function (id) {
@@ -4146,6 +4208,16 @@
                 if (!state.geo.notes) state.geo.notes = {};
                 state.geo.notes[slopeIdx] = "ישרים מקבילים — שיפועים שווים.";
               }
+              if (task.perpendicular) {
+                if (!state.geo.notes) state.geo.notes = {};
+                state.geo.notes[slopeIdx] = "ישרים מאונכים — מכפלת השיפועים היא −1.";
+              }
+            } else if (task.kind === "distance" && DoctematicaGeometry.canonicalDistanceSteps) {
+              DoctematicaGeometry.canonicalDistanceSteps(task, pack).forEach(function (line) {
+                state.history.push(line);
+              });
+            } else if (task.kind === "equalLen") {
+              state.history.push(task.segs && task.segs.length >= 2 ? String(task.segs[0]).toUpperCase() + "=" + String(task.segs[1]).toUpperCase() : "AB=BC");
             } else if (task.kind === "lineMb" && DoctematicaGeometry.canonicalLineMbSteps) {
               DoctematicaGeometry.canonicalLineMbSteps(task, pack).forEach(function (line) {
                 state.history.push(line);
@@ -4158,6 +4230,25 @@
               });
               if (!state.geo.notes) state.geo.notes = {};
               if (task.reason) state.geo.notes[state.history.length - 1] = task.reason;
+            } else if (task.kind === "perpendicular" && DoctematicaGeometry.canonicalPerpendicularSteps) {
+              var perpSteps = DoctematicaGeometry.canonicalPerpendicularSteps(task, pack);
+              var perpBase = state.history.length;
+              perpSteps.forEach(function (line) {
+                state.history.push(line);
+              });
+              if (!state.geo.notes) state.geo.notes = {};
+              var perpNote = DoctematicaGeometry.perpSlopeReason
+                ? DoctematicaGeometry.perpSlopeReason(task, pack)
+                : "";
+              var pk;
+              for (pk = 0; pk < perpSteps.length; pk++) {
+                var pln = String(perpSteps[pk] || "");
+                if (/^(כן|לא)$/.test(pln) || /^ולכן/.test(pln)) continue;
+                if (/[·×*]/.test(pln) && /=/.test(pln)) {
+                  state.geo.notes[perpBase + pk] = perpNote;
+                  break;
+                }
+              }
             } else if (task.kind === "yesNo") {
               state.history.push(task.answer ? "כן" : "לא");
             } else if (task.kind === "lineEq" && DoctematicaGeometry.canonicalLineEqSteps) {
@@ -4230,11 +4321,11 @@
     pack.tasks.forEach(function (t) {
       if (t.kind === "point" || t.kind === "midpoint") state.geo.coords[t.id] = { x: true, y: true };
     });
+    markSolved();
     renderSteps();
     renderGeoPart();
     renderGeoScene(null);
     renderGeoAskUi();
-    markSolved();
     mathField.setDisabled(true);
     checkBtn.disabled = true;
     nextAfterSolveBtn.classList.remove("hidden");
@@ -4996,7 +5087,9 @@
           : null;
       var hasOnLineHint = geoPartHasKind("onLine");
       var hasParallelHint = geoFocus ? geoFocus.kind === "parallel" : geoPartHasKind("parallel");
+      var hasPerpHint = geoFocus ? geoFocus.kind === "perpendicular" : geoPartHasKind("perpendicular");
       var hasSlopeHint = geoFocus ? geoFocus.kind === "slope" : geoPartHasKind("slope");
+      var hasDistanceHint = geoFocus ? geoFocus.kind === "distance" || geoFocus.kind === "equalLen" : geoPartHasKind("distance") || geoPartHasKind("equalLen");
       var hasMidpointHint = geoFocus ? geoFocus.kind === "midpoint" : geoPartHasKind("midpoint");
       var midEndHint = !!(
         (geoFocus && geoFocus.kind === "midpoint" && geoFocus.mid) ||
@@ -5013,6 +5106,15 @@
           geoPackHint &&
           (geoPackHint.tasks || []).some(function (t) {
             if (t.kind !== "slope" || !t.parallel) return false;
+            return !geoPartHintIds.length || geoPartHintIds.indexOf(t.id) >= 0;
+          }))
+      );
+      var slopeIsPerp = !!(
+        (geoFocus && geoFocus.kind === "slope" && geoFocus.perpendicular) ||
+        (!geoFocus &&
+          geoPackHint &&
+          (geoPackHint.tasks || []).some(function (t) {
+            if (t.kind !== "slope" || !t.perpendicular) return false;
             return !geoPartHintIds.length || geoPartHintIds.indexOf(t.id) >= 0;
           }))
       );
@@ -5054,6 +5156,8 @@
           ? "שתי דרכים: הציבו x ו־y והראו אם האגפים שווים, או הציבו רק x וחשבו y. בשאלות כן/לא — אחרי החישוב ענו כן או לא. אפשר לנמק."
           : hasParallelHint
           ? "ישרים מקבילים: שיפועים שווים. אם המשוואה לא ב־y = mx + b — סדרו קודם. אחר כך ענו כן או לא. נימוק באתר; אפשר לנמק אם תרצו."
+          : hasPerpHint
+          ? "ישרים מאונכים: מכפלת השיפועים היא −1. אם צריך — סדרו קודם ל־y = mx + b (לא חובה אם כבר יודעים את השיפוע). אחר כך ענו כן או לא."
           : hasMidpointHint
           ? midEndHint
             ? geoFocus && geoFocus.onAxis
@@ -5063,7 +5167,11 @@
           : hasSlopeHint
           ? slopeIsParallel
             ? "לישרים מקבילים שיפועים שווים. רשמו m2 = mCD = … (או mII = mI), או m = …."
+            : slopeIsPerp
+              ? "לישרים מאונכים: m₁ · m₂ = −1. רשמו את הנוסחה, הציבו את השיפוע הנתון, ואז בודדו. אפשר גם ישר את השיפוע."
             : "שיפוע: כפתור «שיפוע» לרשום mAB = (y₂ − y₁)/(x₂ − x₁). לא משנה איזו נקודה היא 1 — אותו סדר במונה ובמכנה. אפשר גם m = … או ישר את המספר."
+          : hasDistanceHint
+          ? "מרחק: כפתור «מרחק» לרשום dAB. נוסחה d = √((x₂ − x₁)² + (y₂ − y₁)²). אותו סדר נקודות בשני ההפרשים. אפשר לדלג לשלבים או ישר לתשובה המדויקת (בלי עשרוני)."
           : hasYesNoHint
           ? "ענו כן או לא. אין צורך לנמק."
           : hasLineEqHint
@@ -5213,6 +5321,35 @@
         );
       } else {
         mathField.setMSlopeEnabled(false);
+      }
+    }
+    if (mathField && mathField.setMDistEnabled) {
+      var distPack = state.problem && state.problem.geo;
+      var distFocus =
+        distPack && DoctematicaGeometry.currentFocusTask
+          ? DoctematicaGeometry.currentFocusTask(distPack, state.geo)
+          : null;
+      var distPart =
+        distPack && DoctematicaGeometry.currentPartText
+          ? DoctematicaGeometry.currentPartText(distPack, state.geo)
+          : null;
+      var distPartIds = (distPart && distPart.taskIds) || [];
+      var distTask = null;
+      if (distFocus && distFocus.kind === "distance") {
+        distTask = distFocus;
+      } else if (!distFocus || distFocus.kind === "equalLen") {
+        distTask =
+          distPack &&
+          (distPack.tasks || []).filter(function (x) {
+            if (x.kind !== "distance") return false;
+            if (state.geo && state.geo.done && state.geo.done[x.id]) return false;
+            return !distPartIds.length || distPartIds.indexOf(x.id) >= 0;
+          })[0];
+      }
+      if (distTask) {
+        mathField.setMDistEnabled(true, String(distTask.from || "A") + String(distTask.to || "B"));
+      } else {
+        mathField.setMDistEnabled(false);
       }
     }
   }

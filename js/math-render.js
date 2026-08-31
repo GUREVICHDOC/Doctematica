@@ -181,7 +181,7 @@
         }
         continue;
       }
-      var mSlopeLab = s.slice(i).match(/^m_?((?:III|II|I)|[A-Za-z]{2,4}|\d+)(?![A-Za-z])/);
+      var mSlopeLab = s.slice(i).match(/^m_?((?:III|II|I)|[A-Za-z]{2,4}|\d+|[₀₁₂₃₄₅₆₇₈₉]+)(?![A-Za-z])/);
       if (mSlopeLab) {
         out +=
           '<span class="m-slope">' +
@@ -192,10 +192,42 @@
         i += mSlopeLab[0].length;
         continue;
       }
+      var dDistLab = s.slice(i).match(/^d_?((?:[A-Za-z]{2,4}|\d+))(?![A-Za-z])/);
+      if (dDistLab) {
+        out +=
+          '<span class="m-slope">' +
+          '<span class="m-slope-m">d</span>' +
+          '<span class="m-slope-pts">' +
+          escapeHtml(dDistLab[1]) +
+          "</span></span>";
+        i += dDistLab[0].length;
+        continue;
+      }
+      if (dDistLab) {
+        out +=
+          '<span class="m-slope">' +
+          '<span class="m-slope-m">d</span>' +
+          '<span class="m-slope-pts">' +
+          escapeHtml(dDistLab[1]) +
+          "</span></span>";
+        i += dDistLab[0].length;
+        continue;
+      }
       var mixed = s.slice(i).match(/^(-?\d+)\s+(\d+)\s*\/\s*(\d+)/);
       if (mixed) {
         out += mixedHTML(mixed[1], mixed[2], mixed[3]);
         i += mixed[0].length;
+        continue;
+      }
+      var mixedHalf = s.slice(i).match(/^(-?\d+)½/);
+      if (mixedHalf) {
+        out += mixedHTML(mixedHalf[1], "1", "2");
+        i += mixedHalf[0].length;
+        continue;
+      }
+      if (s.charAt(i) === "½") {
+        out += fracHTML("1", "2");
+        i += 1;
         continue;
       }
       var nrootm =
@@ -214,7 +246,18 @@
         i += nrootm[0].length;
         continue;
       }
-      var sqrtm = s.slice(i).match(/^√\(([^()]*)\)/) || s.slice(i).match(/^√(\d+(?:\.\d+)?)/);
+      if (s.charAt(i) === "√" && s.charAt(i + 1) === "(") {
+        var radBal = matchBalancedParen(s, i + 1);
+        if (radBal) {
+          out +=
+            '<span class="m-sqrt"><span class="m-rad-sign">√</span><span class="m-rad">' +
+            sideToHTML(unwrapParens(radBal)) +
+            "</span></span>";
+          i += 1 + radBal.length;
+          continue;
+        }
+      }
+      var sqrtm = s.slice(i).match(/^√(\d+(?:\.\d+)?)/);
       if (sqrtm) {
         out +=
           '<span class="m-sqrt"><span class="m-rad-sign">√</span><span class="m-rad">' +
@@ -351,8 +394,8 @@
         i += 1;
         continue;
       }
-      if (ch === "=") {
-        out += '<span class="m-eq">=</span>';
+      if (ch === "=" || ch === "≠") {
+        out += '<span class="m-eq">' + (ch === "≠" ? "≠" : "=") + "</span>";
         i += 1;
         continue;
       }
@@ -413,10 +456,29 @@
   var RE_SLOPE_TEMPLATE = /y\s*=\s*mx\s*[+−–—-]\s*b/gi;
   var RE_SLOPE_YX =
     /[yY]\s*=\s*[−–—-]?(?:(?:\(\s*\d+(?:\.\d+)?\s*\/\s*\d+(?:\.\d+)?\s*\)\s*[xX]|\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?\s*[xX])|[xX])(?:\s*[+−–—-]\s*\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)?/gi;
-  var RE_M_EQ =
-    /\bm\s*=\s*[−–—-]?(?:\d+\s+\d+\s*\/\s*\d+|\(\d+\s*\/\s*\d+\)|\d+\s*\/\s*\d+|\d+(?:\.\d+)?)/gi;
+  var M_TAG = "(?:_(?:III|II|I|[A-Za-z]{1,4}|\\d+)|[₀₁₂₃₄₅₆₇₈₉]+|\\d+|[A-Za-z]{1,4})?";
+  var M_VAL =
+    "[−–—-]?(?:\\d+\\s+\\d+\\s*\\/\\s*\\d+|\\(\\d+\\s*\\/\\s*\\d+\\)|\\d+\\s*\\/\\s*\\d+|\\d+½|\\d+(?:\\.\\d+)?|½)";
+  var RE_M_EQ = new RegExp("\\bm" + M_TAG + "\\s*=\\s*" + M_VAL, "gi");
+  var RE_M_EQ_LIST = new RegExp(
+    "\\bm" + M_TAG + "\\s*=\\s*" + M_VAL + "(?:\\s*[,;]\\s*m" + M_TAG + "\\s*=\\s*" + M_VAL + ")+",
+    "gi"
+  );
   var RE_PROSE_MATH =
     /S(?:△|Δ|□|▭)?[A-Za-z]{3,4}(?:\s*=\s*S(?:△|Δ|□|▭)?[A-Za-z]{3,4}\s*[−–—-]\s*S(?:△|Δ|□|▭)?[A-Za-z]{3,4})?|[A-Za-z]→[A-Za-z]{2}|[A-Za-z]\s*\(\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*[.,;]\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*\)|\(\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*[.,;]\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*\)|[−–—-]?\d+(?:\.\d+)?[xX](?!\w)/g;
+  var PROD_NUM =
+    "(?:\\(\\s*[−–—-]?\\s*\\d+\\s*\\/\\s*\\d+\\s*\\)|\\(\\s*[−–—-]?\\s*\\d+(?:\\.\\d+)?\\s*\\)|[−–—-]?\\d+\\s*\\/\\s*\\d+|[−–—-]?\\d+(?:\\.\\d+)?|½)";
+  var RE_PROD_EQ = new RegExp(
+    PROD_NUM +
+      "\\s*[·×*]\\s*" +
+      PROD_NUM +
+      "\\s*[=≠]\\s*" +
+      PROD_NUM +
+      "(?:\\s*≠\\s*" +
+      PROD_NUM +
+      ")?",
+    "gi"
+  );
 
   function proseChunkHTML(chunk) {
     return toHTML(String(chunk || "").trim());
@@ -438,8 +500,12 @@
       );
       return id;
     }
+    src = src.replace(RE_M_EQ_LIST, stash);
     src = src.replace(RE_M_EQ, stash);
+    src = src.replace(/\bd_?[A-Za-z]{2,4}(?:\s*=\s*[^\s,;]+)?/g, stash);
+    src = src.replace(/\bd\s*=\s*√[^\n.]*/g, stash);
     src = src.replace(RE_SLOPE_TEMPLATE, stash);
+    src = src.replace(RE_PROD_EQ, stash);
     src = src.replace(RE_LINEAR_EQ, function (chunk, offset, full) {
       if (offset > 0 && /[xX0-9)]\s*[+−–—-]\s*$/.test(full.slice(0, offset))) return chunk;
       return stash(chunk);
@@ -452,6 +518,9 @@
         return pre + stash(num);
       }
     );
+    src = src.replace(/(^|[^A-Za-z0-9])(\d+\s*\/\s*\d+)/g, function (_, pre, frac) {
+      return pre + stash(frac);
+    });
     var esc = escapeHtml(src);
     slots.forEach(function (html, i) {
       esc = esc.split("\x00M" + i + "\x00").join(html);

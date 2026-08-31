@@ -456,37 +456,55 @@ button#new-problem {
 }
 
 .steps li.has-step-note {
-  align-items: baseline;
-}
-
-.steps li.has-step-note:has(.step-note-input) {
   flex-wrap: wrap;
+  align-items: flex-start;
 }
 
-.steps li.has-step-note:has(.step-note-input) > span:nth-child(2) {
-  flex: 1 1 calc(100% - 2rem);
+.steps li.has-step-note > .n {
+  order: 1;
 }
 
+.steps li.has-step-note > span:nth-child(2) {
+  flex: 1 1 auto;
+  min-width: 10rem;
+  order: 2;
+}
+
+.steps li.has-step-note .step-note.has-text,
 .steps li.has-step-note:has(.step-note-input) .step-note {
-  flex: 1 1 100%;
+  flex: 1 0 100%;
+  width: 100%;
+  max-width: none;
+  order: 3;
   margin-inline-start: 1.8rem;
-  margin-top: 0.2rem;
-  max-width: calc(100% - 1.8rem);
+  margin-top: 0.25rem;
 }
 
 .step-note {
-  flex: 0 1 10.5rem;
+  flex: 0 1 auto;
   margin-inline-start: 0.35rem;
   text-align: start;
 }
 
 .step-note.has-text {
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--muted, #5a6d61);
   border-inline-start: 2px solid rgba(42, 111, 154, 0.45);
-  padding-inline-start: 0.45rem;
-  line-height: 1.35;
+  padding-inline-start: 0.55rem;
+  line-height: 1.5;
+}
+
+.step-note.has-text .math-prose {
+  display: inline-block;
+  width: max-content;
+  max-width: 100%;
+  margin-inline: 0.15em;
+  vertical-align: middle;
+}
+
+.step-note.has-text .m-frac {
+  vertical-align: middle;
 }
 
 .step-note-ask {

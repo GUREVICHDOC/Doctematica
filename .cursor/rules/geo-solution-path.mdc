@@ -101,6 +101,12 @@ A line parallel to a given line through a point: slope is copied (`m_{II}=m_I=2`
 
 Prove two lines are parallel: compute the two slopes (or one slope and a given \(m\)), then write \(m_{AB}=m_{CD}\) (or \(m_1=m_2\)). The site then adds «ולכן הישרים מקבילים». The note stays «ישרים בעלי אותו שיפוע מקבילים». Not parallel: \(m_{BC}\neq m_{AD}\), then «ולכן הישרים לא מקבילים». Skip to כן/לא still fills the same two lines.
 
+Perp slope of a given line: site path \(m_1·m_2=-1\), then plug the given slope (`4·m₂=-1`), then isolate (`m₂=-1/4`). Skip to the plug or to the number is allowed. A bare fraction such as `-1/4` is the answer, not a two-point slope formula.
+
+Perp through a given point: that slope path, then the equation (`lineEq`). Skip to \(y-y_1=m(x-x_1)\) is allowed. If the given equation is not \(y=mx+b\), rearrange first.
+
+Perp at an intercept of a given line: site path the intercept (`x = 0` or `y = 0`, plug, point), then the perp slope, then the equation. Slope before the point is also accepted. Book א/ב stay; do not add a «what can you say» part.
+
 ## Lines parallel / perpendicular to the axes
 
 - ∥ x-axis (or ⊥ y-axis): \(y =\) the shared \(y\) (of the point, or of both points).
@@ -112,3 +118,14 @@ Prove two lines are parallel: compute the two slopes (or one slope and a given \
 - Discover lines through `(answerX, answerY)` from `pack.lines`. Do not hard-code only `lineKey`.
 - `y = 3` / tag `Y` is the y-axis, never a wrong x.
 - TwinY is the mirror of twinX.
+
+## Distance between two points
+
+Site path: \(d=\sqrt{(x_2-x_1)^2+(y_2-y_1)^2}\) (also \(d_{AB}\)). Substitute, simplify double negatives, compute each difference, square, add, simplify the square root exactly (perfect squares evaluate; extract square factors; never a long decimal).
+
+Accept either subtraction order if both coordinates use the same point order. Reversing both differences is valid. Mixed order is not.
+
+Skip-ahead to any equivalent form or the exact answer is allowed. Axis-parallel length (same y or same x) stays the existing `segment` path — do not use the distance formula there.
+
+Prove equal lengths: compute both distances (either first), then write \(AB=BC\).
+

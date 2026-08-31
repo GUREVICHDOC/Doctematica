@@ -1,0 +1,31 @@
+---
+description: Stacked fractions in exercise text, history, and hints — never leave a/b as a slash in Hebrew RTL prose.
+globs: data/curriculum.js,data/curriculum.json,js/math-render.js,js/geometry.js,js/app.js
+alwaysApply: true
+---
+
+# Math display in Hebrew UI (Yonatan)
+
+Exercise **part text**, given lines, hints, notes, and «פתרון מלא» go through `DoctematicaMath.proseHTML` / `toHTML`. Those must show a **stacked fraction** (`m-frac`), not a slash `1/7`.
+
+## Curriculum strings
+
+Write fractions as `1/7`, `(1/5)`, `−2/9`, `(3/4)x`, or mixed `4½` / `4 1/2`. Do **not** invent a second markup.
+
+Several slope (or similar) assignments in one Hebrew sentence **must stay one phrase** so RTL does not reverse them:
+
+`m₁ = −7, m₂ = 1/7` — keep both on the same side of the Hebrew, comma-separated. The renderer treats that list as one LTR math island.
+
+A slope **product** in a Hebrew note must stay one phrase so RTL does not reverse `= −1`:
+
+`(9/2)·(−2/9) = −1` and `4·(1/4) = 1 ≠ −1` — keep the factors, `=`, and `≠` together. The renderer treats that as one LTR math island (stacked fractions).
+
+`d = √((x₂ − x₁)² + (y₂ − y₁)²)` and `dAB = …` are LTR islands. Keep a slope **list** and a distance formula as one phrase.
+
+`y = (1/5)x + 3` is already picked up as a line equation.
+
+## Renderer
+
+If a new form does not stack (unicode `m₁`, `m_AB`, mixed `½`, a list of `m₁ = …, m₂ = …`), **fix `js/math-render.js`**, do not paste raw HTML into curriculum.
+
+Never ship a visible slash-fraction in a student-facing Hebrew sentence.

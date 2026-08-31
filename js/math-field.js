@@ -20,7 +20,7 @@
   }
 
   function isMSlopeNode(v) {
-    return v && typeof v === "object" && v.type === "mslope";
+    return v && typeof v === "object" && (v.type === "mslope" || v.type === "mdist");
   }
 
   /** Plain "x^3" / "2^4" → pow node (for radicands that stored caret as text). */
@@ -170,7 +170,7 @@
       out.push({ path: path.concat("verts") });
       return;
     }
-    if (node.type === "mslope") {
+    if (node.type === "mslope" || node.type === "mdist") {
       out.push({ path: path.concat("pts") });
       return;
     }
@@ -242,6 +242,10 @@
     if (part.type === "mslope") {
       var pts = this.serializeSlot(part.pts).replace(/\s+/g, "").toUpperCase();
       return "m" + pts;
+    }
+    if (part.type === "mdist") {
+      var dpts = this.serializeSlot(part.pts).replace(/\s+/g, "").toUpperCase();
+      return dpts ? "d" + dpts : "d";
     }
     if (part.type === "frac") return this.serializeSlot(part);
     var w = String(part.whole || "").trim();
@@ -606,6 +610,43 @@
     }
   };
 
+  MathField.prototype.insertMDist = function (pts) {
+    if (this.disabled) return;
+    var part = this.parts[this.focusPart];
+    if (part && part.type !== "text") return;
+    var split = this.splitCurrentText();
+    var labels = this.cleanMSlopePts(pts || this.mDistPts || "AB") || "AB";
+    this.insertWithSplit(split, { type: "mdist", pts: labels });
+    this.normalize();
+    var i;
+    for (i = 0; i < this.parts.length; i++) {
+      if (this.parts[i].type === "mdist") break;
+    }
+    var right = this.parts[i + 1];
+    if (right && right.type === "text" && !/^\s*=/.test(right.value || "")) {
+      right.value = " = " + (right.value || "");
+    }
+    if (labels.length >= 1) {
+      this.focusPart = Math.min(i + 1, this.parts.length - 1);
+      this.focusPath = ["value"];
+      this.caretPos = (this.parts[this.focusPart].value || "").length;
+    } else {
+      this.focusPart = i;
+      this.focusPath = ["pts"];
+    }
+    this.render();
+    this.focus();
+  };
+
+  MathField.prototype.setMDistEnabled = function (enabled, pts) {
+    this.mDistPts = this.cleanMSlopePts(pts || "AB") || "AB";
+    if (this.mDistWrap) {
+      this.mDistWrap.classList.toggle("hidden", !enabled);
+      var lab = this.mDistWrap.querySelector(".mslope-icon small");
+      if (lab) lab.textContent = this.mDistPts || "AB";
+    }
+  };
+
   MathField.prototype.insertMixed = function () {
     if (this.disabled) return;
     var part = this.parts[this.focusPart];
@@ -849,7 +890,7 @@
   MathField.prototype.maybeAdvanceMSlopePts = function (partIndex, path, el) {
     if (!path || path[0] !== "pts") return false;
     var part = this.parts[partIndex];
-    if (!part || part.type !== "mslope") return false;
+    if (!part || (part.type !== "mslope" && part.type !== "mdist")) return false;
     var cleaned = this.cleanMSlopePts(el ? el.value : part.pts || "");
     if (el && el.value !== cleaned) {
       el.value = cleaned;
@@ -1039,16 +1080,19 @@
         run.appendChild(area);
         return;
       }
-      if (part.type === "mslope") {
+      if (part.type === "mslope" || part.type === "mdist") {
         var msl = document.createElement("span");
         msl.className = "ml-mslope";
         var mLet = document.createElement("span");
         mLet.className = "ml-mslope-m";
-        mLet.textContent = "m";
+        mLet.textContent = part.type === "mdist" ? "d" : "m";
         msl.appendChild(mLet);
         var ptsInp = self.makeInput(index, ["pts"], part.pts, "ml-mslope-pts");
-        ptsInp.placeholder = this.mSlopePts || "AB";
-        ptsInp.setAttribute("aria-label", "שם הישר או שתי נקודות לשיפוע");
+        ptsInp.placeholder = part.type === "mdist" ? this.mDistPts || "AB" : this.mSlopePts || "AB";
+        ptsInp.setAttribute(
+          "aria-label",
+          part.type === "mdist" ? "שתי נקודות למרחק" : "שם הישר או שתי נקודות לשיפוע"
+        );
         msl.appendChild(ptsInp);
         run.appendChild(msl);
         return;
@@ -1134,6 +1178,7 @@
       self.actionsHost.appendChild(btn);
     });
     this.buildMSlopeButton();
+    this.buildMDistButton();
     this.buildAreaMenu();
   };
 
@@ -1155,6 +1200,26 @@
     wrap.appendChild(btn);
     this.actionsHost.appendChild(wrap);
     this.mSlopeWrap = wrap;
+  };
+
+  MathField.prototype.buildMDistButton = function () {
+    var self = this;
+    var wrap = document.createElement("div");
+    wrap.className = "mslope-action-wrap hidden";
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ghost math-action";
+    btn.innerHTML =
+      '<span class="mslope-icon" aria-hidden="true"><b>d</b><small>AB</small></span><span>מרחק</span>';
+    btn.addEventListener("mousedown", function (event) {
+      event.preventDefault();
+    });
+    btn.addEventListener("click", function () {
+      self.insertMDist(self.mDistPts);
+    });
+    wrap.appendChild(btn);
+    this.actionsHost.appendChild(wrap);
+    this.mDistWrap = wrap;
   };
 
   MathField.prototype.closeAreaMenu = function () {
