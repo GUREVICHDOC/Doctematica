@@ -9766,7 +9766,6 @@ window.DoctematicaCurriculum = {
               y: 3,
               m: -3,
               b: 33,
-              plugB: true,
               label: "BC",
             },
             {
@@ -9790,7 +9789,6 @@ window.DoctematicaCurriculum = {
               mn: 1,
               md: 3,
               b: -11 / 3,
-              plugB: true,
               label: "DC",
             },
           ],
@@ -9890,7 +9888,6 @@ window.DoctematicaCurriculum = {
               mn: 1,
               md: 2,
               b: -10,
-              plugB: true,
               label: "DC",
             },
             { id: "C", kind: "lineIntersect", point: "C", label: "C", answerX: 6, answerY: -7 },
@@ -10037,7 +10034,6 @@ window.DoctematicaCurriculum = {
               mn: -1,
               md: 3,
               b: 1,
-              plugB: true,
               label: "BD",
             },
             {

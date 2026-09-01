@@ -1,6 +1,6 @@
 ---
 description: Geometry solution path — twin first, then plug; multiple valid paths; pick the easy intercept.
-globs: js/geometry.js,data/curriculum.js,data/curriculum.json,data/geo-*.json
+globs: js/geometry.js,js/geo/*.js,data/curriculum.js,data/curriculum.json,data/geo-*.json
 alwaysApply: true
 ---
 
