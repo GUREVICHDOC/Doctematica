@@ -403,6 +403,8 @@
   }
 
   .solve-wrap.has-geo .geo-board {
+    grid-column: 1;
+    grid-row: 1 / -1;
     margin: 0;
     display: flex;
     flex-direction: column;
@@ -413,6 +415,13 @@
     overflow: auto;
   }
 
+  .solve-wrap.has-geo .sys-known:not(.hidden) {
+    grid-column: 2;
+    flex: none;
+    width: fit-content;
+    max-width: 100%;
+  }
+
   .solve-wrap.has-geo .coord-svg {
     flex: 0 0 auto;
     width: 100%;
@@ -421,6 +430,7 @@
   }
 
   .solve-wrap.has-geo .solve-main {
+    grid-column: 2;
     min-width: 0;
   }
 }

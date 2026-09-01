@@ -251,15 +251,15 @@
   }
 
   function formulaWorkActive() {
-    return isQuadMode() || (isMixedEqMode() && mixedPath() === "formula");
+    return isQuadMode() || mixedPath() === "formula";
   }
 
   function factorWorkActive() {
-    return isFactorEqMode() || (isMixedEqMode() && mixedPath() === "factor");
+    return isFactorEqMode() || mixedPath() === "factor";
   }
 
   function sqrtWorkActive() {
-    return isSqrtEqMode() || isHighRootEqMode() || (isMixedEqMode() && mixedPath() === "sqrt");
+    return isSqrtEqMode() || isHighRootEqMode() || mixedPath() === "sqrt";
   }
 
   function isEqWorkMode() {
@@ -310,12 +310,191 @@
     if (trail[trail.length - 1] !== eq) trail.push(eq);
   }
 
+  function geoDistUnkTask() {
+    if (!state.problem || state.problem.mode !== "geo-length") return null;
+    var pack = state.problem.geo;
+    if (!pack || !DoctematicaGeometry) return null;
+    var t =
+      DoctematicaGeometry.currentFocusTask && DoctematicaGeometry.currentFocusTask(pack, state.geo);
+    if (t && t.kind === "distUnknown") {
+      if (state.geo && state.geo.done && state.geo.done[t.id]) return null;
+      return t;
+    }
+    var part =
+      DoctematicaGeometry.currentPartText && DoctematicaGeometry.currentPartText(pack, state.geo);
+    var ids = (part && part.taskIds) || [];
+    var open = (pack.tasks || []).filter(function (task) {
+      if (task.kind !== "distUnknown") return false;
+      if (state.geo && state.geo.done && state.geo.done[task.id]) return false;
+      return !ids.length || ids.indexOf(task.id) >= 0;
+    });
+    var i;
+    for (i = 0; i < open.length; i++) {
+      var st = state.geo && state.geo.distUnk && state.geo.distUnk[open[i].id];
+      if (st && st.squared) return open[i];
+    }
+    return open[0] || null;
+  }
+
+  function geoEqLetter() {
+    var t = geoDistUnkTask();
+    var st = t && state.geo && state.geo.distUnk && state.geo.distUnk[t.id];
+    var axis = t && String(t.unknownAxis || "").toLowerCase();
+    if (st && st.letter) {
+      var L = String(st.letter).toLowerCase();
+      var last = (t && state.geo && state.geo.lastExpr && state.geo.lastExpr[t.id]) || "";
+      if (axis === "y" && L === "x" && /(?:^|[^A-Za-z])y(?:[^A-Za-z]|$)/i.test(last)) return "y";
+      return L;
+    }
+    if (t && t.letter) return String(t.letter).toLowerCase();
+    if (t && t.yLine && !near0Yline(t)) return String(t.letter || "x").toLowerCase();
+    if (axis === "y") return "y";
+    if (t && t.fromExpr) return "t";
+    return "x";
+  }
+
+  function near0Yline(t) {
+    return t.yLine && Math.abs(Number(t.yLine.m)) < 1e-9;
+  }
+
+  function rewriteLetterGeo(eq, from, to) {
+    if (!from || !to || String(from).toLowerCase() === String(to).toLowerCase()) return eq;
+    var f = String(from).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return String(eq || "").replace(new RegExp("(?<![A-Za-z_])" + f + "(?![A-Za-z])", "gi"), to);
+  }
+
+  function geoEngineTyped(typed) {
+    if (!geoEqSolveActive()) return typed;
+    var L = geoEqLetter();
+    if (!L || String(L).toLowerCase() === "x") return typed;
+    return rewriteLetterGeo(typed, L, "x");
+  }
+
+  function geoEqSolveActive() {
+    var t = geoDistUnkTask();
+    if (!t) return false;
+    var last = (state.geo && state.geo.lastExpr && state.geo.lastExpr[t.id]) || "";
+    if (/√|sqrt/i.test(last)) return false;
+    var st = state.geo && state.geo.distUnk && state.geo.distUnk[t.id];
+    return !!(st && st.squared && last);
+  }
+
+  function geoDistUnkNeedPoint() {
+    var t = geoDistUnkTask();
+    if (!t || String(t.resultKind || "point") !== "point") return false;
+    var st = t && state.geo && state.geo.distUnk && state.geo.distUnk[t.id];
+    return !!(st && st.keepFound && st.keepFound.length);
+  }
+
+  function ensureGeoMixedPack() {
+    if (!geoEqSolveActive() || !DoctematicaQuadratic || !DoctematicaQuadratic.analyzeMixedStart) return false;
+    var last = lastHistoryEq();
+    if (!last) return false;
+    try {
+      var pack = DoctematicaQuadratic.analyzeMixedStart(last);
+      state.problem.mixed = pack;
+      if (pack.factor) state.problem.factor = pack.factor;
+      if (pack.quad) state.problem.quad = pack.quad;
+      if (pack.sqrt) state.problem.sqrt = pack.sqrt;
+      state.mixed = state.mixed || emptyMixedState();
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function finishEqSolveForGeo(answer) {
+    if (!state.problem || state.problem.mode !== "geo-length" || !geoDistUnkTask()) return false;
+    var text = String(answer || "").trim();
+    var L = geoEqLetter();
+    if (L && String(L).toLowerCase() !== "x") text = rewriteLetterGeo(text, "x", L);
+    state.mixed = state.mixed || emptyMixedState();
+    state.mixed.path = null;
+    state.mixed.md53 = false;
+    if (state.quad && state.quad.trail && state.quad.trail.length) {
+      state.geo = state.geo || {};
+      var trailL = geoEqLetter();
+      var trailLines = state.quad.trail;
+      if (trailL && String(trailL).toLowerCase() !== "x") {
+        trailLines = trailLines.map(function (line) {
+          return rewriteLetterGeo(line, "x", trailL);
+        });
+      }
+      state.geo.eqTrail = (state.geo.eqTrail || []).concat(trailLines);
+    }
+    state.quad = null;
+    state.factor = emptyFactorState();
+    if (quadGuideEl) {
+      quadGuideEl.classList.add("hidden");
+      quadGuideEl.innerHTML = "";
+    }
+    if (sysKnownEl) {
+      sysKnownEl.classList.add("hidden");
+      sysKnownEl.innerHTML = "";
+    }
+    if (solveWrap) solveWrap.classList.remove("is-system");
+    setQuadInput(true);
+    var pack = state.problem.geo;
+    var res =
+      text && DoctematicaGeometry.applyDistUnknownAlgebra
+        ? DoctematicaGeometry.applyDistUnknownAlgebra(text, pack, state.geo)
+        : null;
+    if (res && res.ok) {
+      applyGeoResultState(res);
+      if (res.show) {
+        var histLine = res.show;
+        if (DoctematicaGeometry.capsHistoryLetters) {
+          histLine = DoctematicaGeometry.capsHistoryLetters(histLine);
+        }
+        if (state.history[state.history.length - 1] !== histLine) state.history.push(histLine);
+      }
+      renderSteps();
+      renderGeoPart();
+      renderGeoAskUi();
+      renderGeoScene(null);
+      mathField.clear();
+      mathField.setDisabled(false);
+      checkBtn.disabled = false;
+      updateSplitBtn();
+      updateFormulaBtn();
+      setModeUi();
+      var okMsg = res.message || "";
+      if (DoctematicaMath && DoctematicaMath.proseHTML) okMsg = DoctematicaMath.proseHTML(okMsg);
+      if (res.solved) {
+        markSolved();
+        mathField.setDisabled(true);
+        checkBtn.disabled = true;
+        nextAfterSolveBtn.classList.remove("hidden");
+        showFeedback(true, "<strong>כל הכבוד.</strong> " + okMsg);
+      } else {
+        showFeedback(true, "<strong>נכון.</strong> " + okMsg);
+        mathField.focus();
+      }
+      return true;
+    }
+    renderSteps();
+    updateSplitBtn();
+    updateFormulaBtn();
+    setModeUi();
+    return true;
+  }
+
   function lastHistoryEq() {
-    return state.history[state.history.length - 1];
+    var raw = state.history[state.history.length - 1];
+    if (geoEqSolveActive()) {
+      if (!mixedPath()) {
+        var t = geoDistUnkTask();
+        var fromTask = t && state.geo && state.geo.lastExpr && state.geo.lastExpr[t.id];
+        if (fromTask) raw = fromTask;
+      }
+      return rewriteLetterGeo(raw, geoEqLetter(), "x");
+    }
+    return raw;
   }
 
   function canSplitFactor() {
-    if (!factorWorkActive() || state.locked || !state.problem || !state.problem.factor) return false;
+    if (geoEqSolveActive()) ensureGeoMixedPack();
+    if ((!factorWorkActive() && !geoEqSolveActive()) || state.locked || !state.problem || !state.problem.factor) return false;
     var st = state.factor || emptyFactorState();
     var last = lastHistoryEq();
     var Q = DoctematicaQuadratic;
@@ -341,12 +520,15 @@
 
   function updateSplitBtn() {
     if (!splitEqsBtn) return;
-    var show = factorWorkActive() && !state.locked && canSplitFactor();
+    var show = !state.locked && canSplitFactor();
     splitEqsBtn.classList.toggle("hidden", !show);
   }
 
   function canUseMixedFormula() {
-    if (!isMixedEqMode() || state.locked || !state.problem || !state.problem.mixed) return false;
+    if (state.locked || !state.problem) return false;
+    if (geoEqSolveActive()) ensureGeoMixedPack();
+    if (!isMixedEqMode() && !geoEqSolveActive()) return false;
+    if (!state.problem.mixed) return false;
     if (mixedPath()) return false;
     var last = lastHistoryEq();
     var Q = DoctematicaQuadratic;
@@ -558,7 +740,7 @@
     if (!domainPending() || !domainMulti()) {
       domainGuideEl.classList.add("hidden");
       domainGuideEl.innerHTML = "";
-      if (mathWrap) mathWrap.classList.remove("hidden");
+      if (mathWrap && !formulaWorkActive()) mathWrap.classList.remove("hidden");
       return;
     }
     wireDomainMathKeys();
@@ -1280,6 +1462,10 @@
       showFeedback(false, "<strong>עוד לא.</strong> קודם הוציאו גורם משותף, למשל x(x−5)=0.");
       return;
     }
+    if (geoEqSolveActive()) {
+      state.mixed = state.mixed || emptyMixedState();
+      state.mixed.path = "factor";
+    }
     var Q = DoctematicaQuadratic;
     var pack = state.problem.factor;
     state.factor = state.factor || emptyFactorState();
@@ -1349,6 +1535,7 @@
     renderSteps();
     var both = state.factor.solved[0] && state.factor.solved[1];
     if (both) {
+      if (finishEqSolveForGeo(state.problem.factor.answer || "")) return;
       markSolved();
       mathField.setDisabled(true);
       checkBtn.disabled = true;
@@ -1386,6 +1573,8 @@
       showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
       return false;
     }
+    var shownTyped = String(typed || "").trim();
+    typed = geoEngineTyped(shownTyped);
     state.stats.try += 1;
     saveStats();
     renderStats();
@@ -1400,9 +1589,9 @@
     }
     var wasSplit = !!state.factor.split;
     if (res.factored) {
-      if (state.history[state.history.length - 1] !== typed) state.history.push(typed);
+      if (state.history[state.history.length - 1] !== shownTyped) state.history.push(shownTyped);
     } else if (res.rearrange) {
-      if (state.history[state.history.length - 1] !== typed) state.history.push(typed);
+      if (state.history[state.history.length - 1] !== shownTyped) state.history.push(shownTyped);
     } else if (res.split && !wasSplit) {
       var startEqs = res.eqs;
       var p0 = pack.high
@@ -1419,7 +1608,7 @@
     if (res.sqrtProg) state.factor.sqrtProg = res.sqrtProg;
     if (typeof res.which === "number") {
       if (res.trailAlso) appendFactorTrail(res.which, res.trailAlso);
-      appendFactorTrail(res.which, typed);
+      appendFactorTrail(res.which, shownTyped);
     } else if (res.solved === true && res.progress) {
       if (res.progress.z) appendFactorTrail(0, "x = 0");
       if (pack.high && pack.quadRoot && res.progress.o && res.progress.n) {
@@ -1432,13 +1621,14 @@
         appendFactorTrail(1, "x = " + Q.fmtDisp(pack.otherF));
       }
     } else if (res.progress) {
-      if (res.progress.z && !wasSplit) appendFactorTrail(0, typed);
-      if (res.progress.o || res.progress.n) appendFactorTrail(1, typed);
+      if (res.progress.z && !wasSplit) appendFactorTrail(0, shownTyped);
+      if (res.progress.o || res.progress.n) appendFactorTrail(1, shownTyped);
     }
     renderSteps();
     renderFactorGuide();
     var done = res.solvedAll || res.solved === true;
     if (done) {
+      if (finishEqSolveForGeo((state.problem.factor && state.problem.factor.answer) || shownTyped)) return true;
       markSolved();
       mathField.setDisabled(true);
       checkBtn.disabled = true;
@@ -2200,7 +2390,7 @@
   }
 
   function ensureGeoFocusTaskHeader(pack, geo) {
-    if (!pack || !DoctematicaGeometry.currentFocusTask) return;
+    if (!pack || !DoctematicaGeometry.taskStepLabel) return;
     if (
       DoctematicaGeometry.lineMatchPartActive &&
       DoctematicaGeometry.lineMatchPartActive(pack, geo || state.geo)
@@ -2208,19 +2398,10 @@
       return;
     }
     var g = geo || state.geo;
-    var focus = DoctematicaGeometry.currentFocusTask(pack, g);
-    if (!focus) return;
-    var pair =
-      DoctematicaGeometry.axisMidPairTasks && DoctematicaGeometry.axisMidPairTasks(pack, g);
-    if (pair && DoctematicaGeometry.taskWorkStarted && !DoctematicaGeometry.taskWorkStarted(g, focus)) {
-      return;
-    }
-    var pairL =
-      DoctematicaGeometry.lineMidPairTasks && DoctematicaGeometry.lineMidPairTasks(pack, g);
-    if (pairL && DoctematicaGeometry.taskWorkStarted && !DoctematicaGeometry.taskWorkStarted(g, focus)) {
-      return;
-    }
-    ensureGeoTaskHeader(focus);
+    var heading =
+      DoctematicaGeometry.partHeadingTask && DoctematicaGeometry.partHeadingTask(pack, g);
+    if (!heading) return;
+    ensureGeoTaskHeader(heading);
   }
 
   function lastHistoryStepIndex() {
@@ -2428,6 +2609,37 @@
         }
         stepsEl.appendChild(li);
       });
+      var geoFactorSplit =
+        factorWorkActive() &&
+        state.factor &&
+        state.factor.split &&
+        state.factor.trails &&
+        (state.factor.trails[0].length || state.factor.trails[1].length);
+      if (geoFactorSplit) {
+        stepsEl.appendChild(renderFactorFork(stepNum + 1));
+      }
+      var liveTrail =
+        formulaWorkActive() && state.quad && state.quad.trail && state.quad.trail.length
+          ? state.quad.trail
+          : state.geo && state.geo.eqTrail && state.geo.eqTrail.length
+            ? state.geo.eqTrail
+            : null;
+      if (liveTrail) {
+        liveTrail.forEach(function (item, index) {
+          var liQ = document.createElement("li");
+          var nQ = document.createElement("span");
+          nQ.className = "n";
+          nQ.textContent = index === 0 ? "מקדמים" : String(index);
+          var bodyQ = document.createElement("span");
+          bodyQ.innerHTML = item.html;
+          liQ.appendChild(nQ);
+          liQ.appendChild(bodyQ);
+          if (state.locked && index === liveTrail.length - 1) liQ.classList.add("solved-row");
+          stepsEl.appendChild(liQ);
+        });
+      }
+      renderFactorGuide();
+      if (formulaWorkActive()) renderQuadGuide();
       return;
     }
     if (formulaWorkActive() && state.quad && state.quad.trail && state.quad.trail.length) {
@@ -2576,9 +2788,10 @@
     inp.setAttribute("dir", "ltr");
     inp.autocomplete = "off";
     inp.placeholder = "□";
-    inp.addEventListener("keydown", function (event) {
+      inp.addEventListener("keydown", function (event) {
       if (event.key === "Enter") {
         event.preventDefault();
+        event.stopPropagation();
         handleQuadSubmit();
       }
     });
@@ -3211,6 +3424,7 @@
     }
     renderQuadGuide();
     renderSteps();
+    if (finishEqSolveForGeo(state.problem.quad && state.problem.quad.answer)) return;
     markSolved();
     mathField.setDisabled(true);
     checkBtn.disabled = true;
@@ -3753,6 +3967,8 @@
       intersect: {},
       pointRoute: {},
       lineMatch: {},
+      distUnk: {},
+      eqTrail: [],
     };
   }
 
@@ -3767,6 +3983,7 @@
     if (res.intersect) state.geo.intersect = res.intersect;
     if (res.pointRoute) state.geo.pointRoute = Object.assign({}, state.geo.pointRoute || {}, res.pointRoute);
     if (res.footCoords) state.geo.footCoords = res.footCoords;
+    if (res.distUnk) state.geo.distUnk = res.distUnk;
   }
 
   function startGeoSession() {
@@ -3986,6 +4203,9 @@
     showFeedback(true, "<strong>נכון.</strong> " + okMsg);
     renderGeoAskUi();
     setModeUi();
+    if (geoEqSolveActive()) ensureGeoMixedPack();
+    updateSplitBtn();
+    updateFormulaBtn();
     var askNow = DoctematicaGeometry.lineAsk && DoctematicaGeometry.lineAsk(pack, state.geo);
     if (!askNow) mathField.focus();
     return true;
@@ -4036,6 +4256,54 @@
   function geoOneStep() {
     var pack = state.problem && state.problem.geo;
     if (!pack || state.locked) return;
+    if (geoEqSolveActive()) {
+      var gPathEarly = mixedPath();
+      if (gPathEarly === "formula") return fillQuadStep();
+      if (gPathEarly === "factor") return factorOneStep();
+      if (gPathEarly === "sqrt") return sqrtOneStep();
+      if (gPathEarly === "linear") return stepOneStep();
+      var duTask = geoDistUnkTask();
+      if (duTask && DoctematicaGeometry.nextDistUnknownStep) {
+        var geoNxt = DoctematicaGeometry.nextDistUnknownStep(duTask, pack, state.geo);
+        var lastDu = (state.geo.lastExpr && state.geo.lastExpr[duTask.id]) || "";
+        if (geoNxt && String(geoNxt).replace(/\s+/g, "") !== String(lastDu).replace(/\s+/g, "")) {
+          applyGeoTyped(geoNxt);
+          return;
+        }
+      }
+      ensureGeoMixedPack();
+      var gPath = mixedPath();
+      if (gPath === "formula") return fillQuadStep();
+      if (gPath === "factor") return factorOneStep();
+      if (gPath === "sqrt") return sqrtOneStep();
+      if (gPath === "linear") return stepOneStep();
+      var mixPack = state.problem.mixed;
+      if (mixPack && DoctematicaQuadratic && DoctematicaQuadratic.nextMixedStep) {
+        var act = DoctematicaQuadratic.nextMixedStep(lastHistoryEq(), mixPack);
+        if (act && act.path === "formula") {
+          enterMixedFormula();
+          return;
+        }
+        if (act && act.path === "factor" && act.eq) {
+          state.mixed = state.mixed || emptyMixedState();
+          state.mixed.path = "factor";
+          if (mixPack.factor) state.problem.factor = mixPack.factor;
+          applyFactorTyped(act.eq);
+          return;
+        }
+        if (act && act.path === "sqrt" && act.eq) {
+          state.mixed = state.mixed || emptyMixedState();
+          state.mixed.path = "sqrt";
+          if (mixPack.sqrt) state.problem.sqrt = mixPack.sqrt;
+          applySqrtEqTyped(act.eq);
+          return;
+        }
+        if (act && act.eq) {
+          applyGeoTyped(rewriteLetterGeo(act.eq, "x", geoEqLetter()));
+          return;
+        }
+      }
+    }
     if (
       DoctematicaGeometry.lineMatchPartActive &&
       DoctematicaGeometry.lineMatchPartActive(pack, state.geo)
@@ -4214,6 +4482,14 @@
               }
             } else if (task.kind === "distance" && DoctematicaGeometry.canonicalDistanceSteps) {
               DoctematicaGeometry.canonicalDistanceSteps(task, pack).forEach(function (line) {
+                state.history.push(line);
+              });
+            } else if (task.kind === "distUnknown" && DoctematicaGeometry.canonicalDistUnknownSteps) {
+              DoctematicaGeometry.canonicalDistUnknownSteps(task, pack).forEach(function (line) {
+                state.history.push(line);
+              });
+            } else if (task.kind === "perimeter" && DoctematicaGeometry.canonicalPerimeterSteps) {
+              DoctematicaGeometry.canonicalPerimeterSteps(task, pack).forEach(function (line) {
                 state.history.push(line);
               });
             } else if (task.kind === "equalLen") {
@@ -4447,6 +4723,8 @@
       showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
       return false;
     }
+    var shownTyped = String(typed || "").trim();
+    typed = geoEngineTyped(shownTyped);
     if (DoctematicaAlgebra.missingEqualsSign(typed)) {
       state.stats.try += 1;
       saveStats();
@@ -4457,7 +4735,7 @@
     state.stats.try += 1;
     saveStats();
     renderStats();
-    var prev = state.history[state.history.length - 1];
+    var prev = lastHistoryEq();
     var pack = state.problem.sqrt;
     var Q = DoctematicaQuadratic;
     if (Q.hasVisibleLinearX && Q.hasVisibleLinearX(prev)) {
@@ -4465,7 +4743,7 @@
       var nextP = Q.parseABC(typed);
       var isoT = Q.isolatedK(typed);
       if (mixedPack && nextP && Q.abcEquivalent(mixedPack, nextP) && isoT && (isoT.kind === "value" || isoT.kind === "unreduced" || isoT.kind === "expr")) {
-        state.history.push(typed);
+        state.history.push(shownTyped);
         renderSteps();
         mathField.clear();
         showFeedback(true, "<strong>נכון.</strong> x² מבודד. עכשיו הוציאו שורש משני האגפים.");
@@ -4479,7 +4757,7 @@
         showFeedback(false, "<strong>עוד לא.</strong> " + both.message);
         return false;
       }
-      state.history.push(typed);
+      state.history.push(shownTyped);
       renderSteps();
       mathField.clear();
       showFeedback(true, "<strong>נכון.</strong> " + both.message);
@@ -4489,7 +4767,7 @@
     var isolated = false;
     var h;
     for (h = 0; h < state.history.length; h++) {
-      var isoH = Q.isolatedK(state.history[h]);
+      var isoH = Q.isolatedK(geoEngineTyped(state.history[h]));
       if (isoH && (isoH.kind === "value" || isoH.kind === "unreduced")) isolated = true;
     }
     var rootAns = Q.isRootAnswerText(typed);
@@ -4500,7 +4778,7 @@
         showFeedback(false, "<strong>עוד לא.</strong> " + result.message);
         return false;
       }
-      state.history.push(typed);
+      state.history.push(shownTyped);
       renderSteps();
       mathField.clear();
       showFeedback(
@@ -4518,9 +4796,10 @@
       return false;
     }
     if (fin.progress) state.sqrtProg = fin.progress;
-    state.history.push(typed);
+    state.history.push(shownTyped);
     renderSteps();
     if (fin.solved) {
+      if (finishEqSolveForGeo(shownTyped || (pack && pack.answer) || "")) return true;
       markSolved();
       mathField.setDisabled(true);
       checkBtn.disabled = true;
@@ -4540,6 +4819,8 @@
       showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
       return false;
     }
+    var shownTyped = String(typed || "").trim();
+    typed = geoEngineTyped(shownTyped);
     state.stats.try += 1;
     saveStats();
     renderStats();
@@ -4548,9 +4829,10 @@
       showFeedback(false, "<strong>עוד לא.</strong> " + result.message);
       return false;
     }
-    state.history.push(typed);
+    state.history.push(shownTyped);
     renderSteps();
     if (result.solved) {
+      if (finishEqSolveForGeo(shownTyped)) return true;
       markSolved();
       mathField.setDisabled(true);
       checkBtn.disabled = true;
@@ -4566,6 +4848,7 @@
   }
 
   function enterMixedFormula() {
+    if (geoEqSolveActive()) ensureGeoMixedPack();
     var pack = state.problem.mixed;
     if (!state.problem.quad && pack) {
       state.problem.quad = pack.quad || DoctematicaQuadratic.analyze(pack.a, pack.b, pack.c, pack.standard);
@@ -4589,6 +4872,7 @@
   }
 
   function enterMixedMd53() {
+    if (geoEqSolveActive()) ensureGeoMixedPack();
     var last = lastHistoryEq();
     var Q = DoctematicaQuadratic;
     var p = Q.parseABC(last);
@@ -4613,6 +4897,8 @@
 
   function applyMixedTyped(typed) {
     typed = String(typed || "").trim();
+    var shownTyped = typed;
+    typed = geoEngineTyped(shownTyped);
     var path = mixedPath();
     if (path === "formula") {
       handleQuadSubmit();
@@ -4626,9 +4912,9 @@
       showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
       return false;
     }
-    if (path === "sqrt") return applySqrtEqTyped(typed);
-    if (path === "factor") return applyFactorTyped(typed);
-    if (path === "linear") return applyLinearTyped(typed);
+    if (path === "sqrt") return applySqrtEqTyped(shownTyped);
+    if (path === "factor") return applyFactorTyped(shownTyped);
+    if (path === "linear") return applyLinearTyped(shownTyped);
 
     var pack = state.problem.mixed;
     var Q = DoctematicaQuadratic;
@@ -4643,7 +4929,7 @@
     if (res.path === "factor") {
       if (res.factor) state.problem.factor = res.factor;
       state.mixed.path = "factor";
-      return applyFactorTyped(typed);
+      return applyFactorTyped(shownTyped);
     }
     if (res.enter === "sqrt") {
       if (!state.problem.sqrt && pack && pack.sqrt) state.problem.sqrt = pack.sqrt;
@@ -4654,14 +4940,14 @@
       }
       state.mixed.path = "sqrt";
       state.sqrtProg = { pos: false, neg: false };
-      return applySqrtEqTyped(typed);
+      return applySqrtEqTyped(shownTyped);
     }
     if (res.enter === "linear") {
       state.mixed.path = "linear";
       state.stats.try += 1;
       saveStats();
       renderStats();
-      state.history.push(typed);
+      state.history.push(shownTyped);
       renderSteps();
       mathField.clear();
       try {
@@ -4684,7 +4970,7 @@
       state.stats.try += 1;
       saveStats();
       renderStats();
-      state.history.push(typed);
+      state.history.push(shownTyped);
       markSolved();
       mathField.setDisabled(true);
       checkBtn.disabled = true;
@@ -4697,7 +4983,7 @@
     saveStats();
     renderStats();
     clearLcdAssist();
-    state.history.push(typed);
+    state.history.push(shownTyped);
     renderSteps();
     mathField.clear();
     showFeedback(true, "<strong>צעד חוקי.</strong> " + res.message);
@@ -5064,6 +5350,43 @@
       };
     }
     if (isGeoLengthMode() || (isAnalyticTopic() && state.problem && state.problem.mode === "geo-length")) {
+      if (geoEqSolveActive()) {
+        ensureGeoMixedPack();
+        var gMix = mixedPath();
+        if (gMix === "formula") {
+          return {
+            work: true,
+            buttons: true,
+            hintText:
+              state.mixed && state.mixed.md53
+                ? "md53: רשמו a, אחר כך b, אחר כך c. אחרי שלושתם מופיע הפתרון."
+                : "רשמו את המקדמים a, b, c בנוסחת השורשים. אחרי כל מקדם לחצו Enter.",
+            hint: quadHint,
+            oneStep: fillQuadStep,
+            showSolution: geoShowSolution,
+          };
+        }
+        if (gMix === "factor") {
+          return {
+            work: true,
+            buttons: true,
+            hintText: "מכפלה שווה אפס רק אם אחד הגורמים אפס. לחצו «חילוק למשוואות» ופתרו כל גורם.",
+            hint: factorHint,
+            oneStep: factorOneStep,
+            showSolution: geoShowSolution,
+          };
+        }
+        if (gMix === "sqrt") {
+          return {
+            work: true,
+            buttons: true,
+            hintText: "בודדו את x² ואז הוציאו שורש משני האגפים. אם האגף השני שלילי — אין פתרון ממשי.",
+            hint: sqrtHint,
+            oneStep: sqrtOneStep,
+            showSolution: geoShowSolution,
+          };
+        }
+      }
       var geoPackHint = state.problem && state.problem.geo;
       var geoPartHint =
         geoPackHint && DoctematicaGeometry.currentPartText
@@ -5090,6 +5413,7 @@
       var hasPerpHint = geoFocus ? geoFocus.kind === "perpendicular" : geoPartHasKind("perpendicular");
       var hasSlopeHint = geoFocus ? geoFocus.kind === "slope" : geoPartHasKind("slope");
       var hasDistanceHint = geoFocus ? geoFocus.kind === "distance" || geoFocus.kind === "equalLen" : geoPartHasKind("distance") || geoPartHasKind("equalLen");
+      var hasDistUnkHint = geoFocus ? geoFocus.kind === "distUnknown" : geoPartHasKind("distUnknown");
       var hasMidpointHint = geoFocus ? geoFocus.kind === "midpoint" : geoPartHasKind("midpoint");
       var midEndHint = !!(
         (geoFocus && geoFocus.kind === "midpoint" && geoFocus.mid) ||
@@ -5141,7 +5465,7 @@
             return !geoPartHintIds.length || geoPartHintIds.indexOf(t.id) >= 0;
           })
         );
-      var hasAreaHint = geoPartHasKind("area");
+      var hasAreaHint = geoPartHasKind("area") || geoPartHasKind("perimeter");
       var lineMatchHint =
         state.problem &&
         state.problem.geo &&
@@ -5172,6 +5496,12 @@
             : "שיפוע: כפתור «שיפוע» לרשום mAB = (y₂ − y₁)/(x₂ − x₁). לא משנה איזו נקודה היא 1 — אותו סדר במונה ובמכנה. אפשר גם m = … או ישר את המספר."
           : hasDistanceHint
           ? "מרחק: כפתור «מרחק» לרשום dAB. נוסחה d = √((x₂ − x₁)² + (y₂ − y₁)²). אותו סדר נקודות בשני ההפרשים. אפשר לדלג לשלבים או ישר לתשובה המדויקת (בלי עשרוני)."
+          : hasDistUnkHint
+          ? geoDistUnkNeedPoint()
+            ? "יש את פתרונות המשוואה. רשמו את הנקודה שמתאימה לנתונים (רביע, ציר, ישר)."
+            : geoEqSolveActive()
+            ? "אחרי ביטול השורש: סדרו ax²+bx+c=0. «נוסחת שורשים» או md53, או גורם משותף ואז «חילוק למשוואות»."
+            : "רשמו את הנקודה עם נעלם, הציבו בנוסחת המרחק, העלו בריבוע את שני האגפים, ופתרו."
           : hasYesNoHint
           ? "ענו כן או לא. אין צורך לנמק."
           : hasLineEqHint
@@ -5183,7 +5513,7 @@
           : hasLineHint
           ? "נתון x: הציבו ב־y = … וחשבו. נתון y: הציבו ופתרו משוואה בנעלם אחד, ואז רשמו את הנקודה (x;y)."
           : hasAreaHint
-          ? "אורכים: גדול פחות קטן. שטח: בחרו נוסחה ב«שטחים», רשמו את הקודקודים, ואז את הביטוי והתוצאה."
+          ? "אורכים: גדול פחות קטן. שטח או היקף: בחרו ב«שטחים והיקפים», רשמו את הקודקודים, ואז את הביטוי והתוצאה."
           : "קטע/ראשית: גדול פחות קטן. מרחק לציר: A→x. מרחק מנקודה לקטע: C→AB או CAB. מציאת נקודה: B(x;y).",
         hint: geoHint,
         oneStep: geoOneStep,
@@ -5277,6 +5607,8 @@
           ((dInfo && dInfo.display) || "x≠−2") +
           " — או ישר את הצורה הסופית.";
       }
+    } else if (formulaWorkActive() && state.quad) {
+      /* renderQuadGuide sets the label and hint */
     } else if (g && g.work) {
       answerLabelEl.textContent = "הצעד הבא";
       answerLabelEl.classList.remove("is-domain");
@@ -5352,6 +5684,9 @@
         mathField.setMDistEnabled(false);
       }
     }
+    if (geoEqSolveActive()) ensureGeoMixedPack();
+    updateSplitBtn();
+    updateFormulaBtn();
   }
 
   function markSolved() {
@@ -5631,6 +5966,22 @@
     }
 
     if (state.problem && state.problem.mode === "geo-length") {
+      if (mixedPath() === "formula") {
+        handleQuadSubmit();
+        return;
+      }
+      if (mixedPath() === "factor") {
+        applyFactorTyped(typedAnswer());
+        return;
+      }
+      if (mixedPath() === "sqrt") {
+        applySqrtEqTyped(typedAnswer().trim());
+        return;
+      }
+      if (mixedPath() === "linear") {
+        applyLinearTyped(typedAnswer());
+        return;
+      }
       applyGeoTyped(typedAnswer().trim());
       return;
     }

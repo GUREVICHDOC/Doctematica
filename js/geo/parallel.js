@@ -77,6 +77,20 @@
       maps.done[task.id] = true;
       delete maps.partial[task.id];
       delete maps.lastExpr[task.id];
+      (pack.tasks || []).forEach(function (t) {
+        if (!t || t.id === task.id || t.kind !== "slope" || !t.parallel) return;
+        var sameLab = slopeTagNorm(t.label) && slopeTagNorm(t.label) === slopeTagNorm(task.label);
+        var a = String(t.from || "").toUpperCase();
+        var b = String(t.to || "").toUpperCase();
+        var c = String(task.from || "").toUpperCase();
+        var d = String(task.to || "").toUpperCase();
+        var sameEnds = a && b && c && d && ((a === c && b === d) || (a === d && b === c));
+        if ((sameLab || sameEnds) && nearNum(slopeWant(pack, t), want)) {
+          maps.done[t.id] = true;
+          delete maps.partial[t.id];
+          delete maps.lastExpr[t.id];
+        }
+      });
       var left = remainingRequired(pack, maps.done);
       var siteShow = parallelCopyShow(task, pack);
       return {

@@ -12,6 +12,8 @@
     var cloneMaps = dep.cloneMaps;
     var remainingRequired = dep.remainingRequired;
     var taskMatchesTag = dep.taskMatchesTag;
+    var currentPartText = dep.currentPartText;
+    var markOptionalDone = dep.markOptionalDone;
 
   function radMake(n, d, k) {
     n = Math.round(Number(n) || 0);
@@ -259,6 +261,43 @@
     return out;
   }
 
+  function termsOf(v) {
+    if (!v) return null;
+    if (v.kind === "rat") return [{ k: 1, n: v.r.n, d: v.r.d }];
+    if (v.kind === "rad") return [{ k: v.r.k, n: v.r.n, d: v.r.d }];
+    if (v.kind === "sum") return (v.terms || []).slice();
+    return null;
+  }
+  function addTermLists(a, b, sign) {
+    var out = (a || []).slice();
+    var i;
+    var j;
+    for (i = 0; i < (b || []).length; i++) {
+      var t = { k: b[i].k, n: sign * b[i].n, d: b[i].d };
+      var merged = false;
+      for (j = 0; j < out.length; j++) {
+        if (out[j].k === t.k) {
+          var s = ratAdd(rat(out[j].n, out[j].d), rat(t.n, t.d));
+          out[j] = { k: t.k, n: s.n, d: s.d };
+          merged = true;
+          break;
+        }
+      }
+      if (!merged) out.push(t);
+    }
+    return out.filter(function (t) {
+      return t && t.n;
+    });
+  }
+  function fromTermList(terms) {
+    if (!terms || !terms.length) return { kind: "rat", r: rat(0, 1) };
+    if (terms.length === 1) {
+      if (terms[0].k === 1) return { kind: "rat", r: rat(terms[0].n, terms[0].d) };
+      return { kind: "rad", r: radMake(terms[0].n, terms[0].d, terms[0].k) };
+    }
+    return { kind: "sum", terms: terms };
+  }
+
   function parseDistTokens(tokens) {
     if (!tokens) return null;
     var i = 0;
@@ -357,8 +396,11 @@
       while (peek() && (peek().t === "+" || peek().t === "-")) {
         var op = eat().t;
         var right = parseMul();
-        if (!left || !right || left.kind !== "rat" || right.kind !== "rat") return null;
-        left = { kind: "rat", r: op === "+" ? ratAdd(left.r, right.r) : ratSub(left.r, right.r) };
+        if (!left || !right) return null;
+        var lt = termsOf(left);
+        var rt = termsOf(right);
+        if (!lt || !rt) return null;
+        left = fromTermList(addTermLists(lt, rt, op === "+" ? 1 : -1));
       }
       lastAdd = left;
       return left;
@@ -440,8 +482,10 @@
     var squares = parseTwoSquares(rhs);
     var parsed = parseDistTokens(tokenizeDist(rhs));
     var rad = null;
+    var sum = null;
     if (parsed && parsed.kind === "rad") rad = parsed.r;
     else if (parsed && parsed.kind === "rat") rad = radMake(parsed.r.n, parsed.r.d, 1);
+    else if (parsed && parsed.kind === "sum") sum = parsed;
     if (squares && !rad) {
       var sx = squares.xr.n * squares.xr.n * squares.yr.d * squares.yr.d;
       var sy = squares.yr.n * squares.yr.n * squares.xr.d * squares.xr.d;
@@ -452,6 +496,7 @@
       tag: tag || null,
       rhs: rhs,
       rad: rad,
+      sum: sum,
       squares: squares,
       hasSqrt: /√/.test(rhs),
       innerSum: /√/.test(rhs) && /\+/.test(rhs),
@@ -630,6 +675,7 @@
     var s = String(typed || "").replace(/\s+/g, "");
     if (!s) return null;
     var got = parseDistExpr(typed);
+    if (got && got.sum && got.sum.terms && got.sum.terms.length > 1) return null;
     var eqLen = (pending || []).filter(function (t) {
       return t.kind === "equalLen";
     })[0];
@@ -825,6 +871,316 @@
     };
   }
 
+  function periVerts(task) {
+    return ((task && task.verts) || []).map(function (v) {
+      return String(v || "").toUpperCase();
+    });
+  }
+
+  function periLabel(task) {
+    var v = periVerts(task).join("");
+    if (task && task.label) return String(task.label);
+    return v ? "P△" + v : "P";
+  }
+
+  function periSides(task) {
+    var v = periVerts(task);
+    var out = [];
+    var i;
+    for (i = 0; i < v.length; i++) {
+      var a = v[i];
+      var b = v[(i + 1) % v.length];
+      out.push({ a: a, b: b, name: a + b, rev: b + a });
+    }
+    return out;
+  }
+
+  function periSideRad(pack, side) {
+    return distExactFromPoints(getPoint(pack && pack.map, side.a), getPoint(pack && pack.map, side.b));
+  }
+
+  function periWant(task, pack) {
+    var terms = [];
+    periSides(task).forEach(function (side) {
+      var r = periSideRad(pack, side);
+      if (!r) return;
+      terms = addTermLists(terms, termsOf({ kind: "rad", r: r }), 1);
+    });
+    return fromTermList(terms);
+  }
+
+  function fmtValueExpr(v) {
+    if (!v) return "";
+    if (v.kind === "rat") {
+      if (v.r.d === 1) return fmtNum(v.r.n);
+      return fmtFrac(v.r.n, v.r.d);
+    }
+    if (v.kind === "rad") return fmtRad(v.r);
+    if (v.kind === "sum") {
+      var bits = [];
+      (v.terms || []).forEach(function (t, idx) {
+        var piece =
+          t.k === 1 ? (t.d === 1 ? fmtNum(t.n) : fmtFrac(t.n, t.d)) : fmtRad(radMake(t.n, t.d, t.k));
+        if (!idx) bits.push(piece);
+        else if (t.n < 0) bits.push("−" + fmtRad(radMake(-t.n, t.d, t.k === 1 ? 1 : t.k)).replace(/^−/, ""));
+        else bits.push("+" + piece);
+      });
+      return bits.join("");
+    }
+    return "";
+  }
+
+  function valuesEq(a, b) {
+    if (!a || !b) return false;
+    var ta = termsOf(a);
+    var tb = termsOf(b);
+    if (!ta || !tb || ta.length !== tb.length) return false;
+    var i;
+    var j;
+    var used = {};
+    for (i = 0; i < ta.length; i++) {
+      var ok = false;
+      for (j = 0; j < tb.length; j++) {
+        if (used[j]) continue;
+        if (ta[i].k === tb[j].k && ta[i].n === tb[j].n && ta[i].d === tb[j].d) {
+          used[j] = true;
+          ok = true;
+          break;
+        }
+      }
+      if (!ok) return false;
+    }
+    return true;
+  }
+
+  function periLetterBody(task) {
+    return periSides(task)
+      .map(function (s) {
+        return s.name;
+      })
+      .join("+");
+  }
+
+  function periPlugBody(task, pack) {
+    return periSides(task)
+      .map(function (s) {
+        return fmtRad(periSideRad(pack, s));
+      })
+      .join("+");
+  }
+
+  function canonicalPerimeterSteps(task, pack) {
+    if (!task || task.kind !== "perimeter") return [];
+    var lhs = periLabel(task);
+    var letters = periLetterBody(task);
+    var plug = periPlugBody(task, pack);
+    var want = periWant(task, pack);
+    var fin = fmtValueExpr(want);
+    var out = [lhs + "=" + letters];
+    if (plug && plug !== letters) out.push(lhs + "=" + plug);
+    if (fin && plug !== fin) out.push(lhs + "=" + fin);
+    return out;
+  }
+
+  function periTagFromTyped(typed) {
+    var s = String(typed || "").replace(/\s+/g, "");
+    var m = s.match(/^P(?:△|Δ|_?)([A-Za-z]{3,6})(?:=|:)/i);
+    return m ? m[1].toUpperCase() : "";
+  }
+
+  function looksLikePeriAttempt(typed) {
+    var s = String(typed || "").replace(/\s+/g, "").replace(/[−–—]/g, "-");
+    if (/^P(?:△|Δ|_?)[A-Za-z]{3,6}/i.test(s)) return true;
+    if (/^[A-Za-z]{2}(\+[A-Za-z]{2}){1,5}$/.test(s)) return true;
+    if (/^[A-Za-z]{2}(\+[A-Za-z]{2}){1,5}=/.test(s)) return true;
+    return false;
+  }
+
+  function periReplaceLetters(rhs, task, pack, progress) {
+    var t = String(rhs || "").replace(/\s+/g, "");
+    periSides(task).forEach(function (side) {
+      var r = periSideRad(pack, side);
+      if (!r) return;
+      var known = false;
+      (pack.tasks || []).forEach(function (u) {
+        if (u.kind !== "distance") return;
+        var a = String(u.from || "").toUpperCase();
+        var b = String(u.to || "").toUpperCase();
+        var match =
+          (a === side.a && b === side.b) || (a === side.b && b === side.a);
+        if (match && progress && progress.done && progress.done[u.id]) known = true;
+      });
+      var show = fmtRad(r);
+      t = t.replace(new RegExp(side.name, "gi"), show);
+      t = t.replace(new RegExp(side.rev, "gi"), show);
+      if (known) {
+        /* already replaced */
+      }
+    });
+    return t;
+  }
+
+  function periHasLetterSide(rhs, task) {
+    var t = String(rhs || "");
+    return periSides(task).some(function (side) {
+      return new RegExp(side.name, "i").test(t) || new RegExp(side.rev, "i").test(t);
+    });
+  }
+
+  function samePeriVerts(tag, task) {
+    var want = periVerts(task).join("");
+    var got = String(tag || "").toUpperCase();
+    if (!got || got.length !== want.length) return false;
+    if (got.length === 3) {
+      var rot = [want, want[1] + want[2] + want[0], want[2] + want[0] + want[1]];
+      var rev = want.split("").reverse().join("");
+      var rotR = [rev, rev[1] + rev[2] + rev[0], rev[2] + rev[0] + rev[1]];
+      return rot.indexOf(got) >= 0 || rotR.indexOf(got) >= 0;
+    }
+    return (want + want).indexOf(got) >= 0;
+  }
+
+  function pendingPeriTasks(pack, progress, pending) {
+    var part = currentPartText && currentPartText(pack, progress);
+    var ids = (part && part.taskIds) || [];
+    return (pending || []).filter(function (t) {
+      if (t.kind !== "perimeter") return false;
+      return !ids.length || ids.indexOf(t.id) >= 0;
+    });
+  }
+
+  function checkPerimeter(typed, pack, progress, pending, doneMap, partialMap, coordsMap) {
+    var hits = pendingPeriTasks(pack, progress, pending);
+    if (!hits.length) return null;
+    var s = String(typed || "").replace(/\s+/g, "");
+    if (!s) return null;
+    var tag = periTagFromTyped(typed);
+    if (tag) {
+      var named = hits.filter(function (t) {
+        return samePeriVerts(tag, t);
+      });
+      if (!named.length) {
+        return {
+          ok: false,
+          message: "היקף " + periLabel(hits[0]) + " — רשמו את הקודקודים של המשולש.",
+        };
+      }
+      hits = named;
+    } else if (!looksLikePeriAttempt(typed) && !/\+|√/.test(s)) {
+      return null;
+    }
+    var task = hits[0];
+    var lhs = periLabel(task);
+    var rhs = s.replace(/^P(?:△|Δ|_?)[A-Za-z]{3,6}(?:=|:)/i, "");
+    if (!rhs) rhs = s;
+    if (/^\d+\.\d+$/.test(rhs)) {
+      return { ok: false, message: "השאירו ביטוי מדויק (שורשים), בלי קירוב עשרוני." };
+    }
+    var maps = cloneMaps(doneMap, partialMap, coordsMap, progress);
+    var want = periWant(task, pack);
+    var letters = periLetterBody(task);
+    function finish(show) {
+      maps.done[task.id] = true;
+      delete maps.partial[task.id];
+      delete maps.lastExpr[task.id];
+      if (markOptionalDone) markOptionalDone(pack, maps.done, task);
+      var left = remainingRequired(pack, maps.done);
+      return {
+        ok: true,
+        solved: left.length === 0,
+        done: maps.done,
+        partial: maps.partial,
+        coords: maps.coords,
+        lastExpr: maps.lastExpr,
+        task: task,
+        show: show || lhs + "=" + fmtValueExpr(want),
+        rawStep: true,
+        message: left.length ? "נכון. המשיכו." : "נכון.",
+      };
+    }
+    function partial(show, msg) {
+      maps.partial[task.id] = true;
+      maps.lastExpr[task.id] = show;
+      return {
+        ok: true,
+        solved: false,
+        done: maps.done,
+        partial: maps.partial,
+        coords: maps.coords,
+        lastExpr: maps.lastExpr,
+        task: task,
+        show: show,
+        rawStep: true,
+        message: msg,
+      };
+    }
+    var letterOnly = /^[A-Za-z]{2}(\+[A-Za-z]{2})+$/.test(rhs);
+    if (letterOnly || (periHasLetterSide(rhs, task) && !/√|\d/.test(rhs))) {
+      var gotLetters = rhs.toUpperCase().split("+").filter(Boolean).sort().join("+");
+      var wantLetters = letters.split("+").slice().sort().join("+");
+      var revOk = periSides(task).every(function (side) {
+        return rhs.toUpperCase().indexOf(side.name) >= 0 || rhs.toUpperCase().indexOf(side.rev) >= 0;
+      });
+      if (gotLetters === wantLetters || revOk) {
+        return partial(lhs + "=" + letters, "נכון. עכשיו הציבו את אורכי הצלעות.");
+      }
+      return { ok: false, message: "היקף המשולש הוא סכום הצלעות: " + lhs + "=" + letters + "." };
+    }
+    var plugged = periReplaceLetters(rhs, task, pack, progress);
+    if (periHasLetterSide(plugged, task)) {
+      return partial(
+        lhs + "=" + letters,
+        "נכון. עכשיו הציבו את האורכים שכבר מצאתם, או חשבו קודם צלע חסרה."
+      );
+    }
+    var got = parseDistExpr(plugged);
+    if (got && got.sum && valuesEq(got.sum, want)) {
+      var simplified = fmtValueExpr(want);
+      if (prettyDistExpr(plugged) !== simplified && periPlugBody(task, pack) === prettyDistExpr(plugged).replace(/\s+/g, "")) {
+        return partial(lhs + "=" + periPlugBody(task, pack), "נכון. אספו איברים דומים (אותו שורש).");
+      }
+      return finish(lhs + "=" + simplified);
+    }
+    if (got && got.rad && valuesEq({ kind: "rad", r: got.rad }, want)) {
+      return finish(lhs + "=" + fmtValueExpr(want));
+    }
+    if (got && (got.rad || got.sum)) {
+      var plugShow = periPlugBody(task, pack);
+      if (prettyDistExpr(plugged) === prettyDistExpr(plugShow) || prettyDistExpr(plugged) === plugShow) {
+        return partial(lhs + "=" + plugShow, "נכון. אספו איברים דומים (אותו שורש).");
+      }
+      return { ok: false, message: "הציבו " + lhs + "=" + letters + " ואז את האורכים, ואספו איברים דומים." };
+    }
+    if (looksLikePeriAttempt(typed) || tag) {
+      return { ok: false, message: "היקף: " + lhs + "=" + letters + ". הציבו את האורכים ואספו איברים דומים." };
+    }
+    return null;
+  }
+
+  function perimeterHintMessage(task, pack, progress) {
+    var lhs = periLabel(task);
+    var letters = periLetterBody(task);
+    var prev = (progress && progress.lastExpr && progress.lastExpr[task.id]) || "";
+    if (!prev) {
+      return "היקף המשולש הוא סכום אורכי הצלעות. רשמו " + lhs + "=" + letters + ", או חשבו קודם צלע חסרה.";
+    }
+    if (periHasLetterSide(prev, task) && !/√/.test(prev)) {
+      return "הציבו את אורכי הצלעות שכבר מצאתם.";
+    }
+    return "אספו איברים דומים (אותו שורש), בלי קירוב עשרוני.";
+  }
+
+  function nextPerimeterStep(task, pack, progress) {
+    var steps = canonicalPerimeterSteps(task, pack);
+    var prev = (progress && progress.lastExpr && progress.lastExpr[task.id]) || "";
+    if (!prev) return steps[0] || periLabel(task);
+    var i;
+    for (i = 0; i < steps.length - 1; i++) {
+      if (String(steps[i]).replace(/\s+/g, "") === String(prev).replace(/\s+/g, "")) return steps[i + 1];
+    }
+    return steps[steps.length - 1] || periLabel(task);
+  }
+
     return {
       distExactFromPoints: distExactFromPoints,
       distLhs: distLhs,
@@ -838,6 +1194,12 @@
       canonicalDistanceSteps: canonicalDistanceSteps,
       distanceHintMessage: distanceHintMessage,
       nextDistanceStep: nextDistanceStep,
+      looksLikePeriAttempt: looksLikePeriAttempt,
+      checkPerimeter: checkPerimeter,
+      canonicalPerimeterSteps: canonicalPerimeterSteps,
+      perimeterHintMessage: perimeterHintMessage,
+      nextPerimeterStep: nextPerimeterStep,
+      periLabel: periLabel,
     };
   }
 

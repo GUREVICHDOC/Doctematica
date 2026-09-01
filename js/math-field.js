@@ -237,7 +237,8 @@
     if (part.type === "area") {
       var verts = this.serializeSlot(part.verts).replace(/\s+/g, "").toUpperCase();
       var mark = part.shape === "rect" ? "□" : "△";
-      return "S" + mark + verts;
+      var letter = part.shape === "perim" ? "P" : "S";
+      return letter + mark + verts;
     }
     if (part.type === "mslope") {
       var pts = this.serializeSlot(part.pts).replace(/\s+/g, "").toUpperCase();
@@ -559,7 +560,11 @@
     var part = this.parts[this.focusPart];
     if (part && part.type !== "text") return;
     var split = this.splitCurrentText();
-    this.insertWithSplit(split, { type: "area", shape: shape === "rect" ? "rect" : "triangle", verts: "" });
+    this.insertWithSplit(split, {
+      type: "area",
+      shape: shape === "rect" ? "rect" : shape === "perim" ? "perim" : "triangle",
+      verts: "",
+    });
     this.normalize();
     this.focusPath = ["verts"];
     this.render();
@@ -1063,7 +1068,7 @@
         area.className = "ml-area" + (part.shape === "rect" ? " is-rect" : "");
         var sLetter = document.createElement("span");
         sLetter.className = "ml-area-s";
-        sLetter.textContent = "S";
+        sLetter.textContent = part.shape === "perim" ? "P" : "S";
         area.appendChild(sLetter);
         var mark = document.createElement("span");
         mark.className = part.shape === "rect" ? "ml-area-rect" : "ml-area-tri";
@@ -1235,8 +1240,8 @@
     btn.type = "button";
     btn.className = "ghost math-action";
     btn.setAttribute("aria-haspopup", "true");
-    btn.innerHTML =
-      '<span class="area-icon" aria-hidden="true"><b>S</b></span><span>שטחים</span>';
+      btn.innerHTML =
+      '<span class="area-icon" aria-hidden="true"><b>S</b></span><span>שטחים והיקפים</span>';
     var menu = document.createElement("div");
     menu.className = "area-shape-menu hidden";
     menu.setAttribute("role", "menu");
@@ -1252,6 +1257,12 @@
         label: "מלבן",
         html:
           '<span class="area-icon"><b>S</b><svg viewBox="0 0 14 12" width="14" height="12" focusable="false"><rect x="1.4" y="1.6" width="11.2" height="8.8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span><span>מלבן</span><small>4 קודקודים</small>',
+      },
+      {
+        shape: "perim",
+        label: "היקף",
+        html:
+          '<span class="area-icon"><b>P</b><svg viewBox="0 0 14 12" width="14" height="12" focusable="false"><path d="M7 1.2 L12.8 10.8 H1.2 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span><span>היקף</span><small>סכום צלעות</small>',
       },
     ];
     items.forEach(function (item) {

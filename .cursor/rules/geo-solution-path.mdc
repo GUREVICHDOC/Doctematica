@@ -1,6 +1,6 @@
 ---
 description: Geometry solution path — twin first, then plug; multiple valid paths; pick the easy intercept.
-globs: js/geometry.js,js/geo/*.js,data/curriculum.js,data/curriculum.json,data/geo-*.json
+globs: js/geometry.js,js/geo/*.js,data/curriculum.js,data/curriculum-geo.js,data/geo-*.json
 alwaysApply: true
 ---
 
@@ -21,6 +21,7 @@ If both coordinates come from parallels (`twinX` and `twinY`, no line to substit
 ## Intercepts — site path
 
 - On the y-axis: `x = 0` → plug into the given equation (also if it is not `y=mx+b`, e.g. `3x−4y=12` → `−4y=12` or `3·0−4y=12`) → isolate y (`y=−3`) → point. Same for the x-axis: `y = 0` → `3x=12` → `x=4` → point. Any equivalent rearrange is accepted; skip to y, to x, or to the point.
+- If **several** intercepts (or points) are still open, follow **what they typed**: `x = 0` is the y-axis intercept, `y = 0` is the x-axis intercept (never rewrite `y = 0` as `x = 0`). `0 = 4x+8` is the x-axis plug. Skip to either point. Headings follow the point they started, not a fixed book order.
 - If the point lies on **more than one line**, pick the **easier** equation. If one line is ∥ x-axis (`y = k`) or ∥ y-axis (`x = k`), site path: write that coordinate first, then plug into the other line. Equating the two lines is also accepted.
 - If they plug into a line that is on the figure but **does not contain the point**, reject and name both equations (the one they used, and the one through the point).
 
@@ -43,7 +44,7 @@ Hints follow **what the student already typed**. If they equated, continue that 
 
 Right triangle, legs ∥ axes, \(S\) given: optional write \(S△=(leg\times leg)/2\), then plug the known area and the known length, leave the unknown side (`BO` or `x`) and solve as a linear equation (one-sided denom → multiply both sides, e.g. `10=(BO×4)/2` → `20=4BO` → `BO=5`). Direct plug is allowed. Skip to the length is allowed. Then the point (on an axis / from a parallel).
 
-On the figure: given area is labeled `S=…` inside the triangle. Side lengths are shown only on a side that is axis-aligned (on or ∥ the y-axis, or on or ∥ the x-axis), written horizontally, if the length is given or already found (including a drawn height such as HJ). Diagonal sides stay by their slope (line equation), not a length label.
+On the figure: given area is labeled `S=…` inside the triangle. Axis-aligned side lengths (on or ∥ an axis, including a drawn height such as HJ) are written horizontally when given or already found. A **given** distance (`givenDist` / `givenLengths`) is labeled on that side from the start — including a diagonal. After a **distance** (or any found length) is computed, label that side too — including a diagonal — with the exact value (e.g. \(4\sqrt{5}\)), along the side.
 
 ## Equation of a line (point + slope)
 
@@ -53,7 +54,7 @@ Also accept plug into \(y=mx+b\) and solve for \(b\) (`5=2*(-4)+b` → `b=13`), 
 
 ## Midpoint of a segment
 
-Site path: \(x=(x_1+x_2)/2\) (order of the two endpoints does not matter), add the numerator, then divide; same for \(y\); then \(M(x;y)\). One-step does x then y then the point. Skip to the summed numerator (`8/2`), to a coordinate (`x=4`), or to the point (`M(4;5)` / `(4;5)`). First term of the numerator, if negative, is written without extra parentheses (`-4 + 6`, not `(-4) + 6`).
+Site path: \(x=(x_1+x_2)/2\) (order of the two endpoints does not matter), add the numerator, then divide; same for \(y\); then write the point \(M(x;y)\) — even when the book then asks for a distance or a line. One-step does x then y then the point. Skip to the summed numerator (`8/2`), to a coordinate (`x=4`), or to the point (`M(4;5)` / `(4;5)`). First term of the numerator, if negative, is written without extra parentheses (`-4 + 6`, not `(-4) + 6`).
 
 Known midpoint, missing endpoint: plug \(x_m=(x_1+x)/2\) (e.g. `3=(1+x)/2`), multiply the left side by 2 (`6=1+x`), then isolate \(x\). Same for \(y\), then \(B(x;y)\). The unknown may be any of \(x_M, x_1, x_2\) (and the same for \(y\)). Skip to any correct later equation or to the point. Detect: missing `/2`, copying the midpoint or the given end, \(2m+x_1\) instead of \(2m-x_1\).
 
@@ -67,13 +68,15 @@ Given line + segment AB, intersection, then prove the line **bisects** AB: site 
 
 ∥ an axis gives a coordinate before the other is known: \(AE\parallel y\) and \(A(4,-1)\) ⇒ \(x_E=4\) and also \(x_M=4\) if M is on AE, even before \(y_E\) is found. Then plug \(x\) into the line through E. Area of a triangle with a vertical base: existing length/height/\(S\) path (`ME` large \(y\) minus small \(y\); height \(|x|\) of that vertical line).
 
-Intercepts then midpoint of that segment: y-axis `x = 0` → plug; x-axis `y = 0` → plug; then the midpoint. Skip to the midpoint is allowed.
+Intercepts then midpoint of that segment: y-axis `x = 0` → plug; x-axis `y = 0` → plug; then the midpoint. Skip to the midpoint is allowed. After x of M from the midpoint formula, plugging that x into the **given line** (or the equation of AB) for y is also accepted. Hints and «צעד אחד» continue that plug (compute y). Do not switch back to \(y=(y_1+y_2)/2\).
 
 Midpoint then line through the origin (and the midpoint): site path is both coordinates of C from the midpoint formula, then the line OC (slope then `lineEq`, or skip to `y=mx`). Also accept: after x of C, equation of AB (slope of AB, then point+slope / `y=mx+b`), plug that x, get y of C, then OC. Do not send `y=(y₁+y₂)/2` to the line-equation checker.
 
 ## Book parts vs steps
 
-Do **not** invent extra א/ב/ג because the student must do two things (point then equation, slope then equation). Keep the book’s parts. Put several `taskIds` in one part; `partStepByTask` sequences them. Hints and the live heading (`taskStepLabel` / «משימה:») follow the **current** action. Skip-ahead is still allowed.
+Do **not** invent extra א/ב/ג because the student must do two things (point then equation, slope then equation). Keep the book’s parts. Put several `taskIds` in one part; `partStepByTask` sequences them. Hints follow the **current** action. Skip-ahead is still allowed.
+
+Live heading (`taskStepLabel` / «משימה:») appears **only after** the student has typed a step toward that action — so it does not reveal «שיפוע AB» before they start the slope. When the current book part has a **single** required task, the heading may appear from the start. Do not preview the next heading when the previous micro-task is finished.
 
 ## Hints follow the current state
 
@@ -103,6 +106,8 @@ Prove two lines are parallel: compute the two slopes (or one slope and a given \
 
 Perp slope of a given line: site path \(m_1·m_2=-1\), then plug the given slope (`4·m₂=-1`), then isolate (`m₂=-1/4`). Skip to the plug or to the number is allowed. A bare fraction such as `-1/4` is the answer, not a two-point slope formula.
 
+∥ and ⊥ together: if AB ∥ DC and BC ⊥ DC, then BC ⊥ AB. After \(m_{AB}\), the site path is \(m_{BC}\) from \(m_1·m_2=-1\) (using \(m_{AB}\)), then the equation of BC. Do not require \(m_{DC}\) first. Copying \(m_{DC}=m_{AB}\) first is still accepted.
+
 Perp through a given point: that slope path, then the equation (`lineEq`). Skip to \(y-y_1=m(x-x_1)\) is allowed. If the given equation is not \(y=mx+b\), rearrange first.
 
 Perp at an intercept of a given line: site path the intercept (`x = 0` or `y = 0`, plug, point), then the perp slope, then the equation. Slope before the point is also accepted. Book א/ב stay; do not add a «what can you say» part.
@@ -127,5 +132,31 @@ Accept either subtraction order if both coordinates use the same point order. Re
 
 Skip-ahead to any equivalent form or the exact answer is allowed. Axis-parallel length (same y or same x) stays the existing `segment` path — do not use the distance formula there.
 
+Once the length is found, write it on that side of the figure (same as a finished `segment`). Diagonals too; exact radical, not a long decimal. If the length is **given** in the question, label it on the side from the start — do not wait for the student to compute it.
+
 Prove equal lengths: compute both distances (either first), then write \(AB=BC\).
+
+## Given distance, unknown coordinate
+
+On the figure the given length is written on that side from the start (same as a given area `S=…`).
+
+Site formula: \(\sqrt{\ldots}=d\) (root on the left, given distance on the right). After squaring: compute the insides of the parentheses first (the two differences), then the squares, then combine like terms. Hand the resulting equation to the existing linear / mixed / quadratic engine.
+
+Site path: write the missing coordinate as a letter (\(B(x;16)\), \(B(8;y)\), or a parameter such as \(t\)). The letter need not be the book’s letter. Plug into \(d=\sqrt{(x_2-x_1)^2+(y_2-y_1)^2}\) (also \(d_{AB}\)). Square **both** sides to cancel the root, then simplify. Hand the resulting equation to the existing linear / mixed / quadratic engine — do not add a new solver inside distance. After the roots, apply geometric filters (first quadrant, on an axis, on \(x=k\)). Keep every root the question asks for; discard only those that fail a stated constraint. Axis-first when the point is on an axis or on a vertical line (\(x=0\) / \(x=k\)) uses the existing axis-parallel logic. Skip-ahead to a later equivalent equation or to the kept point(s) is allowed. Dropping the root without squaring the other side is an error.
+
+If the unknown lies on a given line \(y=mx+b\) (not only an axis), represent it as one parameter: \(P(x;mx+b)\) or \(B(t;t-3)\). The letter is free. Then the same distance formula / square / mixed path. After the roots, write each point using \(y=mx+b\). Keep every point the question asks for (both if it says «שתי האפשרויות»).
+
+Equidistant from two given points: the sentence means \(PA=PB\) (or \(AB=AC\)). Site path: mark the unknown, then the distance formula for one segment, then the other (either first), then \(\sqrt{\ldots}=\sqrt{\ldots}\), square **both** sides, then the existing equation engine. Skip-ahead to \(\sqrt=\sqrt\) or to the squared inners is allowed. Direct \(PA=PB\) without formulas is a start, not the answer. Combine with a line: \(P(x;mx+b)\) then \(PA=PB\).
+
+## Perimeter
+
+Triangle (or polygon) perimeter is the sum of side lengths: \(P_{ABC}=AB+BC+CA\) (site shows \(P△ABC\)). Optional: compute missing sides with the existing distance (or axis-parallel segment) path, then the formula, plug, combine like radicals. Direct \(P=\) the exact sum is allowed. Formula before all sides is allowed. Side order does not matter. Do not accept a long decimal in place of an exact radical sum.
+
+## Distance after intersection / intercepts
+
+A book part that asks for a point of two lines, then a distance: existing `lineIntersect` (equate, then Teach for the linear equation, then plug y), then existing `distance`. Skip to the distance after the point is found.
+
+Intercepts of a given line, then midpoint of that segment, then distance from the midpoint to the origin: existing intercept path, existing midpoint, existing distance. Headings follow the current action (intercept / midpoint / distance). Skip to the midpoint or, after \(M\) is known, to the distance formula.
+
+Two given points: slope then equation (`lineEq`), then distance of the segment, then perimeter of \(OAB\) using those distances. Do not recompute a side that is already done.
 

@@ -652,6 +652,17 @@
   align-items: flex-start;
 }
 
+.solve-wrap.has-geo.is-system {
+  display: grid;
+}
+
+@media (max-width: 859px) {
+  .solve-wrap.has-geo.is-system {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
 .solve-main {
   flex: 1;
   min-width: 0;

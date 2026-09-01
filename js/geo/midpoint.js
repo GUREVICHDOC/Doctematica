@@ -32,6 +32,7 @@
     var evalMaybeExpr = dep.evalMaybeExpr;
     var lastEqStage = dep.lastEqStage;
     var evalStepExpr = dep.evalStepExpr;
+    var evalArithLoose = dep.evalArithLoose;
     var parseNumberToken = dep.parseNumberToken;
     var parseParenNumber = dep.parseParenNumber;
     var parseSlopeDiffExpr = dep.parseSlopeDiffExpr;
@@ -73,6 +74,46 @@
     var fakeB = { m: spec.m, b: spec.b, x: spec.bpt.x, y: spec.bpt.y, mn: null, md: 1 };
     if (lineEqSysEquivalent(raw, lineEqPointSlope(fakeB))) return true;
     return false;
+  }
+
+  function midpointYLineSpecs(pack, progress, task) {
+    var specs = [];
+    var seen = {};
+    function add(spec) {
+      if (!spec || spec.vertical != null || spec.m == null) return;
+      var k = String(spec.m) + "," + String(spec.b);
+      if (seen[k]) return;
+      seen[k] = true;
+      specs.push(spec);
+    }
+    var ends = midpointEnds(pack, progress, task);
+    if (ends.a && ends.b) add(segmentLineFromEnds(ends.a, ends.b));
+    if (pack && pack.line && task && task.answerX != null && task.answerY != null) {
+      var L = parseLineSpec(pack.line);
+      if (L && L.m != null && L.b != null && nearNum(L.m * task.answerX + L.b, task.answerY)) {
+        add({ m: L.m, b: L.b, a: ends.a, bpt: ends.b });
+      }
+    }
+    return specs;
+  }
+
+  function midpointYPlugKind(typed, spec, x, wantY) {
+    if (!spec || x == null) return "";
+    var shown = String(typed || "").replace(/[−–—]/g, "-");
+    if (!/^y\s*=/i.test(shown)) return "";
+    if (yEqGivesCoord(shown, wantY)) return "done";
+    if (spec.a && typedMatchesAbLine(typed, spec)) return "line";
+    var plug = "y = " + substYRhs({ m: spec.m, b: spec.b }, x);
+    if (eqNormEqual(shown, plug) || linearEqEquivalent(shown, plug)) return "plug";
+    var rhs = shown.replace(/^y\s*=/i, "");
+    if (/[xX]/.test(rhs)) return "";
+    var rhsVal = evalMaybeExpr(rhs);
+    if (rhsVal == null && typeof evalArithLoose === "function") rhsVal = evalArithLoose(rhs);
+    if (rhsVal == null) return "";
+    if (!nearNum(rhsVal, spec.m * x + spec.b)) return "";
+    var compact = String(rhs).replace(/\s+/g, "");
+    if (/[+\-*×·()\/]/.test(compact.replace(/^-?[\d.]+$/, ""))) return "plug";
+    return "";
   }
 
   function typedLooksLikeFindMidpoint(typed, pack, progress) {
@@ -687,22 +728,45 @@
     };
   }
 
+  function midpointLaterRequiredDone(pack, progress, midTask) {
+    var done = (progress && progress.done) || {};
+    var map = taskByIdMap(pack);
+    var parts = (pack && pack.parts) || [];
+    var ids = [];
+    var pi;
+    for (pi = 0; pi < parts.length; pi++) {
+      var partIds = parts[pi].taskIds || [];
+      if (partIds.indexOf(midTask.id) >= 0) {
+        ids = partIds;
+        break;
+      }
+    }
+    var i = ids.indexOf(midTask.id);
+    var j;
+    if (i >= 0) {
+      for (j = i + 1; j < ids.length; j++) {
+        var u = map[ids[j]];
+        if (u && isRequiredTask(u) && done[u.id]) return true;
+      }
+      return false;
+    }
+    return (pack.tasks || []).some(function (u) {
+      return u && isRequiredTask(u) && u.kind !== "midpoint" && u.id !== midTask.id && done[u.id];
+    });
+  }
+
   function settleSkippedMidpointPairs(pack, progress) {
     if (!pack || !progress) return;
     var done = progress.done || {};
-    var movedOn = (pack.tasks || []).some(function (t) {
-      return t && !t.optional && t.kind !== "midpoint" && done[t.id];
-    });
-    if (!movedOn) return;
     progress.done = done;
     (pack.tasks || []).forEach(function (t) {
       if (!t || t.kind !== "midpoint") return;
       if (done[t.id]) return;
       var cf = progress.coords && progress.coords[t.id];
-      if (midpointReadyForPair(t, cf, pack, progress)) {
-        progress.done[t.id] = true;
-        if (progress.partial) delete progress.partial[t.id];
-      }
+      if (!midpointReadyForPair(t, cf, pack, progress)) return;
+      if (!midpointLaterRequiredDone(pack, progress, t)) return;
+      progress.done[t.id] = true;
+      if (progress.partial) delete progress.partial[t.id];
     });
   }
 
@@ -865,30 +929,46 @@
     }
     var axis = cf.x ? "y" : "x";
     if (!cf.x && !cf.y && /^y/i.test(prev)) axis = "y";
-    if (/^m/i.test(prev) || (/^y\s*=/i.test(prev) && /[xX]/.test(prev))) {
-      var endsAbH = midpointEnds(pack, progress, t);
-      var abH = endsAbH.a && endsAbH.b ? segmentLineFromEnds(endsAbH.a, endsAbH.b) : null;
-      if (abH && !abH.vertical) {
-        if (/^m/i.test(prev)) {
-          return {
-            task: t,
-            message:
-              "כתבו את משוואת " +
-              midpointSegmentLetters(t) +
-              " מנקודה ושיפוע, הציבו את השיעור הידוע של האמצע, ומצאו את החסר. אפשר גם ישר את נוסחת האמצע.",
-            step: prettyLineEq({ m: abH.m, b: abH.b }),
-            answer: pair,
-            rawStep: true,
-          };
+    var ySpecsH = midpointYLineSpecs(pack, progress, t);
+    if (cf.x && !cf.y && ySpecsH.length) {
+      var hi;
+      var hk = "";
+      var hs = null;
+      for (hi = 0; hi < ySpecsH.length; hi++) {
+        hk = midpointYPlugKind(prev, ySpecsH[hi], t.answerX, t.answerY);
+        if (hk) {
+          hs = ySpecsH[hi];
+          break;
         }
+      }
+      if (!hk && /^m/i.test(prev)) {
+        return {
+          task: t,
+          message:
+            "כתבו את משוואת " +
+            midpointSegmentLetters(t) +
+            " מנקודה ושיפוע, הציבו את השיעור הידוע של האמצע, ומצאו את החסר. אפשר גם ישר את נוסחת האמצע.",
+          step: prettyLineEq({ m: ySpecsH[0].m, b: ySpecsH[0].b }),
+          answer: pair,
+          rawStep: true,
+        };
+      }
+      if (hk === "line" || (hk && /[xX]/.test(prev))) {
         return {
           task: t,
           message:
             "הציבו x = " +
             fmtNum(t.answerX) +
-            " במשוואת " +
-            midpointSegmentLetters(t) +
-            " ומצאו את y.",
+            " במשוואה ומצאו את y.",
+          step: "y = " + substYRhs({ m: hs.m, b: hs.b }, t.answerX),
+          answer: pair,
+          rawStep: true,
+        };
+      }
+      if (hk === "plug") {
+        return {
+          task: t,
+          message: "חשבו את y.",
           step: midpointValText("y", t.answerY),
           answer: pair,
           rawStep: true,
@@ -1148,6 +1228,14 @@
         var abLine = segmentLineFromEnds(endsAb.a, endsAb.b);
         if (abLine && typedMatchesAbLine(typed, abLine)) return true;
         if (lettersMatchMidSegment(slopeTagLetters(typed), task)) return true;
+        var cfPlug = (progress.coords && progress.coords[task.id]) || {};
+        if (cfPlug.x && !cfPlug.y) {
+          var ySpecsL = midpointYLineSpecs(pack, progress, task);
+          var liY;
+          for (liY = 0; liY < ySpecsL.length; liY++) {
+            if (midpointYPlugKind(typed, ySpecsL[liY], task.answerX, task.answerY)) return true;
+          }
+        }
       }
     }
     var focusNow = currentFocusTask(pack, progress);
@@ -1833,27 +1921,38 @@
             " ומצאו את השיעור החסר."
         );
       }
-      if (cf.x && !cf.y) {
-        var shownAb = String(typed || "").replace(/[−–—]/g, "-");
-        var plugAb = "y = " + substYRhs({ m: abSpec.m, b: abSpec.b }, task.answerX);
-        if (yEqGivesCoord(shownAb, task.answerY)) {
+    }
+    if (cf.x && !cf.y) {
+      var ySpecsC = midpointYLineSpecs(pack, progress, task);
+      var shownAb = String(typed || "").replace(/[−–—]/g, "-");
+      var sci;
+      for (sci = 0; sci < ySpecsC.length; sci++) {
+        var specC = ySpecsC[sci];
+        var kindC = midpointYPlugKind(typed, specC, task.answerX, task.answerY);
+        if (kindC === "done") {
           return afterCoord("y", midpointValText("y", task.answerY));
         }
-        if (eqNormEqual(shownAb, plugAb) || linearEqEquivalent(shownAb, plugAb)) {
+        if (kindC === "line") {
+          return partial(
+            prettyLineEq({ m: specC.m, b: specC.b }),
+            "נכון. הציבו x = " + fmtNum(task.answerX) + " במשוואה ומצאו את y."
+          );
+        }
+        if (kindC === "plug") {
           return partial(shownAb, "נכון. עכשיו חשבו את y.");
         }
-        var prevAb = maps.lastExpr[task.id] || "";
-        if (/^y\s*=/i.test(prevAb) && /[xX]/.test(prevAb)) {
-          var plugResAb = checkPlugYStep(prevAb, shownAb);
-          if (plugResAb && plugResAb.ok) {
-            if (yEqGivesCoord(shownAb, task.answerY) || isSolvedYText(typed)) {
-              var yAb = evalMaybeExpr(lastEqStage(shownAb));
-              if (yAb != null && nearNum(yAb, task.answerY)) {
-                return afterCoord("y", midpointValText("y", task.answerY));
-              }
+      }
+      var prevAb = maps.lastExpr[task.id] || "";
+      if (/^y\s*=/i.test(prevAb)) {
+        var plugResAb = checkPlugYStep(prevAb, shownAb);
+        if (plugResAb && plugResAb.ok) {
+          if (yEqGivesCoord(shownAb, task.answerY) || isSolvedYText(typed)) {
+            var yAb = evalMaybeExpr(lastEqStage(shownAb));
+            if (yAb != null && nearNum(yAb, task.answerY)) {
+              return afterCoord("y", midpointValText("y", task.answerY));
             }
-            return partial(shownAb, plugResAb.message || "צעד חוקי. המשיכו לחשב את y.");
           }
+          return partial(shownAb, plugResAb.message || "צעד חוקי. המשיכו לחשב את y.");
         }
       }
     }

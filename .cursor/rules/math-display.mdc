@@ -1,6 +1,6 @@
 ---
 description: Stacked fractions in exercise text, history, and hints — never leave a/b as a slash in Hebrew RTL prose.
-globs: data/curriculum.js,data/curriculum.json,js/math-render.js,js/geometry.js,js/geo/*.js,js/app.js
+globs: data/curriculum.js,data/curriculum-geo.js,js/math-render.js,js/geometry.js,js/geo/*.js,js/app.js
 alwaysApply: true
 ---
 

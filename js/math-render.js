@@ -164,11 +164,13 @@
     var i = 0;
     while (i < s.length) {
       // S△AOB — S גדול, משולש וקודקודים קטנים
-      var areaLab = s.slice(i).match(/^S(?:△|Δ)([A-Za-z]{2,6})/);
+      var areaLab = s.slice(i).match(/^[SP](?:△|Δ)([A-Za-z]{2,6})/);
       if (areaLab) {
         out +=
           '<span class="m-area">' +
-          '<span class="m-area-s">S</span>' +
+          '<span class="m-area-s">' +
+          escapeHtml(areaLab[0].charAt(0)) +
+          "</span>" +
           '<span class="m-area-tri" aria-hidden="true">△</span>' +
           '<span class="m-area-verts">' +
           escapeHtml(areaLab[1]) +
