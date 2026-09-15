@@ -1267,6 +1267,10 @@
   flex-wrap: nowrap;
 }
 
+.steps .q-root-row {
+  flex-wrap: wrap;
+}
+
 .q-roots {
   display: flex;
   flex-wrap: wrap;

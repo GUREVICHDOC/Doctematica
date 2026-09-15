@@ -193,7 +193,11 @@
       if (seen[id]) return;
       if (!isFinite(it.value)) return;
       seen[id] = true;
-      out.push(it);
+      out.push({
+        kind: it.kind,
+        level: it.level,
+        startEquation: it.startEquation,
+      });
     }
 
     var xs = [-8, -6, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12];
@@ -355,9 +359,6 @@
       mode: "steps",
       prompt: chosen.startEquation,
       startEquation: chosen.startEquation,
-      solutionSteps: chosen.solutionSteps,
-      answer: chosen.answer,
-      value: chosen.value,
       kind: chosen.kind,
       explain: "בודדו את x בצעדים שקולים עד שמתקבלת משוואה מהצורה x = מספר.",
     };

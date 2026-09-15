@@ -4256,6 +4256,18 @@
         explain: "אוספים לאגף אחד. מקדמים בודקים אחרי האיסוף, לא לפי הנתון המפוזר.",
       };
     }
+    if (
+      !isAbcOrder(eqText) &&
+      pack.standard &&
+      isAbcOrder(pack.standard) &&
+      normFactorText(pack.standard) !== normFactorText(eqText)
+    ) {
+      return {
+        eq: pack.standard,
+        hint: mixedHintFor(pack, eqText),
+        explain: "עדיף לסדר קודם x², אחר כך x, ואז המספר.",
+      };
+    }
     var cls = pack.classify;
     if (cls.kind === "identity") {
       return { eq: "כל x", hint: mixedHintFor(pack, eqText), doneKind: "identity" };
@@ -4349,7 +4361,19 @@
         solved: [false, false],
         progress: { z: false, o: false },
       });
-      if (fres.ok) return { ok: true, path: "factor", factor: fa, raw: fres };
+      if (fres.ok) {
+        return {
+          ok: true,
+          path: "factor",
+          factor: fa,
+          factored: !!fres.factored,
+          message: String(fres.message || "נכון. הוצאתם גורם משותף. עכשיו לחצו «חילוק למשוואות», או פתרו כל גורם בנפרד."),
+          eqs: fres.eqs,
+          solved: fres.solved,
+          solvedFlags: fres.solvedFlags,
+          raw: fres,
+        };
+      }
       return { ok: false, message: fres.message };
     }
 
