@@ -5,6 +5,15 @@ var POINT_KINDS = { point: true, onLine: true, freePoint: true, noIntercept: tru
 var POINT_PAGE_IDS = { "geo-line-points-1": true, "geo-line-axis-1": true };
 var LINE_MB_PAGE_IDS = { "geo-line-mb-1": true };
 var LINE_MATCH_PAGE_IDS = { "geo-line-match-1": true };
+var LINE_INTERSECT_PAGE_IDS = { "geo-line-intersect-1": true };
+var SUMMARY_PAGE_IDS = { "geo-line-summary-1": true };
+var LINE_EQ_PAGE_IDS = { "geo-line-eq-1": true };
+var SLOPE_PAGE_IDS = { "geo-slope-1": true };
+var PARALLEL_PAGE_IDS = { "geo-parallel-1": true };
+var AXIS_LINES_PAGE_IDS = { "geo-axis-lines-1": true };
+var MIDPOINT_PAGE_IDS = { "geo-midpoint-1": true };
+var PERP_PAGE_IDS = { "geo-perp-1": true };
+var DISTANCE_PAGE_IDS = { "geo-distance-1": true };
 
 function isLengthKind(kind) {
   return !!LENGTH_KINDS[String(kind || "")];
@@ -26,6 +35,18 @@ function isLineMatchKind(kind) {
   return String(kind || "") === "lineMatch";
 }
 
+function isLineIntersectKind(kind) {
+  return String(kind || "") === "lineIntersect";
+}
+
+function isLineEqKind(kind) {
+  return String(kind || "") === "lineEq";
+}
+
+function isSlopeKind(kind) {
+  return String(kind || "") === "slope";
+}
+
 function isPointPageLevel(pack) {
   return !!(pack && POINT_PAGE_IDS[pack._levelId]);
 }
@@ -38,21 +59,201 @@ function isLineMatchPage(pack) {
   return !!(pack && LINE_MATCH_PAGE_IDS[pack._levelId]);
 }
 
+function isLineIntersectPage(pack) {
+  return !!(pack && LINE_INTERSECT_PAGE_IDS[pack._levelId]);
+}
+
+function isSummaryPage(pack) {
+  return !!(pack && SUMMARY_PAGE_IDS[pack._levelId]);
+}
+
+function isLineEqPage(pack) {
+  return !!(pack && LINE_EQ_PAGE_IDS[pack._levelId]);
+}
+
+function isSlopePage(pack) {
+  return !!(pack && SLOPE_PAGE_IDS[pack._levelId]);
+}
+
+function isParallelPage(pack) {
+  return !!(pack && PARALLEL_PAGE_IDS[pack._levelId]);
+}
+
+function isAxisLinesPage(pack) {
+  return !!(pack && AXIS_LINES_PAGE_IDS[pack._levelId]);
+}
+
+function isMidpointPage(pack) {
+  return !!(pack && MIDPOINT_PAGE_IDS[pack._levelId]);
+}
+
+function isPerpPage(pack) {
+  return !!(pack && PERP_PAGE_IDS[pack._levelId]);
+}
+
+function isDistancePage(pack) {
+  return !!(pack && DISTANCE_PAGE_IDS[pack._levelId]);
+}
+
+function isMidpointKind(kind) {
+  return String(kind || "") === "midpoint";
+}
+
+function isPerpKind(kind) {
+  return String(kind || "") === "perpendicular";
+}
+
+function isPerpSlopeTask(task) {
+  return !!(task && isSlopeKind(task.kind) && task.perpendicular);
+}
+
+function isDistanceKind(kind) {
+  var k = String(kind || "");
+  return k === "distance" || k === "equalLen" || k === "distUnknown" || k === "perimeter";
+}
+
+function isEqualLenKind(kind) {
+  return String(kind || "") === "equalLen";
+}
+
+function isDistUnknownKind(kind) {
+  return String(kind || "") === "distUnknown";
+}
+
+function isPerimeterKind(kind) {
+  return String(kind || "") === "perimeter";
+}
+
+function isProveBisectTask(task) {
+  return !!(task && isYesNoKind(task.kind) && task.proveBisect);
+}
+
+function isYesNoKind(kind) {
+  return String(kind || "") === "yesNo";
+}
+
+function isAxisLineTask(task) {
+  var a = String((task && task.axisParallel) || "").toLowerCase();
+  return a === "x" || a === "h" || a === "y" || a === "v";
+}
+
+function isParallelKind(kind) {
+  return String(kind || "") === "parallel";
+}
+
+function isServerLineMatch(pack) {
+  return isLineMatchPage(pack) || isSummaryPage(pack) || isParallelPage(pack);
+}
+
+function isServerIntersect(pack) {
+  return (
+    isLineIntersectPage(pack) ||
+    isSummaryPage(pack) ||
+    isParallelPage(pack) ||
+    isAxisLinesPage(pack) ||
+    isMidpointPage(pack) ||
+    isPerpPage(pack) ||
+    isDistancePage(pack)
+  );
+}
+
+function isServerPoints(pack) {
+  return (
+    isPointPageLevel(pack) ||
+    isSummaryPage(pack) ||
+    isParallelPage(pack) ||
+    isAxisLinesPage(pack) ||
+    isMidpointPage(pack) ||
+    isPerpPage(pack) ||
+    isDistancePage(pack)
+  );
+}
+
 function isMigratedKind(kind, pack) {
   if (isLengthKind(kind) || isAreaKind(kind)) return true;
   if (pack && isPointPageLevel(pack) && isPointKind(kind)) return true;
+  if (pack && isSummaryPage(pack) && isPointKind(kind)) return true;
   if (pack && isLineMbPage(pack) && isLineMbKind(kind)) return true;
-  if (pack && isLineMatchPage(pack) && isLineMatchKind(kind)) return true;
+  if (pack && isServerLineMatch(pack) && isLineMatchKind(kind)) return true;
+  if (pack && isServerIntersect(pack) && (isLineIntersectKind(kind) || String(kind || "") === "rearrange")) return true;
+  if (pack && isLineEqPage(pack) && isLineEqKind(kind)) return true;
+  if (pack && isSlopePage(pack) && isSlopeKind(kind)) return true;
+  if (pack && isParallelPage(pack)) {
+    if (isParallelKind(kind) || isSlopeKind(kind) || isLineEqKind(kind) || isLineMbKind(kind)) return true;
+    if (isPointKind(kind) || isLineIntersectKind(kind) || String(kind || "") === "rearrange") return true;
+    if (isLineMatchKind(kind)) return true;
+  }
+  if (pack && isAxisLinesPage(pack)) {
+    if (isLineEqKind(kind) || isYesNoKind(kind) || isSlopeKind(kind)) return true;
+    if (isPointKind(kind) || isLineIntersectKind(kind) || String(kind || "") === "rearrange") return true;
+  }
+  if (pack && isMidpointPage(pack)) {
+    if (isMidpointKind(kind)) return true;
+    if (isPointKind(kind) || isSlopeKind(kind) || isLineEqKind(kind)) return true;
+    if (isLineIntersectKind(kind) || String(kind || "") === "rearrange") return true;
+    if (isYesNoKind(kind)) return true;
+  }
+  if (pack && isPerpPage(pack)) {
+    if (isPerpKind(kind) || isSlopeKind(kind) || isLineEqKind(kind)) return true;
+    if (isPointKind(kind) || isLineIntersectKind(kind) || String(kind || "") === "rearrange") return true;
+    if (isMidpointKind(kind) || isYesNoKind(kind) || isParallelKind(kind)) return true;
+  }
+  if (pack && isDistancePage(pack)) {
+    if (isDistanceKind(kind) || isSlopeKind(kind) || isLineEqKind(kind)) return true;
+    if (isPointKind(kind) || isLineIntersectKind(kind) || String(kind || "") === "rearrange") return true;
+    if (isMidpointKind(kind) || isPerpKind(kind)) return true;
+  }
   return false;
 }
 
 function capabilityForFocus(pack, focus) {
   if (focus && isAreaKind(focus.kind)) return "areas";
-  if (focus && isPointPageLevel(pack) && isPointKind(focus.kind)) return "points";
+  if (focus && isLengthKind(focus.kind)) return "lengths";
+  if (focus && isServerPoints(pack) && isPointKind(focus.kind)) return "points";
   if (focus && isLineMbPage(pack) && isLineMbKind(focus.kind)) return "line-mb";
-  if (focus && isLineMatchPage(pack) && isLineMatchKind(focus.kind)) return "line-match";
+  if (focus && isServerLineMatch(pack) && isLineMatchKind(focus.kind)) return "line-match";
+  if (focus && isServerIntersect(pack) && (isLineIntersectKind(focus.kind) || focus.kind === "rearrange")) return "line-intersect";
+  if (focus && isLineEqPage(pack) && isLineEqKind(focus.kind)) return "line-eq";
+  if (focus && isSlopePage(pack) && isSlopeKind(focus.kind)) return "slope";
+  if (focus && isParallelPage(pack) && isParallelKind(focus.kind)) return "parallel";
+  if (focus && isParallelPage(pack) && isSlopeKind(focus.kind)) return "slope";
+  if (focus && isParallelPage(pack) && isLineEqKind(focus.kind)) return "line-eq";
+  if (focus && isParallelPage(pack) && isLineMbKind(focus.kind)) return "line-mb";
+  if (focus && isParallelPage(pack) && isPointKind(focus.kind)) return "points";
+  if (focus && isParallelPage(pack) && (isLineIntersectKind(focus.kind) || focus.kind === "rearrange")) return "line-intersect";
+  if (focus && isParallelPage(pack) && isLineMatchKind(focus.kind)) return "line-match";
+  if (focus && isAxisLinesPage(pack) && (isYesNoKind(focus.kind) || isAxisLineTask(focus))) return "axis-lines";
+  if (focus && isAxisLinesPage(pack) && isLineEqKind(focus.kind)) return "line-eq";
+  if (focus && isAxisLinesPage(pack) && isSlopeKind(focus.kind)) return "slope";
+  if (focus && isMidpointPage(pack) && (isMidpointKind(focus.kind) || isProveBisectTask(focus))) return "midpoint";
+  if (focus && isMidpointPage(pack) && isPointKind(focus.kind)) return "points";
+  if (focus && isMidpointPage(pack) && isSlopeKind(focus.kind)) return "slope";
+  if (focus && isMidpointPage(pack) && isLineEqKind(focus.kind)) return "line-eq";
+  if (focus && isMidpointPage(pack) && (isLineIntersectKind(focus.kind) || focus.kind === "rearrange")) return "line-intersect";
+  if (focus && (isPerpPage(pack) || isDistancePage(pack)) && isServerPoints(pack) && isPointKind(focus.kind)) return "points";
+  if (focus && (isPerpPage(pack) || isDistancePage(pack)) && (isLineIntersectKind(focus.kind) || focus.kind === "rearrange")) {
+    return "line-intersect";
+  }
+  if (focus && (isPerpPage(pack) || isDistancePage(pack)) && isAxisLineTask(focus)) return "axis-lines";
+  if (focus && (isPerpPage(pack) || isDistancePage(pack)) && isLineEqKind(focus.kind)) return "line-eq";
+  if (focus && (isPerpPage(pack) || isDistancePage(pack)) && isPerpSlopeTask(focus)) return "perpendicular";
+  if (focus && (isPerpPage(pack) || isDistancePage(pack)) && isSlopeKind(focus.kind)) return "slope";
+  if (focus && (isPerpPage(pack) || isDistancePage(pack)) && isMidpointKind(focus.kind)) return "midpoint";
+  if (focus && isPerpPage(pack) && isYesNoKind(focus.kind)) return "axis-lines";
+  if (focus && isPerpPage(pack) && isPerpKind(focus.kind)) return "perpendicular";
+  if (focus && isDistancePage(pack) && isPerpKind(focus.kind)) return "perpendicular";
+  if (focus && isDistancePage(pack) && isDistanceKind(focus.kind)) return "distance";
   if (isLineMatchPage(pack)) return "line-match";
   if (isLineMbPage(pack)) return "line-mb";
+  if (isLineIntersectPage(pack)) return "line-intersect";
+  if (isLineEqPage(pack)) return "line-eq";
+  if (isSlopePage(pack)) return "slope";
+  if (isParallelPage(pack)) return "parallel";
+  if (isAxisLinesPage(pack)) return "axis-lines";
+  if (isMidpointPage(pack)) return "midpoint";
+  if (isPerpPage(pack)) return "perpendicular";
+  if (isDistancePage(pack)) return "distance";
+  if (isSummaryPage(pack)) return "points";
   return "lengths";
 }
 
@@ -133,15 +334,40 @@ function seedNonLengthProgress(pack, geo) {
     lastExpr: lastExpr,
     coords: coords,
     footCoords: footCoords,
-    lineEq: isLineMatchPage(pack) || isLineMbPage(pack) ? {} : copyMap(geo.lineEq),
-    intersect: geo.intersect && typeof geo.intersect === "object" ? geo.intersect : {},
+    lineEq:
+      isLineMatchPage(pack) ||
+      isLineMbPage(pack) ||
+      isLineIntersectPage(pack) ||
+      isSummaryPage(pack) ||
+      isLineEqPage(pack) ||
+      isParallelPage(pack) ||
+      isAxisLinesPage(pack) ||
+      isMidpointPage(pack) ||
+      isPerpPage(pack) ||
+      isDistancePage(pack)
+        ? {}
+        : copyMap(geo.lineEq),
+    intersect: isServerIntersect(pack)
+      ? {}
+      : geo.intersect && typeof geo.intersect === "object"
+        ? geo.intersect
+        : {},
     pointRoute: pointRoute,
-    distUnk: geo.distUnk && typeof geo.distUnk === "object" ? geo.distUnk : {},
+    distUnk: isDistancePage(pack) ? {} : geo.distUnk && typeof geo.distUnk === "object" ? geo.distUnk : {},
     draw: geo.draw || null,
-    mbRearranged: isLineMbPage(pack) ? false : !!geo.mbRearranged,
-    mbRearrangeExpr: isLineMbPage(pack) ? null : geo.mbRearrangeExpr || null,
-    lineEqDisplay: isLineMbPage(pack) ? null : geo.lineEqDisplay || null,
-    lineMatch: isLineMatchPage(pack) ? {} : copyMap(geo.lineMatch),
+    mbRearranged: isLineMbPage(pack) || isParallelPage(pack) || isPerpPage(pack) ? false : !!geo.mbRearranged,
+    mbRearrangeExpr: isLineMbPage(pack) || isParallelPage(pack) || isPerpPage(pack) ? null : geo.mbRearrangeExpr || null,
+    lineEqDisplay:
+      isLineMbPage(pack) ||
+      isLineEqPage(pack) ||
+      isParallelPage(pack) ||
+      isAxisLinesPage(pack) ||
+      isMidpointPage(pack) ||
+      isPerpPage(pack) ||
+      isDistancePage(pack)
+        ? null
+        : geo.lineEqDisplay || null,
+    lineMatch: isServerLineMatch(pack) ? {} : copyMap(geo.lineMatch),
   };
 }
 
@@ -149,20 +375,46 @@ function applyMigratedResult(pack, progress, res) {
   if (!res || !res.ok) return;
   var migratedTask = res.task && isMigratedKind(res.task.kind, pack);
   var mbPageHit =
-    isLineMbPage(pack) && (res.mbRearranged || res.mbRearrangeExpr || res.lineEqDisplay);
-  var matchHit = isLineMatchPage(pack) && (res.lineMatch || (res.task && isLineMatchKind(res.task.kind)));
-  if (!migratedTask && !mbPageHit && !matchHit) return;
+    (isLineMbPage(pack) || isParallelPage(pack) || isPerpPage(pack) || isDistancePage(pack)) &&
+    (res.mbRearranged || res.mbRearrangeExpr || res.lineEqDisplay);
+  var matchHit = isServerLineMatch(pack) && (res.lineMatch || (res.task && isLineMatchKind(res.task.kind)));
+  var intersectHit =
+    isServerIntersect(pack) && (res.intersect || res.lineEq || (res.task && isLineIntersectKind(res.task.kind)));
+  var lineEqHit =
+    (isLineEqPage(pack) ||
+      isParallelPage(pack) ||
+      isAxisLinesPage(pack) ||
+      isMidpointPage(pack) ||
+      isPerpPage(pack) ||
+      isDistancePage(pack)) &&
+    (res.lineEqDisplay || res.lineEq || (res.task && isLineEqKind(res.task.kind)));
+  var slopeSkipHit =
+    (isSlopePage(pack) ||
+      isParallelPage(pack) ||
+      isAxisLinesPage(pack) ||
+      isMidpointPage(pack) ||
+      isPerpPage(pack) ||
+      isDistancePage(pack)) &&
+    res.done &&
+    (pack.tasks || []).some(function (t) {
+      return isSlopeKind(t.kind) && res.done[t.id];
+    });
+  var footHit = !!(res.footCoords && Object.keys(res.footCoords).length);
+  var distUnkHit = isDistancePage(pack) && (res.distUnk || (res.task && isDistanceKind(res.task.kind)));
+  if (!migratedTask && !mbPageHit && !matchHit && !intersectHit && !lineEqHit && !slopeSkipHit && !footHit && !distUnkHit) return;
   if (res.done) progress.done = res.done;
   if (res.partial) progress.partial = res.partial;
   if (res.lastExpr) progress.lastExpr = res.lastExpr;
   if (res.coords) progress.coords = res.coords;
   if (res.footCoords) progress.footCoords = res.footCoords;
   if (res.pointRoute) progress.pointRoute = res.pointRoute;
+  if (res.distUnk) progress.distUnk = res.distUnk;
   if (res.mbRearranged) progress.mbRearranged = true;
   if (res.mbRearrangeExpr) progress.mbRearrangeExpr = res.mbRearrangeExpr;
   if (res.lineEqDisplay) progress.lineEqDisplay = res.lineEqDisplay;
   if (res.lineMatch) progress.lineMatch = res.lineMatch;
   if (res.lineEq) progress.lineEq = Object.assign({}, progress.lineEq || {}, res.lineEq);
+  if (res.intersect) progress.intersect = Object.assign({}, progress.intersect || {}, res.intersect);
 }
 
 function parseMatchActionLine(line) {
@@ -220,7 +472,7 @@ function applyMatchAction(G, pack, progress, action) {
 
 function applyTypedProgress(G, pack, progress, typed) {
   var act = parseMatchActionLine(typed);
-  if (act && isLineMatchPage(pack) && G.submitLineMatchLine) {
+  if (act && isServerLineMatch(pack) && G.submitLineMatchLine) {
     return applyMatchAction(G, pack, progress, act);
   }
   var res = G.checkTyped(typed, pack, progress);
@@ -304,6 +556,8 @@ function snapshotCheck(res) {
   if (res.lineMatch) out.lineMatch = res.lineMatch;
   if (res.lineEq) out.lineEq = res.lineEq;
   if (res.lineMatchNote) out.lineMatchNote = res.lineMatchNote;
+  if (res.intersect) out.intersect = res.intersect;
+  if (res.distUnk) out.distUnk = res.distUnk;
   return out;
 }
 
@@ -330,7 +584,7 @@ function coordsForDone(pack, done) {
   var coords = {};
   (pack.tasks || []).forEach(function (t) {
     if (!done || !done[t.id]) return;
-    if (isPointKind(t.kind) || t.kind === "onLine" || t.kind === "freePoint") {
+    if (isPointKind(t.kind) || t.kind === "onLine" || t.kind === "freePoint" || t.kind === "lineIntersect" || t.kind === "midpoint" || t.kind === "distUnknown") {
       coords[t.id] = { x: true, y: true };
     }
   });
@@ -356,6 +610,7 @@ function handleSetup(engine, pack, body) {
     partial: progress.partial,
     lastExpr: progress.lastExpr,
     coords: progress.coords,
+    distUnk: progress.distUnk || {},
     solved: !(pack.tasks || []).some(function (t) {
       return !t.optional && !(progress.done && progress.done[t.id]);
     }),
@@ -366,7 +621,7 @@ function handleCheck(engine, pack, body) {
   var G = engine.DoctematicaGeometry;
   var progress = reconstruct(engine, pack, body.history || [], body.geo || {});
   if (body.action && body.action.type) {
-    if (!isLineMatchPage(pack)) {
+    if (!isServerLineMatch(pack)) {
       return { ok: false, local: true, message: "הפעולה שייכת למשימה שעדיין מקומית." };
     }
     return snapshotCheck(applyMatchAction(G, pack, progress, body.action));
@@ -415,7 +670,7 @@ function handleHint(engine, pack, body) {
 function handleOneStep(engine, pack, body) {
   var G = engine.DoctematicaGeometry;
   var progress = reconstruct(engine, pack, body.history || [], body.geo || {});
-  if (isLineMatchPage(pack) && G.lineMatchPartActive && G.lineMatchPartActive(pack, progress) && G.lineMatchOneStep) {
+  if (isServerLineMatch(pack) && G.lineMatchPartActive && G.lineMatchPartActive(pack, progress) && G.lineMatchOneStep) {
     var lm = G.lineMatchOneStep(pack, progress);
     if (!lm) {
       var leftM = (pack.tasks || []).filter(function (t) {
@@ -443,7 +698,9 @@ function handleOneStep(engine, pack, body) {
   }
   var h = G.nextHint(pack, progress);
   if (h && h.footCalc && !(h.task && isMigratedKind(h.task.kind, pack))) {
-    return localHint(h);
+    if (!((isAxisLinesPage(pack) || isMidpointPage(pack) || isPerpPage(pack) || isDistancePage(pack)) && (h.step || h.answer))) {
+      return localHint(h);
+    }
   }
   if (h && h.task && !isMigratedKind(h.task.kind, pack)) {
     return localHint(h);
@@ -452,6 +709,13 @@ function handleOneStep(engine, pack, body) {
     var heightOut = snapshotHint(h);
     heightOut.step = null;
     return heightOut;
+  }
+  if ((isAxisLinesPage(pack) || isMidpointPage(pack) || isPerpPage(pack) || isDistancePage(pack)) && h && h.footCalc && (h.step || h.answer)) {
+    var footTyped = h.rawStep ? h.step : h.step || h.answer;
+    var footRes = applyTypedProgress(G, pack, progress, String(footTyped));
+    var footOut = snapshotCheck(footRes);
+    footOut.step = String(footTyped);
+    return footOut;
   }
   if (!h || !h.task) {
     return { ok: true, step: null, message: (h && h.message) || "התרגיל כבר נפתר.", solved: false };
@@ -479,6 +743,30 @@ function handleOneStep(engine, pack, body) {
 }
 
 function solutionLinesForTask(G, task, pack) {
+  if (isMidpointKind(task.kind) && G.canonicalMidpointSteps) {
+    var midLines = G.canonicalMidpointSteps(task, pack, {}) || [];
+    if (midLines.length) return midLines;
+  }
+  if (isPerpKind(task.kind) && G.canonicalPerpendicularSteps) {
+    var perpLines = G.canonicalPerpendicularSteps(task, pack) || [];
+    if (perpLines.length) return perpLines;
+  }
+  if (isDistanceKind(task.kind) && task.kind === "distance" && G.canonicalDistanceSteps) {
+    var distLines = G.canonicalDistanceSteps(task, pack) || [];
+    if (distLines.length) return distLines;
+  }
+  if (isDistUnknownKind(task.kind) && G.canonicalDistUnknownSteps) {
+    var unkLines = G.canonicalDistUnknownSteps(task, pack) || [];
+    if (unkLines.length) return unkLines;
+  }
+  if (isPerimeterKind(task.kind) && G.canonicalPerimeterSteps) {
+    var periLines = G.canonicalPerimeterSteps(task, pack) || [];
+    if (periLines.length) return periLines;
+  }
+  if (isEqualLenKind(task.kind)) {
+    var segs = task.segs || [];
+    return [segs.length >= 2 ? String(segs[0]).toUpperCase() + "=" + String(segs[1]).toUpperCase() : "AB=BC"];
+  }
   if (isAreaKind(task.kind) && G.canonicalAreaSteps) {
     var areaLines = G.canonicalAreaSteps(task, pack.map) || [];
     if (areaLines.length) return areaLines;
@@ -494,6 +782,29 @@ function solutionLinesForTask(G, task, pack) {
   if (isLineMbKind(task.kind) && G.canonicalLineMbSteps) {
     var mbLines = G.canonicalLineMbSteps(task, pack) || [];
     if (mbLines.length) return mbLines;
+  }
+  if (isLineIntersectKind(task.kind) && G.canonicalLineIntersectSteps) {
+    var isectLines = G.canonicalLineIntersectSteps(task, pack) || [];
+    if (isectLines.length) return isectLines;
+  }
+  if (isLineEqKind(task.kind) && G.canonicalLineEqSteps) {
+    var eqLines = G.canonicalLineEqSteps(task) || [];
+    if (eqLines.length) return eqLines;
+  }
+  if (isSlopeKind(task.kind) && task.perpendicular && G.canonicalPerpSlopeSteps) {
+    var perpSl = G.canonicalPerpSlopeSteps(task, pack) || [];
+    if (perpSl.length) return perpSl;
+  }
+  if (isSlopeKind(task.kind) && G.canonicalSlopeSteps) {
+    var slLines = G.canonicalSlopeSteps(task, pack) || [];
+    if (slLines.length) return slLines;
+  }
+  if (isParallelKind(task.kind) && G.canonicalParallelSteps) {
+    var parLines = G.canonicalParallelSteps(task, pack) || [];
+    if (parLines.length) return parLines;
+  }
+  if (isYesNoKind(task.kind)) {
+    return [task.answer ? "כן" : "לא"];
   }
   if (isLineMatchKind(task.kind)) {
     var eqLab = task.eqNum ? "(" + task.eqNum + ") " : "";
@@ -520,12 +831,42 @@ function handleSolution(engine, pack, body) {
   (pack.parts || []).forEach(function (part) {
     if (part.label) lines.push("סעיף:" + part.label);
     else if (String(part.text || "").trim()) lines.push("שאלה:" + String(part.text).trim());
+    if (G.canonicalGivenLineRearrangeSteps) {
+      var rearrLines = G.canonicalGivenLineRearrangeSteps(pack) || [];
+      if (rearrLines.length && (part.taskIds || []).some(function (id) {
+        var tt = (pack.tasks || []).filter(function (u) { return u.id === id; })[0];
+        return tt && (tt.kind === "lineIntersect" || tt.kind === "slope" || tt.kind === "lineEq");
+      })) {
+        lines.push("משימה:סידור משוואת הישר");
+        rearrLines.forEach(function (line) {
+          if (line) lines.push(line);
+        });
+      }
+    }
     (part.taskIds || []).forEach(function (id) {
       var task = (pack.tasks || []).filter(function (t) {
         return t.id === id;
       })[0];
       if (!task) return;
       done[task.id] = true;
+      var pairSol = G.axisMidPairTasks && G.axisMidPairTasks(pack, {});
+      var pairSolL = G.lineMidPairTasks && G.lineMidPairTasks(pack, {});
+      if (pairSol && (task.id === pairSol.yEnd.id || task.id === pairSol.xEnd.id)) {
+        if (task.id === pairSol.yEnd.id && G.canonicalAxisMidPairSteps) {
+          G.canonicalAxisMidPairSteps(pack, {}).forEach(function (line) {
+            if (line) lines.push(line);
+          });
+        }
+        return;
+      }
+      if (pairSolL && (task.id === pairSolL.yEnd.id || task.id === pairSolL.xEnd.id)) {
+        if (task.id === pairSolL.yEnd.id && G.canonicalLineMidPairSteps) {
+          G.canonicalLineMidPairSteps(pack, {}).forEach(function (line) {
+            if (line) lines.push(line);
+          });
+        }
+        return;
+      }
       if (G.taskStepLabel && G.partStepByTask && G.partStepByTask(part, pack)) {
         var head = G.taskStepLabel(task);
         if (head) lines.push("משימה:" + head);
@@ -588,4 +929,29 @@ module.exports = {
   POINT_PAGE_IDS: POINT_PAGE_IDS,
   LINE_MB_PAGE_IDS: LINE_MB_PAGE_IDS,
   LINE_MATCH_PAGE_IDS: LINE_MATCH_PAGE_IDS,
+  LINE_INTERSECT_PAGE_IDS: LINE_INTERSECT_PAGE_IDS,
+  SUMMARY_PAGE_IDS: SUMMARY_PAGE_IDS,
+  LINE_EQ_PAGE_IDS: LINE_EQ_PAGE_IDS,
+  SLOPE_PAGE_IDS: SLOPE_PAGE_IDS,
+  isLineEqPage: isLineEqPage,
+  isLineEqKind: isLineEqKind,
+  isSlopePage: isSlopePage,
+  isSlopeKind: isSlopeKind,
+  isParallelPage: isParallelPage,
+  isParallelKind: isParallelKind,
+  isAxisLinesPage: isAxisLinesPage,
+  isAxisLineTask: isAxisLineTask,
+  isYesNoKind: isYesNoKind,
+  capabilityForFocus: capabilityForFocus,
+  PARALLEL_PAGE_IDS: PARALLEL_PAGE_IDS,
+  AXIS_LINES_PAGE_IDS: AXIS_LINES_PAGE_IDS,
+  MIDPOINT_PAGE_IDS: MIDPOINT_PAGE_IDS,
+  isMidpointPage: isMidpointPage,
+  isMidpointKind: isMidpointKind,
+  isPerpPage: isPerpPage,
+  isDistancePage: isDistancePage,
+  isPerpKind: isPerpKind,
+  isDistanceKind: isDistanceKind,
+  PERP_PAGE_IDS: PERP_PAGE_IDS,
+  DISTANCE_PAGE_IDS: DISTANCE_PAGE_IDS,
 };

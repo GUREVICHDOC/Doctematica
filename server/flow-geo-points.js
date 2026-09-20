@@ -147,7 +147,7 @@ function main() {
   });
   add(partA && partA.ok && partA.done.A && partA.done.B && !partA.solved ? { ok: true, id: "part-a-not-exercise" } : fail("part-a-not-exercise", JSON.stringify(partA)));
 
-  var localLevels = ["geo-line-eq-1", "geo-slope-1", "geo-parallel-1", "geo-perp-1", "geo-midpoint-1", "geo-distance-1", "geo-line-intersect-1"];
+  var localLevels = [];
   localLevels.forEach(function (levelId) {
     var level = levels.filter(function (l) {
       return l.id === levelId;

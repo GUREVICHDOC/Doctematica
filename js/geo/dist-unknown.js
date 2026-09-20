@@ -1461,9 +1461,39 @@
       return steps;
     }
 
+    function distUnknownWouldAccept(typed, pack, progress, lastNorm) {
+      var s = String(typed || "").trim();
+      if (!s) return false;
+      if (/^\s*a\s*=/i.test(s) && /b\s*=/i.test(s)) return false;
+      if (lastNorm && normEq(s) === lastNorm) return false;
+      if (/^[xy]\s*[+\-−].*=\s*0$/i.test(s.replace(/\s+/g, "")) && !/\^2|²|x\(/i.test(s)) return false;
+      var probe = {
+        done: Object.assign({}, progress.done || {}),
+        partial: Object.assign({}, progress.partial || {}),
+        lastExpr: Object.assign({}, progress.lastExpr || {}),
+        coords: JSON.parse(JSON.stringify(progress.coords || {})),
+        distUnk: JSON.parse(JSON.stringify(progress.distUnk || {})),
+        footCoords: progress.footCoords || {},
+        draw: progress.draw || null,
+      };
+      var pending = (pack.tasks || []).filter(function (t) {
+        return !(probe.done && probe.done[t.id]);
+      });
+      var hit = checkDistUnknown(s, pack, probe, pending, probe.done, probe.partial, probe.coords);
+      return !!(hit && hit.ok);
+    }
+
+    function isEarlyDistUnknownMark(s) {
+      var t = String(s || "").replace(/\s+/g, "");
+      if (/^[xy]=0$/i.test(t)) return true;
+      if (/^[A-Za-z]\([^)]*[xyt][^)]*\)$/i.test(t) && /[xyt]/i.test(t.split(";")[1] || "")) return true;
+      return false;
+    }
+
     function nextDistUnknownStep(task, pack, progress) {
       var steps = canonicalDistUnknownSteps(task, pack);
       var last = progress.lastExpr && progress.lastExpr[task.id];
+      var letter = (stOf(progress, task.id).letter || task.letter || (unknownAxisOf(task) === "y" ? "y" : task.fromExpr ? "t" : "x"));
       if (!last) return steps[0] || formulaShow(pack, task, "x");
       var nLast = normEq(last);
       var i;
@@ -1471,18 +1501,77 @@
       for (i = 0; i < steps.length; i++) {
         if (normEq(steps[i]) === nLast) idx = i;
       }
-      if (idx >= 0 && idx + 1 < steps.length) return steps[idx + 1];
       var st = stOf(progress, task.id);
-      var letter = st.letter || task.letter || (unknownAxisOf(task) === "y" ? "y" : task.fromExpr ? "t" : "x");
+      var start = idx >= 0 ? idx + 1 : 0;
+      var j;
+      if ((st.squared || (last && !hasSqrt(last) && /=/.test(String(last)))) && idx < 0) {
+        var si;
+        for (si = 0; si < steps.length; si++) {
+          if (!hasSqrt(steps[si]) && /[xy]\^2|[xy]²/i.test(String(steps[si]).replace(/²/g, "^2"))) start = si + 1;
+        }
+      }
+      for (j = start; j < steps.length; j++) {
+        if ((st.squared || (last && !hasSqrt(last))) && (hasSqrt(steps[j]) || isEarlyDistUnknownMark(steps[j]))) continue;
+        if (distUnknownWouldAccept(steps[j], pack, progress, nLast)) return steps[j];
+      }
       if (hasSqrt(last) && !st.squared) {
         return String(seedSquared(pack, task, letter)).replace(/\^2/g, "²");
       }
       var Quad = Q();
       if (Quad && Quad.nextMixedStep && last && !hasSqrt(last)) {
         var nxt = Quad.nextMixedStep(asX(last, letter), mixedPackFor(pack, task, letter));
-        if (nxt && nxt.eq) return fromX(nxt.eq, letter);
+        if (nxt && nxt.eq) {
+          var shown = fromX(nxt.eq, letter);
+          if (distUnknownWouldAccept(shown, pack, progress, nLast)) return shown;
+        }
       }
-      return steps[steps.length - 1] || formulaShow(pack, task, letter);
+      var kind = String(task.resultKind || "point");
+      var keeps = keepList(task);
+      var found = (st.found || []).slice();
+      var remaining = keeps.filter(function (r) {
+        return !found.some(function (f) {
+          return nearNum(f, r);
+        });
+      });
+      function notLast(s) {
+        return s && normEq(s) !== nLast;
+      }
+      if (keeps.length) {
+        var rootLine = keeps
+          .map(function (r) {
+            return letter + " = " + fmtRoot(r);
+          })
+          .join(", ");
+        if (notLast(rootLine) && distUnknownWouldAccept(rootLine, pack, progress, nLast)) return rootLine;
+        var restLine = remaining
+          .map(function (r) {
+            return letter + " = " + fmtRoot(r);
+          })
+          .join(", ");
+        if (restLine && notLast(restLine) && distUnknownWouldAccept(restLine, pack, progress, nLast)) return restLine;
+        if (remaining.length && notLast(letter + " = " + fmtRoot(remaining[0])) && distUnknownWouldAccept(letter + " = " + fmtRoot(remaining[0]), pack, progress, nLast)) {
+          return letter + " = " + fmtRoot(remaining[0]);
+        }
+      }
+      var ans = (task.answers || [])[0];
+      if (ans && kind !== "param" && kind !== "coord") {
+        var pt = String(task.unknownPoint || task.label || "P") + formatPointPair(ans.x, ans.y);
+        if (notLast(pt) && distUnknownWouldAccept(pt, pack, progress, nLast)) return pt;
+        var pts = (task.answers || [])
+          .map(function (a) {
+            return String(task.unknownPoint || task.label || "P") + formatPointPair(a.x, a.y);
+          })
+          .join(", ");
+        if (notLast(pts) && distUnknownWouldAccept(pts, pack, progress, nLast)) return pts;
+      }
+      if (remaining.length && notLast(letter + " = " + fmtRoot(remaining[0]))) {
+        return letter + " = " + fmtRoot(remaining[0]);
+      }
+      if (ans && notLast(String(task.unknownPoint || task.label || "P") + formatPointPair(ans.x, ans.y))) {
+        return String(task.unknownPoint || task.label || "P") + formatPointPair(ans.x, ans.y);
+      }
+      if (notLast(formulaShow(pack, task, letter))) return formulaShow(pack, task, letter);
+      return remaining.length ? letter + " = " + fmtRoot(remaining[0]) : null;
     }
 
     function distUnknownHintMessage(task, pack, progress) {

@@ -185,11 +185,11 @@ function main() {
   var gateArea = handler.handle({ topic: "analytic", capability: "points", intent: "one-step", levelId: "geo-triangle-area-1", n: 5, history: [], geo: {} });
   add(gateArea && gateArea.local && gateArea.task && gateArea.task.kind === "point" ? { ok: true, id: "gate-area-point-stays-local" } : fail("gate-area-point-stays-local", JSON.stringify(gateArea)));
 
-  var gateMbFuture = handler.handle({ topic: "analytic", capability: "points", intent: "one-step", levelId: "geo-parallel-1", n: 12, history: [], geo: {} });
-  add(gateMbFuture && gateMbFuture.local ? { ok: true, id: "gate-line-mb-future-local" } : fail("gate-line-mb-future-local", JSON.stringify(gateMbFuture)));
+  var gateMbFuture = handler.handle({ topic: "analytic", capability: "points", intent: "one-step", levelId: "geo-perp-1", n: 1, history: [], geo: {} });
+  add(gateMbFuture && gateMbFuture.ok && !gateMbFuture.local ? { ok: true, id: "gate-perp-points-server" } : fail("gate-perp-points-server", JSON.stringify(gateMbFuture)));
 
-  var gateMid = handler.handle({ topic: "analytic", capability: "points", intent: "one-step", levelId: "geo-midpoint-1", n: 1, history: [], geo: {} });
-  add(gateMid && gateMid.local ? { ok: true, id: "gate-midpoint-local" } : fail("gate-midpoint-local", JSON.stringify(gateMid)));
+  var gateMid = handler.handle({ topic: "analytic", capability: "points", intent: "one-step", levelId: "geo-distance-1", n: 1, history: [], geo: {} });
+  add(gateMid && gateMid.ok && !gateMid.local ? { ok: true, id: "gate-distance-points-server" } : fail("gate-distance-points-server", JSON.stringify(gateMid)));
 
   var recon = reconstruct(engine, ptsPack, ["A(2;4)"], { done: {}, coords: {} });
   add(recon.done && recon.done.A && recon.coords.A && recon.coords.A.x && recon.coords.A.y ? { ok: true, id: "reconstruct-direct-point" } : fail("reconstruct-direct-point", JSON.stringify(recon)));

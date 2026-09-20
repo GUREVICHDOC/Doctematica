@@ -149,13 +149,57 @@
     return String((task && (task.point || task.label || "M")) || "M").toUpperCase();
   }
 
+  function taskForPointLabel(pack, label) {
+    var lab = String(label || "").toUpperCase();
+    if (!lab) return null;
+    var list = (pack && pack.tasks) || [];
+    var i;
+    for (i = 0; i < list.length; i++) {
+      var t = list[i];
+      if (!t) continue;
+      if (
+        String(t.point || t.label || "").toUpperCase() === lab &&
+        (t.kind === "midpoint" || t.kind === "point" || t.kind === "lineIntersect")
+      ) {
+        return t;
+      }
+    }
+    return null;
+  }
+
+  function verifiedMapPoint(pack, progress, label) {
+    var lab = String(label || "").toUpperCase();
+    if (!lab) return null;
+    var given = getPoint(pack && pack.map, lab);
+    var task = taskForPointLabel(pack, label);
+    if (!task) return given;
+    if (task.kind === "point" && task.intercept && given) return given;
+    if (progress && progress.done && progress.done[task.id]) {
+      if (task.answerX == null || task.answerY == null) return given;
+      return { x: task.answerX, y: task.answerY, label: lab };
+    }
+    var x = null;
+    var y = null;
+    if (midpointCoordFlag(progress, task, "x") && task.answerX != null) x = task.answerX;
+    else if (given && !given.hideX && given.x != null) x = given.x;
+    if (midpointCoordFlag(progress, task, "y") && task.answerY != null) y = task.answerY;
+    else if (given && !given.hideY && given.y != null) y = given.y;
+    var vx = midpointLineVertical(task);
+    if (vx != null && x == null) x = vx;
+    var hy = midpointLineHorizontal(task);
+    if (hy != null && y == null) y = hy;
+    if (x == null && y == null) return null;
+    return { x: x, y: y, label: lab };
+  }
+
   function midpointEnds(pack, progress, task) {
-    if (task && task._fromPt && task._toPt) return { a: task._fromPt, b: task._toPt };
-    var part = currentPartText(pack, progress);
-    var local =
-      part && part.points && part.points.length ? pointMap(part.points) : (pack && pack.map) || {};
-    var a = getPoint(local, task && task.from) || getPoint(pack && pack.map, task && task.from);
-    var b = getPoint(local, task && task.to) || getPoint(pack && pack.map, task && task.to);
+    var a = verifiedMapPoint(pack, progress, task && task.from);
+    var b = verifiedMapPoint(pack, progress, task && task.to);
+    if ((!a || a.x == null || a.y == null || !b || b.x == null || b.y == null) && task && task._fromPt && task._toPt) {
+      var fromTask = taskForPointLabel(pack, task.from);
+      var toTask = taskForPointLabel(pack, task.to);
+      if (!fromTask && !toTask) return { a: task._fromPt, b: task._toPt };
+    }
     return { a: a, b: b };
   }
 
@@ -229,6 +273,10 @@
     if (got.axis === "x" && vx != null && nearNum(got.value, vx)) return "x";
     if (got.axis === "x" && midpointOnAxis(task) === "y" && nearNum(got.value, 0)) return "x";
     if (got.axis === "y" && midpointOnAxis(task) === "x" && nearNum(got.value, 0)) return "y";
+    var compact = String(expr || "").replace(/\s+/g, "");
+    if (!/^[xy]=-?\d+(?:\.\d+)?$/i.test(compact)) return "";
+    if (got.axis === "x" && task.answerX != null && nearNum(got.value, task.answerX)) return "x";
+    if (got.axis === "y" && task.answerY != null && nearNum(got.value, task.answerY)) return "y";
     return "";
   }
 
@@ -251,21 +299,34 @@
     });
   }
 
-  function lineMidPairTasks(pack, progress) {
-    var part = currentPartText(pack, progress);
-    var ids = (part && part.taskIds) || [];
-    var map = taskByIdMap(pack);
+  function axisMidPairFromPack(pack) {
+    var yEnd = null;
+    var xEnd = null;
+    ((pack && pack.tasks) || []).forEach(function (t) {
+      if (!t || t.kind !== "midpoint" || !t.mid) return;
+      if (midpointOnAxis(t) === "y") yEnd = t;
+      if (midpointOnAxis(t) === "x") xEnd = t;
+    });
+    if (
+      yEnd &&
+      xEnd &&
+      String(yEnd.mid || "").toUpperCase() === String(xEnd.mid || "").toUpperCase()
+    ) {
+      return { yEnd: yEnd, xEnd: xEnd };
+    }
+    return null;
+  }
+
+  function lineMidPairFromPack(pack) {
     var ident = null;
     var horiz = null;
     var vert = null;
-    var i;
-    for (i = 0; i < ids.length; i++) {
-      var t = map[ids[i]];
-      if (!t || t.kind !== "midpoint" || !t.mid) continue;
+    ((pack && pack.tasks) || []).forEach(function (t) {
+      if (!t || t.kind !== "midpoint" || !t.mid) return;
       if (midpointLineIdentity(t)) ident = t;
       if (midpointLineHorizontal(t) != null) horiz = t;
       if (midpointLineVertical(t) != null) vert = t;
-    }
+    });
     var yEnd = ident || horiz;
     if (
       yEnd &&
@@ -275,6 +336,10 @@
       return { yEnd: yEnd, xEnd: vert };
     }
     return null;
+  }
+
+  function lineMidPairTasks(pack, progress) {
+    return lineMidPairFromPack(pack);
   }
 
   function lineMidPairBlockedByPrior(pack, progress, pair) {
@@ -359,26 +424,21 @@
   }
 
   function axisMidPairTasks(pack, progress) {
-    var part = currentPartText(pack, progress);
-    var ids = (part && part.taskIds) || [];
-    var map = taskByIdMap(pack);
-    var yEnd = null;
-    var xEnd = null;
-    var i;
-    for (i = 0; i < ids.length; i++) {
-      var t = map[ids[i]];
-      if (!t || t.kind !== "midpoint" || !t.mid) continue;
-      if (midpointOnAxis(t) === "y") yEnd = t;
-      if (midpointOnAxis(t) === "x") xEnd = t;
+    return axisMidPairFromPack(pack);
+  }
+
+  function midUnfinishedAxis(expr, cf) {
+    if (!expr) return "";
+    if (!(midLastIsPlug(expr) || (/\+/.test(expr) && !/[\/÷]/.test(expr)))) return "";
+    var ax = midLastAxis(expr);
+    if (!ax) {
+      var hasX = /(^|[^A-Za-z])x([^A-Za-z]|$)/i.test(expr);
+      var hasY = /(^|[^A-Za-z])y([^A-Za-z]|$)/i.test(expr);
+      if (hasX && !hasY) ax = "x";
+      else if (hasY && !hasX) ax = "y";
     }
-    if (
-      yEnd &&
-      xEnd &&
-      String(yEnd.mid || "").toUpperCase() === String(xEnd.mid || "").toUpperCase()
-    ) {
-      return { yEnd: yEnd, xEnd: xEnd };
-    }
-    return null;
+    if (ax && cf && cf[ax]) return "";
+    return ax || "x";
   }
 
   function axisMidPairFocus(pack, progress, pair) {
@@ -387,15 +447,20 @@
     var b = pair.xEnd;
     var done = (progress && progress.done) || {};
     if (done[a.id] && done[b.id]) return null;
-    var ac = (progress.coords && progress.coords[a.id]) || {};
-    var bc = (progress.coords && progress.coords[b.id]) || {};
+    var ac = {
+      x: midpointCoordFlag(progress, a, "x"),
+      y: midpointCoordFlag(progress, a, "y"),
+    };
+    var bc = {
+      x: midpointCoordFlag(progress, b, "x"),
+      y: midpointCoordFlag(progress, b, "y"),
+    };
     var aExpr = (progress.lastExpr && progress.lastExpr[a.id]) || "";
     var bExpr = (progress.lastExpr && progress.lastExpr[b.id]) || "";
-    if (bExpr && !done[b.id] && (midLastIsPlug(bExpr) || /[+]/.test(bExpr))) return b;
-    if (aExpr && !done[a.id] && (midLastIsPlug(aExpr) || /[+]/.test(aExpr))) return a;
+    if (!done[b.id] && midUnfinishedAxis(bExpr, bc)) return b;
+    if (!done[a.id] && midUnfinishedAxis(aExpr, ac)) return a;
     if (midpointAwaitingPair(a, pack, progress)) return a;
     if (midpointAwaitingPair(b, pack, progress)) return b;
-    if (taskWorkStarted(progress, b) && !bc.y && !bc.x && !ac.x) return b;
     if (bc.y && !ac.y) return a;
     if (!ac.x) return a;
     if (!bc.x) return b;
@@ -438,12 +503,24 @@
     return null;
   }
 
+  function axisPairPartnerKnown(pack, progress, task) {
+    var pair = axisMidPairFromPack(pack);
+    if (!pair || !task) return null;
+    var partner = task.id === pair.yEnd.id ? pair.xEnd : pair.yEnd;
+    if (!partner) return null;
+    var pt = { x: null, y: null };
+    if (midpointOnAxis(partner) === "y") pt.x = 0;
+    if (midpointOnAxis(partner) === "x") pt.y = 0;
+    if (midpointCoordFlag(progress, partner, "x") && partner.answerX != null) pt.x = partner.answerX;
+    if (midpointCoordFlag(progress, partner, "y") && partner.answerY != null) pt.y = partner.answerY;
+    if (pt.x == null && pt.y == null) return null;
+    return pt;
+  }
+
   function midpointTrio(pack, progress, task) {
-    var part = currentPartText(pack, progress);
-    var local =
-      part && part.points && part.points.length ? pointMap(part.points) : (pack && pack.map) || {};
-    var known = getPoint(local, task && task.from) || getPoint(pack && pack.map, task && task.from);
-    var mid = getPoint(local, task && task.mid) || getPoint(pack && pack.map, task && task.mid);
+    var known = verifiedMapPoint(pack, progress, task && task.from);
+    var mid = verifiedMapPoint(pack, progress, task && task.mid) || getPoint(pack && pack.map, task && task.mid);
+    if (!known) known = axisPairPartnerKnown(pack, progress, task);
     if (!known) known = midpointAxisKnown(task);
     return { known: known, mid: mid };
   }
@@ -602,6 +679,12 @@
     if (!t) return null;
     var atomic = parseParenNumber(t);
     if (atomic != null) return { a: atomic, b: 0, sum: atomic, atomic: true };
+    var parenAdd = t.match(/^([+-]?\d+(?:\.\d+)?)\+\(([+-]?\d+(?:\.\d+)?)\)$/);
+    if (parenAdd) {
+      var pa = parseFloat(parenAdd[1], 10);
+      var pb = parseFloat(parenAdd[2], 10);
+      if (isFinite(pa) && isFinite(pb)) return { a: pa, b: pb, sum: pa + pb };
+    }
     var plus = splitAtDepthZero(t, "+");
     if (plus) {
       var a = parseParenNumber(plus.left);
@@ -610,9 +693,27 @@
     }
     var diff = parseSlopeDiffExpr(t);
     if (diff && !diff.atomic) {
+      if (plus) return { a: diff.a, b: diff.b, sum: diff.value };
       return { a: diff.a, b: -diff.b, sum: diff.value };
     }
     return null;
+  }
+
+  function midFracLowestTerms(num, den) {
+    var n = Math.round(Math.abs(Number(num)));
+    var d = Math.round(Math.abs(Number(den)));
+    if (!d || !isFinite(n) || !isFinite(d)) return false;
+    function gcd(a, b) {
+      a = Math.abs(a);
+      b = Math.abs(b);
+      while (b) {
+        var r = a % b;
+        a = b;
+        b = r;
+      }
+      return a || 1;
+    }
+    return gcd(n, d) === 1;
   }
 
   function parseMidpointFrac(typed) {
@@ -702,7 +803,7 @@
     if (!task || !cf) return false;
     if (cf.x && cf.y) return true;
     if (midpointOnAxis(task) === "x" && cf.x) {
-      var pairAx = pack ? axisMidPairTasks(pack, progress) : null;
+      var pairAx = pack ? axisMidPairFromPack(pack) : null;
       if (!pairAx || task.id !== pairAx.xEnd.id) return true;
       return !!(progress.done && progress.done[pairAx.yEnd.id]);
     }
@@ -783,9 +884,6 @@
     var prev = (progress.lastExpr && progress.lastExpr[t.id]) || "";
     if (t.mid) {
       var trio = midpointTrio(pack, progress, t);
-      if (!trio.known || !trio.mid) {
-        return { task: t, message: "רשמו את הקצה החסר.", step: pair, answer: pair, rawStep: true };
-      }
       if (midpointReadyForPair(t, cf, pack, progress)) return midpointWritePairHint(t);
       var onAxH = midpointOnAxis(t);
       var midNm = String(t.mid || "C").toUpperCase();
@@ -859,6 +957,9 @@
           answer: pair,
           rawStep: true,
         };
+      }
+      if (!trio.known || !trio.mid) {
+        return { task: t, message: "רשמו את הקצה החסר.", step: pair, answer: pair, rawStep: true };
       }
       if (onAxH === "y" && cf.x && !cf.y && pairH && partner && !(pcf.x || pcf.y)) {
         var plugBx = midpointEndPlugText("x", midpointTrio(pack, progress, partner).known || trio.known, trio.mid);
@@ -1058,6 +1159,26 @@
     if (!allMids || !allMids.length) return null;
     var tag = parsed && parsed.tag ? normGeoTag(parsed.tag) : "";
     var i;
+    var typedNormPick = normalizeMidEndTyped(typed);
+    if (/^y=0$/i.test(typedNormPick)) {
+      for (i = 0; i < allMids.length; i++) {
+        if (midpointOnAxis(allMids[i]) === "x") return allMids[i];
+      }
+    }
+    if (/^x=0$/i.test(typedNormPick)) {
+      for (i = 0; i < allMids.length; i++) {
+        if (midpointOnAxis(allMids[i]) === "y") return allMids[i];
+      }
+    }
+    var formulaPick = parseMidpointFrac(typed);
+    if (formulaPick && !formulaPick.atomic) {
+      for (i = 0; i < allMids.length; i++) {
+        if (allMids[i].mid) continue;
+        var endsPick0 = midpointEnds(pack, progress, allMids[i]);
+        if (!endsPick0.a || !endsPick0.b) continue;
+        if (midAxisFromFormula(formulaPick, endsPick0.a, endsPick0.b)) return allMids[i];
+      }
+    }
     if (tag) {
       var named = [];
       for (i = 0; i < allMids.length; i++) {
@@ -1086,7 +1207,6 @@
         }
       }
     }
-    var typedNormPick = normalizeMidEndTyped(typed);
     for (i = 0; i < allMids.length; i++) {
       var vxPick = midpointLineVertical(allMids[i]);
       if (vxPick == null) continue;
@@ -1176,7 +1296,7 @@
       var tagU0 = normGeoTag(parsed.tag);
       var pN0 = midpointPointName(task);
       if (pN0 && tagU0 && tagU0 !== "X" && tagU0 !== "Y" && tagU0.indexOf(pN0) < 0) {
-        return false;
+        if (!(task && task.mid && parsed.kind === "point")) return false;
       }
     }
     if (parsed && parsed.kind === "point" && parsed.point) {
@@ -1187,8 +1307,12 @@
       ) {
         return true;
       }
-      var tagP = parsed.tag ? midpointTagAxis(parsed.tag, task) : "";
-      return tagP === "point";
+      if (task && task.mid) {
+        var tagP = parsed.tag ? midpointTagAxis(parsed.tag, task) : "";
+        return tagP === "point";
+      }
+      var tagP2 = parsed.tag ? midpointTagAxis(parsed.tag, task) : "";
+      return tagP2 === "point";
     }
     var frac = parseMidpointFrac(typed);
     if (frac && frac.value != null && nearNum(frac.den, 2)) {
@@ -1199,7 +1323,14 @@
       if (task && !task.mid) {
         var endsL = midpointEnds(pack, progress, task);
         if (endsL.a && endsL.b && midAxisFromFormula(frac, endsL.a, endsL.b)) return true;
-        if (frac.atomic && (nearNum(frac.value, task.answerX) || nearNum(frac.value, task.answerY))) {
+        if (
+          frac.atomic &&
+          endsL.a &&
+          endsL.b &&
+          endsL.a.x != null &&
+          endsL.b.x != null &&
+          (nearNum(frac.value, task.answerX) || nearNum(frac.value, task.answerY))
+        ) {
           return true;
         }
       }
@@ -1219,6 +1350,7 @@
       var hyLike = midpointLineHorizontal(task);
       if (hyLike != null && /^y=/i.test(normalizeMidEndTyped(typed))) return true;
       if (midpointLineIdentity(task) && /^(y=x|x=y)$/i.test(normalizeMidEndTyped(typed))) return true;
+      if (parsed && parsed.value != null && isFinite(parsed.value)) return true;
     }
     if (task && !task.mid) {
       var endsAb = midpointEnds(pack, progress, task);
@@ -1242,13 +1374,52 @@
     if (focusNow && focusNow.kind !== "midpoint") return false;
     var got =
       parsed && parsed.value != null && isFinite(parsed.value) ? parsed.value : null;
-    if (got != null && task && (nearNum(got, task.answerX) || nearNum(got, task.answerY))) return true;
+    if (got != null && task && (nearNum(got, task.answerX) || nearNum(got, task.answerY))) {
+      if (task.mid) return true;
+      var endsGot = midpointEnds(pack, progress, task);
+      if (endsGot.a && endsGot.b && endsGot.a.x != null && endsGot.b.x != null) return true;
+      return false;
+    }
     return false;
   }
 
   function checkMidpointEnd(typed, parsed, pack, progress, task, doneMap, partialMap, coordsMap) {
     var trio = midpointTrio(pack, progress, task);
-    if (!trio.known || !trio.mid || task.answerX == null || task.answerY == null) return null;
+    if (task.answerX == null || task.answerY == null) return null;
+    if (!trio.mid) {
+      trio.mid = getPoint(pack && pack.map, task && task.mid);
+    }
+    if (!trio.known || !trio.mid) {
+      if (parsed && parsed.kind === "point" && parsed.point &&
+          nearNum(parsed.point.x, task.answerX) && nearNum(parsed.point.y, task.answerY)) {
+        var maps0 = cloneMaps(doneMap, partialMap, coordsMap, progress);
+        maps0.done[task.id] = true;
+        delete maps0.partial[task.id];
+        maps0.coords[task.id] = { x: true, y: true };
+        delete maps0.lastExpr[task.id];
+        var left0 = remainingRequired(pack, maps0.done);
+        return {
+          ok: true,
+          solved: left0.length === 0,
+          done: maps0.done,
+          partial: maps0.partial,
+          coords: maps0.coords,
+          lastExpr: maps0.lastExpr,
+          task: task,
+          show: midpointPairText(task),
+          rawStep: true,
+          message: left0.length ? "נכון. המשיכו לתרגיל הבא." : "כל החלקים נפתרו.",
+        };
+      }
+      if (
+        !midpointLineVertical(task) &&
+        !midpointLineHorizontal(task) &&
+        !midpointOnAxis(task) &&
+        !midpointLineIdentity(task)
+      ) {
+        return null;
+      }
+    }
     var maps = cloneMaps(doneMap, partialMap, coordsMap, progress);
     if (!maps.coords[task.id]) maps.coords[task.id] = { x: false, y: false };
     var cf = maps.coords[task.id];
@@ -1449,18 +1620,28 @@
           ? pairNow.xEnd
           : pairNow.yEnd
         : null;
+      var pairProgress = {
+        done: maps.done,
+        partial: maps.partial,
+        coords: maps.coords,
+        lastExpr: maps.lastExpr,
+      };
+      var nextTrio =
+        pairNow && pairOther ? midpointTrio(pack, pairProgress, pairOther) : { known: known, mid: mid };
+      var nextKnown = (nextTrio && nextTrio.known) || known;
+      var nextMid = (nextTrio && nextTrio.mid) || mid;
       var nextMsg =
         pairNow && onAx === "y" && axis === "x"
             ? "נכון. עכשיו x של " +
               midpointPointName(pairOther) +
               " מאמצע: " +
-              midpointEndPlugText("x", known, mid) +
+              midpointEndPlugText("x", nextKnown, nextMid) +
               "."
             : pairNow && onAx === "x" && axis === "x"
               ? "נכון. עכשיו y של " +
                 midpointPointName(pairNow.yEnd) +
                 " מאמצע: " +
-                midpointEndPlugText("y", known, mid) +
+                midpointEndPlugText("y", nextKnown, nextMid) +
                 "."
               : onAx === "y" && axis === "x"
                 ? "נכון. עכשיו הציבו את האמצע בנוסחה: " + midpointEndPlugText("y", known, mid) + "."
@@ -1653,8 +1834,17 @@
   function checkMidpoint(typed, parsed, pack, progress, pending, doneMap, partialMap, coordsMap) {
     var allMids = partPendingMidpoints(pending, pack, progress);
     if (!allMids.length) return null;
-    var typedN0 = normalizeMidEndTyped(typed);
     var pairHold = lineMidPairTasks(pack, progress);
+    var typedN0 = normalizeMidEndTyped(typed);
+    var focHold = currentFocusTask(pack, progress);
+    if (
+      focHold &&
+      focHold.kind !== "midpoint" &&
+      /^[xy]=/i.test(typedN0) &&
+      !parseMidpointFrac(typed)
+    ) {
+      return null;
+    }
     if (
       pairHold &&
       lineMidPairBlockedByPrior(pack, progress, pairHold) &&
@@ -1728,7 +1918,29 @@
       return checkMidpointEnd(typed, parsed, pack, progress, task, doneMap, partialMap, coordsMap);
     }
     var ends = midpointEnds(pack, progress, task);
-    if (!ends.a || !ends.b || task.answerX == null || task.answerY == null) return null;
+    function endReady(pt, axis) {
+      if (!pt) return false;
+      var v = String(axis) === "y" ? pt.y : pt.x;
+      return v != null && isFinite(v);
+    }
+    function missingEndLabel() {
+      var ft = taskForPointLabel(pack, task.from);
+      var tt = taskForPointLabel(pack, task.to);
+      if (ft && !(progress.done && progress.done[ft.id]) && !(endReady(ends.a, "x") && endReady(ends.a, "y"))) {
+        return midpointPointName(ft);
+      }
+      if (tt && !(progress.done && progress.done[tt.id]) && !(endReady(ends.b, "x") && endReady(ends.b, "y"))) {
+        return midpointPointName(tt);
+      }
+      return "";
+    }
+    if (!ends.a || !ends.b || task.answerX == null || task.answerY == null) {
+      var miss0 = missingEndLabel();
+      if (miss0 && parsed && parsed.kind === "point" && parsed.point) {
+        return { ok: false, message: "מצאו קודם את הנקודה " + miss0 + ", ואז את האמצע." };
+      }
+      return null;
+    }
     var maps = cloneMaps(doneMap, partialMap, coordsMap, progress);
     if (!maps.coords[task.id]) maps.coords[task.id] = { x: false, y: false };
     var cf = maps.coords[task.id];
@@ -1807,6 +2019,15 @@
 
     var tagAx = parsed && parsed.tag ? midpointTagAxis(parsed.tag, task) : "";
     if (parsed && parsed.kind === "point" && parsed.point) {
+      if (!endReady(ends.a, "x") || !endReady(ends.a, "y") || !endReady(ends.b, "x") || !endReady(ends.b, "y")) {
+        var missP = missingEndLabel();
+        return {
+          ok: false,
+          message: missP
+            ? "מצאו קודם את הנקודה " + missP + ", ואז את האמצע."
+            : "חסר קצה של הקטע. מצאו אותו לפני נקודת האמצע.",
+        };
+      }
       if (nearNum(parsed.point.x, task.answerX) && nearNum(parsed.point.y, task.answerY)) {
         return finish(midpointPairText(task));
       }
@@ -1873,7 +2094,9 @@
       }
       if (prettySum === prettyFin || nearNum(formula.value, midpointWant(axF, task))) {
         if (nearNum(formula.num.sum, midpointWant(axF, task) * 2) && prettySum !== prettyFin) {
-          return partial(prettySum, "נכון. עכשיו חלקו מונה במכנה.");
+          if (!midFracLowestTerms(formula.num.sum, formula.den)) {
+            return partial(prettySum, "נכון. עכשיו חלקו מונה במכנה.");
+          }
         }
         return afterCoord(axF, prettyFin);
       }

@@ -95,8 +95,8 @@
     var start = p;
     if (s.charAt(p) === "+" || s.charAt(p) === "-" || s.charAt(p) === "−") p += 1;
     while (p < s.length && isNumChar(s.charAt(p))) p += 1;
-    // 8/3x is (8/3)·x — the variable is not part of the denominator.
-    if (p > start && /^[xy]/i.test(s.charAt(p))) {
+    // 8/3x and 2/3(x+6) are (8/3)·x and (2/3)(x+6) — not a longer denominator.
+    if (p > start && (/^[xy]/i.test(s.charAt(p)) || s.charAt(p) === "(")) {
       var numDen = s.slice(start, p);
       if (numDen && /^[+\-−]?\d+(?:\.\d+)?$/.test(numDen.replace(/−/g, "-"))) {
         return { consumed: p - from, den: numDen };

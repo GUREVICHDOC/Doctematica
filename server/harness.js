@@ -65,6 +65,20 @@ function testLinearMulti(engine) {
   assert(mid && mid.ok, "one-step result should be a valid step: " + act.eq + " / " + (mid && mid.message));
 }
 
+function testFracJuxtapose(engine) {
+  var MathR = engine.DoctematicaMath;
+  assert(MathR && MathR.toHTML, "math-render loaded");
+  var user = MathR.toHTML("y--19=-2/3(x+6)");
+  assert(user.indexOf("m-frac") >= 0, "user slope frac should stack");
+  assert(user.indexOf("3(x+6)") < 0, "parens after 2/3 are a factor, not the denominator: " + user);
+  assert(/m-den[^>]*>3</.test(user) || user.indexOf(">3</span>") >= 0, "denominator should be 3: " + user);
+  var site = MathR.toHTML("y + 19 = −(2/3)(x + 6)");
+  assert(site.indexOf("m-frac") >= 0, "site slope frac should stack");
+  assert(site.indexOf("3(x+6)") < 0 && site.indexOf("3(x + 6)") < 0, "site parens stay a factor: " + site);
+  var keepDen = MathR.toHTML("2/(3(x+6))");
+  assert(keepDen.indexOf("3(x+6)") >= 0 || keepDen.indexOf("m-den") >= 0, "explicit 2/(3(x+6)) keeps grouped den");
+}
+
 function testGeoDistance(engine) {
   var Geo = engine.DoctematicaGeometry;
   var sheet = sheetById(engine, "geo-distance-1");
@@ -89,6 +103,7 @@ function main() {
   assert(engine.DoctematicaCurriculum, "Curriculum loaded");
   testLinearShort(engine);
   testLinearMulti(engine);
+  testFracJuxtapose(engine);
   testGeoDistance(engine);
   console.log("harness ok: Node engine loaded; linear + geo checks passed");
 }

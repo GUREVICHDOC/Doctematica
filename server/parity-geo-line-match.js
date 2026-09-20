@@ -245,15 +245,15 @@ function main() {
     topic: "analytic",
     capability: "line-match",
     intent: "one-step",
-    levelId: "geo-line-eq-1",
+    levelId: "geo-perp-1",
     n: 1,
     history: [],
     geo: {},
   });
   add(
-    laterMatch && laterMatch.local
-      ? { ok: true, id: "gate-future-match-local" }
-      : fail("gate-future-match-local", JSON.stringify(laterMatch))
+    laterMatch && laterMatch.ok && !laterMatch.local
+      ? { ok: true, id: "gate-perp-now-server" }
+      : fail("gate-perp-now-server", JSON.stringify(laterMatch))
   );
 
   var src = fs.readFileSync(path.join(__dirname, "../js/app.js"), "utf8");

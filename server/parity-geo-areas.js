@@ -266,7 +266,7 @@ function main() {
   add(/\/api\/geometry/.test(api) && !/\/api\/geometry\/areas/.test(api) ? { ok: true, id: "single-endpoint" } : fail("single-endpoint", "split endpoint"));
 
   var geoApi = fs.readFileSync(path.join(__dirname, "geometry.js"), "utf8");
-  add(/capability === "lengths" \|\| capability === "areas" \|\| capability === "points"/.test(geoApi) ? { ok: true, id: "areas-capability-wired" } : fail("areas-capability-wired", geoApi));
+  add(/capability === "areas"/.test(geoApi) && /capability === "line-intersect"/.test(geoApi) ? { ok: true, id: "areas-capability-wired" } : fail("areas-capability-wired", geoApi));
 
   console.log("parity-geo-areas: passed " + passed + ", failed " + failed.length);
   failed.slice(0, 30).forEach(function (f) {

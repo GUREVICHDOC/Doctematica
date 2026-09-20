@@ -284,6 +284,13 @@
     );
   }
 
+  function showGeometryProcessingError() {
+    showFeedback(
+      false,
+      "<strong>הבדיקה נכשלה.</strong> שגיאה בעיבוד בשרת. זה לא אומר שהשרת כבוי — נסו שוב."
+    );
+  }
+
   function requestBasicEqAction(payload, onResult) {
     var intent = String((payload && payload.intent) || "");
     if (isBasicEqServerMode()) {
@@ -405,29 +412,221 @@
     return id === "geo-line-match-1";
   }
 
+  function isGeoLineIntersectPage() {
+    var id = (state.problem && state.problem.levelId) || state.levelId;
+    return id === "geo-line-intersect-1";
+  }
+
+  function isGeoSummaryPage() {
+    var id = (state.problem && state.problem.levelId) || state.levelId;
+    return id === "geo-line-summary-1";
+  }
+
+  function isGeoLineEqPage() {
+    var id = (state.problem && state.problem.levelId) || state.levelId;
+    return id === "geo-line-eq-1";
+  }
+
+  function isGeoSlopePage() {
+    var id = (state.problem && state.problem.levelId) || state.levelId;
+    return id === "geo-slope-1";
+  }
+
+  function isGeoParallelPage() {
+    var id = (state.problem && state.problem.levelId) || state.levelId;
+    return id === "geo-parallel-1";
+  }
+
+  function isGeoAxisLinesPage() {
+    var id = (state.problem && state.problem.levelId) || state.levelId;
+    return id === "geo-axis-lines-1";
+  }
+
+  function isGeoMidpointPage() {
+    var id = (state.problem && state.problem.levelId) || state.levelId;
+    return id === "geo-midpoint-1";
+  }
+
+  function isGeoPerpPage() {
+    var id = (state.problem && state.problem.levelId) || state.levelId;
+    return id === "geo-perp-1";
+  }
+
+  function isGeoDistancePage() {
+    var id = (state.problem && state.problem.levelId) || state.levelId;
+    return id === "geo-distance-1";
+  }
+
+  function isGeoPracticeServerPage() {
+    return (
+      isGeoPointPage() ||
+      isGeoSummaryPage() ||
+      isGeoParallelPage() ||
+      isGeoAxisLinesPage() ||
+      isGeoMidpointPage() ||
+      isGeoPerpPage() ||
+      isGeoDistancePage()
+    );
+  }
+
+  function isAxisParallelTask(task) {
+    var a = String((task && task.axisParallel) || "").toLowerCase();
+    return a === "x" || a === "h" || a === "y" || a === "v";
+  }
+
   function isGeoServerKind(kind) {
     if (isGeoLengthKind(kind) || isGeoAreaKind(kind)) return true;
-    if (isGeoPointPage() && isGeoPointKind(kind)) return true;
-    if (isGeoLineMbPage() && kind === "lineMb") return true;
-    if (isGeoLineMatchPage() && kind === "lineMatch") return true;
+    if (isGeoPracticeServerPage() && isGeoPointKind(kind)) return true;
+    if ((isGeoLineMbPage() || isGeoParallelPage()) && kind === "lineMb") return true;
+    if ((isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage()) && kind === "lineMatch") return true;
+    if (
+      (isGeoLineIntersectPage() || isGeoSummaryPage() || isGeoParallelPage() || isGeoAxisLinesPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage()) &&
+      (kind === "lineIntersect" || kind === "rearrange")
+    ) {
+      return true;
+    }
+    if ((isGeoLineEqPage() || isGeoParallelPage() || isGeoAxisLinesPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage()) && kind === "lineEq") return true;
+    if ((isGeoSlopePage() || isGeoParallelPage() || isGeoAxisLinesPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage()) && kind === "slope") return true;
+    if (isGeoParallelPage() && kind === "parallel") return true;
+    if (isGeoAxisLinesPage() && kind === "yesNo") return true;
+    if (isGeoMidpointPage() && (kind === "midpoint" || kind === "yesNo")) return true;
+    if ((isGeoPerpPage() || isGeoDistancePage()) && kind === "midpoint") return true;
+    if (isGeoPerpPage() && (kind === "perpendicular" || kind === "yesNo")) return true;
+    if (isGeoDistancePage() && (kind === "distance" || kind === "equalLen" || kind === "distUnknown" || kind === "perimeter")) return true;
+    if (isGeoDistancePage() && kind === "perpendicular") return true;
     return false;
   }
 
   function geoServerCapability(kind) {
     if (isGeoAreaKind(kind)) return "areas";
-    if (isGeoPointKind(kind) && isGeoPointPage()) return "points";
-    if (kind === "lineMb" && isGeoLineMbPage()) return "line-mb";
-    if (kind === "lineMatch" && isGeoLineMatchPage()) return "line-match";
+    if (isGeoPointKind(kind) && isGeoPracticeServerPage()) return "points";
+    if (kind === "lineMb" && (isGeoLineMbPage() || isGeoParallelPage())) return "line-mb";
+    if (kind === "lineMatch" && (isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage())) return "line-match";
+    if (
+      (kind === "lineIntersect" || kind === "rearrange") &&
+      (isGeoLineIntersectPage() || isGeoSummaryPage() || isGeoParallelPage() || isGeoAxisLinesPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage())
+    ) {
+      return "line-intersect";
+    }
+    if (kind === "yesNo" && isGeoMidpointPage()) return "midpoint";
+    if (kind === "yesNo" && (isGeoAxisLinesPage() || isGeoPerpPage())) return "axis-lines";
+    if (kind === "lineEq" && (isGeoAxisLinesPage() || isGeoPerpPage() || isGeoDistancePage())) {
+      var axisPack = state.problem && state.problem.geo;
+      var axisFocus =
+        axisPack &&
+        DoctematicaGeometry.currentFocusTask &&
+        DoctematicaGeometry.currentFocusTask(axisPack, state.geo);
+      if (isAxisParallelTask(axisFocus)) return "axis-lines";
+      if (isGeoAxisLinesPage()) return "line-eq";
+    }
+    if (kind === "lineEq" && (isGeoLineEqPage() || isGeoParallelPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage())) {
+      return "line-eq";
+    }
+    if (kind === "slope" && (isGeoPerpPage() || isGeoDistancePage())) {
+      var slPack = state.problem && state.problem.geo;
+      var slFocus =
+        slPack &&
+        DoctematicaGeometry.currentFocusTask &&
+        DoctematicaGeometry.currentFocusTask(slPack, state.geo);
+      if ((slFocus && slFocus.perpendicular) || (kind === "slope" && slFocus && slFocus.kind === "slope" && slFocus.perpendicular)) {
+        return "perpendicular";
+      }
+      return "slope";
+    }
+    if (kind === "slope" && (isGeoSlopePage() || isGeoParallelPage() || isGeoAxisLinesPage() || isGeoMidpointPage())) return "slope";
+    if (kind === "midpoint" && (isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage())) return "midpoint";
+    if (kind === "parallel" && isGeoParallelPage()) return "parallel";
+    if (kind === "perpendicular" && (isGeoPerpPage() || isGeoDistancePage())) return "perpendicular";
+    if ((kind === "distance" || kind === "equalLen" || kind === "distUnknown" || kind === "perimeter") && isGeoDistancePage()) {
+      return "distance";
+    }
     if (isGeoLengthKind(kind)) return "lengths";
     var pack = state.problem && state.problem.geo;
     var focus =
       pack &&
       DoctematicaGeometry.currentFocusTask &&
       DoctematicaGeometry.currentFocusTask(pack, state.geo);
-    if (isGeoPointPage() && isGeoPointKind(focus && focus.kind)) return "points";
+    if (isGeoPracticeServerPage() && isGeoPointKind(focus && focus.kind)) return "points";
     if (isGeoAreaKind(focus && focus.kind)) return "areas";
+    if (isGeoLengthKind(focus && focus.kind)) return "lengths";
     if (isGeoLineMbPage()) return "line-mb";
     if (isGeoLineMatchPage()) return "line-match";
+    if (isGeoLineIntersectPage()) return "line-intersect";
+    if (isGeoSummaryPage()) {
+      if (focus && focus.kind === "lineMatch") return "line-match";
+      if (focus && (focus.kind === "lineIntersect" || focus.kind === "rearrange")) return "line-intersect";
+      return "points";
+    }
+    if (isGeoLineEqPage()) return "line-eq";
+    if (isGeoSlopePage()) return "slope";
+    if (isGeoParallelPage()) {
+      if (focus && focus.kind === "lineMatch") return "line-match";
+      if (focus && (focus.kind === "lineIntersect" || focus.kind === "rearrange")) return "line-intersect";
+      if (focus && focus.kind === "lineEq") return "line-eq";
+      if (focus && focus.kind === "slope") return "slope";
+      if (focus && focus.kind === "lineMb") return "line-mb";
+      if (focus && isGeoPointKind(focus.kind)) return "points";
+      return "parallel";
+    }
+    if (isGeoAxisLinesPage()) {
+      if (focus && (focus.kind === "lineIntersect" || focus.kind === "rearrange")) return "line-intersect";
+      if (focus && isAxisParallelTask(focus)) return "axis-lines";
+      if (focus && focus.kind === "yesNo") return "axis-lines";
+      if (focus && focus.kind === "lineEq") return "line-eq";
+      if (focus && focus.kind === "slope") return "slope";
+      if (focus && isGeoPointKind(focus.kind)) return "points";
+      return "axis-lines";
+    }
+    if (isGeoMidpointPage()) {
+      if (!focus) {
+        var midPack = state.problem && state.problem.geo;
+        var midPending = (midPack && midPack.tasks) || [];
+        var mi;
+        for (mi = 0; mi < midPending.length; mi++) {
+          var mt = midPending[mi];
+          if (mt && !mt.optional && !(state.geo && state.geo.done && state.geo.done[mt.id])) {
+            focus = mt;
+            break;
+          }
+        }
+      }
+      if (focus && isGeoPointKind(focus.kind)) return "points";
+      if (focus && focus.kind === "slope") return "slope";
+      if (focus && focus.kind === "lineEq") return "line-eq";
+      if (focus && (focus.kind === "lineIntersect" || focus.kind === "rearrange")) return "line-intersect";
+      if (focus && isGeoAreaKind(focus.kind)) return "areas";
+      if (focus && isGeoLengthKind(focus.kind)) return "lengths";
+      return "midpoint";
+    }
+    if (isGeoPerpPage() || isGeoDistancePage()) {
+      if (!focus) {
+        var lastPack = state.problem && state.problem.geo;
+        var lastPending = (lastPack && lastPack.tasks) || [];
+        var li;
+        for (li = 0; li < lastPending.length; li++) {
+          var lt = lastPending[li];
+          if (lt && !lt.optional && !(state.geo && state.geo.done && state.geo.done[lt.id])) {
+            focus = lt;
+            break;
+          }
+        }
+      }
+      if (focus && isGeoPointKind(focus.kind)) return "points";
+      if (focus && (focus.kind === "lineIntersect" || focus.kind === "rearrange")) return "line-intersect";
+      if (focus && isAxisParallelTask(focus)) return "axis-lines";
+      if (focus && focus.kind === "lineEq") return "line-eq";
+      if (focus && focus.kind === "slope" && focus.perpendicular) return "perpendicular";
+      if (focus && focus.kind === "slope") return "slope";
+      if (focus && focus.kind === "midpoint") return "midpoint";
+      if (focus && focus.kind === "yesNo") return "axis-lines";
+      if (focus && focus.kind === "perpendicular") return "perpendicular";
+      if (focus && (focus.kind === "distance" || focus.kind === "equalLen" || focus.kind === "distUnknown" || focus.kind === "perimeter")) {
+        return "distance";
+      }
+      if (focus && isGeoAreaKind(focus.kind)) return "areas";
+      if (focus && isGeoLengthKind(focus.kind)) return "lengths";
+      return isGeoDistancePage() ? "distance" : "perpendicular";
+    }
     return "lengths";
   }
 
@@ -439,11 +638,17 @@
       DoctematicaGeometry.lineMatchPartActive &&
       DoctematicaGeometry.lineMatchPartActive(pack, state.geo)
     ) {
-      return isGeoLineMatchPage();
+      return isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage();
     }
     var ask = DoctematicaGeometry.lineAsk && DoctematicaGeometry.lineAsk(pack, state.geo);
     if (ask) {
-      if (!(isGeoPointPage() && ask.task && isGeoPointKind(ask.task.kind))) return false;
+      if (ask.task && isGeoServerKind(ask.task.kind)) {
+        /* keep server for parallel yes/no and other migrated asks */
+      } else if (
+        !((isGeoPointPage() || isGeoSummaryPage() || isGeoAxisLinesPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage()) && ask.task && isGeoPointKind(ask.task.kind))
+      ) {
+        return false;
+      }
     }
     var focus =
       DoctematicaGeometry.currentFocusTask &&
@@ -493,34 +698,65 @@
     if (!isGeoLengthMode()) return false;
     if (equationsCheckBusy) return true;
     equationsCheckBusy = true;
-    var body = {
-      topic: "analytic",
-      capability: payload.capability || geoServerCapability(payload.kind),
-      intent: payload.intent,
-      levelId: (state.problem && state.problem.levelId) || state.levelId,
-      n: state.problem && state.problem.n,
-      exerciseIndex: state.exerciseIndex,
-      history: payload.history != null ? payload.history : (state.geo && state.geo.lengthLog) || [],
-      geo: payload.geo || geoClientMaps(),
-    };
-    if (payload.typed != null) body.typed = payload.typed;
-    if (payload.action) body.action = payload.action;
+    var rawBody;
+    try {
+      var body = {
+        topic: "analytic",
+        capability: payload.capability || geoServerCapability(payload.kind),
+        intent: payload.intent,
+        levelId: (state.problem && state.problem.levelId) || state.levelId,
+        n: state.problem && state.problem.n,
+        exerciseIndex: state.exerciseIndex,
+        history: payload.history != null ? payload.history : (state.geo && state.geo.lengthLog) || [],
+        geo: payload.geo || geoClientMaps(),
+      };
+      if (payload.typed != null) body.typed = payload.typed;
+      if (payload.action) body.action = payload.action;
+      rawBody = JSON.stringify(body);
+    } catch (err) {
+      equationsCheckBusy = false;
+      showGeometryProcessingError();
+      return true;
+    }
     fetch(GEOMETRY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: rawBody,
     })
       .then(function (res) {
-        if (!res.ok) throw new Error("geometry http " + res.status);
-        return res.json();
+        return res.text().then(function (text) {
+          var data = null;
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch (err) {
+            data = null;
+          }
+          if (!res.ok) {
+            var httpErr = new Error("geometry http " + res.status);
+            httpErr.status = res.status;
+            httpErr.body = data;
+            throw httpErr;
+          }
+          if (data == null) {
+            var jsonErr = new Error("geometry bad json");
+            jsonErr.status = res.status || 500;
+            throw jsonErr;
+          }
+          return data;
+        });
       })
       .then(function (remote) {
         equationsCheckBusy = false;
-        onResult(remote || {});
+        try {
+          onResult(remote || {});
+        } catch (err) {
+          showGeometryProcessingError();
+        }
       })
-      .catch(function () {
+      .catch(function (err) {
         equationsCheckBusy = false;
-        showBasicEqServerUnavailable();
+        if (err && err.status) showGeometryProcessingError();
+        else showBasicEqServerUnavailable();
       });
     return true;
   }
@@ -836,6 +1072,7 @@
   }
 
   function geoEqSolveActive() {
+    if (isGeoDistancePage()) return false;
     var t = geoDistUnkTask();
     if (!t) return false;
     var last = (state.geo && state.geo.lastExpr && state.geo.lastExpr[t.id]) || "";
@@ -4841,6 +5078,8 @@
     if (
       pack &&
       !isGeoLineMatchPage() &&
+      !isGeoSummaryPage() &&
+      !isGeoParallelPage() &&
       DoctematicaGeometry.lineMatchAutoCompleteRemaining &&
       res.done
     ) {
@@ -4951,7 +5190,7 @@
         b.disabled = !!state.locked || row.done;
         b.addEventListener("click", function () {
           if (state.locked) return;
-          if (isGeoLineMatchPage() && isGeoLengthMode()) {
+          if ((isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage()) && isGeoLengthMode()) {
             requestLineMatchAction("lineMatch.line", row.task.id, { lineKey: opt.key });
             return;
           }
@@ -4970,7 +5209,7 @@
         noneBtn.disabled = !!state.locked || row.done;
         noneBtn.addEventListener("click", function () {
           if (state.locked) return;
-          if (isGeoLineMatchPage() && isGeoLengthMode()) {
+          if ((isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage()) && isGeoLengthMode()) {
             requestLineMatchAction("lineMatch.line", row.task.id, { lineKey: "none" });
             return;
           }
@@ -4993,7 +5232,7 @@
           rb.className = "line-match-reason-btn";
           rb.textContent = opt.label;
           rb.addEventListener("click", function () {
-            if (isGeoLineMatchPage() && isGeoLengthMode()) {
+            if ((isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage()) && isGeoLengthMode()) {
               requestLineMatchAction("lineMatch.reason", row.task.id, { reasonId: opt.id });
               return;
             }
@@ -5047,7 +5286,9 @@
     if (!res || !state.geo) return;
     state.geo.done = res.done || state.geo.done || {};
     state.geo.partial = res.partial !== undefined ? res.partial : state.geo.partial || {};
-    state.geo.lastExpr = res.lastExpr || state.geo.lastExpr || {};
+    if (res.lastExpr && (Object.keys(res.lastExpr).length || (res.task && res.done && res.done[res.task.id]))) {
+      state.geo.lastExpr = res.lastExpr;
+    }
     state.geo.coords = res.coords !== undefined ? res.coords : state.geo.coords || {};
     if (res.lineEqDisplay) state.geo.lineEqDisplay = res.lineEqDisplay;
     if (res.lineEq) state.geo.lineEq = Object.assign({}, state.geo.lineEq || {}, res.lineEq);
@@ -5126,7 +5367,13 @@
             return t.kind === "lineEq";
           })
         ) {
-          emptyMsg = "רשמו משוואת ישר או צעד (למשל y − y₁ = m(x − x₁)).";
+          emptyMsg =
+            emptyKinds[0] && isAxisParallelTask(emptyKinds[0])
+              ? String(emptyKinds[0].axisParallel).toLowerCase() === "y" ||
+                String(emptyKinds[0].axisParallel).toLowerCase() === "v"
+                ? "רשמו x = מספר (ישר מקביל לציר y)."
+                : "רשמו y = מספר (ישר מקביל לציר x)."
+              : "רשמו משוואת ישר או צעד (למשל y − y₁ = m(x − x₁)).";
         } else if (
           emptyKinds.length &&
           emptyKinds.every(function (t) {
@@ -5202,7 +5449,7 @@
       if (!state.geo.lengthLog) state.geo.lengthLog = [];
       var logLine = String(typed || "").trim();
       if (logLine) state.geo.lengthLog.push(logLine);
-    } else if (res.mbRearranged || res.mbRearrangeExpr) {
+    } else if (res.mbRearranged || res.mbRearrangeExpr || res.lineEq) {
       if (!state.geo.lengthLog) state.geo.lengthLog = [];
       var rearrangeLine = String(typed || "").trim();
       if (rearrangeLine) state.geo.lengthLog.push(rearrangeLine);
@@ -5550,7 +5797,8 @@
       DoctematicaGeometry.lineAsk && DoctematicaGeometry.lineAsk(pack, state.geo);
     if (ask && ask.stage === "yesno") {
       var yesAns =
-        ask.task && (ask.task.kind === "parallel" || ask.task.kind === "perpendicular")
+        ask.task &&
+        (ask.task.kind === "parallel" || ask.task.kind === "perpendicular" || ask.task.kind === "yesNo")
           ? !!ask.task.answer
           : !!ask.task.on;
       applyGeoTyped(yesAns ? "כן" : "לא");

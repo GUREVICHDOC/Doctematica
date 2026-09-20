@@ -273,7 +273,7 @@ function main() {
     history: [],
     geo: {},
   });
-  add(midRemote && midRemote.local ? { ok: true, id: "areas-defers-midpoint" } : fail("areas-defers-midpoint", JSON.stringify(midRemote)));
+  add(midRemote && (midRemote.local || (midRemote.ok && midRemote.task && midRemote.task.kind === "midpoint")) ? { ok: true, id: "areas-defers-midpoint" } : fail("areas-defers-midpoint", JSON.stringify(midRemote)));
   add(midH && midH.task && midH.task.kind === "midpoint" ? { ok: true, id: "midpoint-still-local-engine" } : fail("midpoint-still-local-engine", JSON.stringify(midH && midH.task && midH.task.kind)));
 
   var src = fs.readFileSync(path.join(__dirname, "../js/app.js"), "utf8");

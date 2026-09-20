@@ -17,7 +17,17 @@ var systems = createSystemsHandler(engine);
 var geometry = createGeometryHandler(engine);
 
 function sendJson(res, status, body) {
-  var raw = JSON.stringify(body);
+  var raw;
+  try {
+    raw = JSON.stringify(body);
+  } catch (err) {
+    status = 500;
+    raw = JSON.stringify({
+      ok: false,
+      error: "server",
+      message: "שגיאה בעיבוד הבדיקה.",
+    });
+  }
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
@@ -117,7 +127,17 @@ var server = http.createServer(function (req, res) {
         sendJson(res, 400, { ok: false, message: "invalid json" });
         return;
       }
-      var result = geometry.handle(body);
+      var result;
+      try {
+        result = geometry.handle(body);
+      } catch (err) {
+        sendJson(res, 500, {
+          ok: false,
+          error: "server",
+          message: "שגיאה בעיבוד הבדיקה.",
+        });
+        return;
+      }
       if (result && result.error) {
         sendJson(res, 400, { ok: false, message: result.message || result.error });
         return;

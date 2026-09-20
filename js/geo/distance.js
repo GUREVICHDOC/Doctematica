@@ -1066,8 +1066,11 @@
         };
       }
       hits = named;
-    } else if (!looksLikePeriAttempt(typed) && !/\+|√/.test(s)) {
-      return null;
+    } else if (!looksLikePeriAttempt(typed)) {
+      var startedPeri = hits.some(function (t) {
+        return !!(progress && progress.lastExpr && progress.lastExpr[t.id]);
+      });
+      if (!startedPeri) return null;
     }
     var task = hits[0];
     var lhs = periLabel(task);

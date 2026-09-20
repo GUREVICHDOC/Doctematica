@@ -369,12 +369,13 @@
       typedLooksLikeCoordStep(typed, extractAnswerValue(typed)) &&
       !typedLooksLikeLaterLineEq(typed, pack, progress)
     ) {
+      var axisFocus = hits[0] && axisLineDir(hits[0]);
       var coordIsLine =
         (hits[0] && lineEqComplete(raw, hits[0])) ||
         pendingEq.some(function (u) {
           return lineEqComplete(raw, u);
         });
-      if (!coordIsLine) return null;
+      if (!coordIsLine && !axisFocus) return null;
     }
     if (!hits.length) {
       var slopeNow = currentPartSlopeTask(pack, progress);

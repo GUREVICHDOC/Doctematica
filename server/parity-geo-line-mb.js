@@ -172,15 +172,15 @@ function main() {
     topic: "analytic",
     capability: "line-mb",
     intent: "one-step",
-    levelId: "geo-parallel-1",
-    n: 12,
+    levelId: "geo-perp-1",
+    n: 1,
     history: [],
     geo: {},
   });
   add(
-    gateFuture && gateFuture.local
-      ? { ok: true, id: "gate-future-lineMb-local" }
-      : fail("gate-future-lineMb-local", JSON.stringify(gateFuture))
+    gateFuture && gateFuture.ok && !gateFuture.local
+      ? { ok: true, id: "gate-perp-now-server" }
+      : fail("gate-perp-now-server", JSON.stringify(gateFuture))
   );
 
   var src = fs.readFileSync(path.join(__dirname, "../js/app.js"), "utf8");

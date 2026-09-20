@@ -196,10 +196,34 @@
     return out;
   };
 
+  /** 2/3 then (x+6) typed in the den slot → (2/3)(x+6), like the site path. */
+  function splitNumericDenParens(d) {
+    var t = String(d || "").replace(/\s+/g, "");
+    var m = t.match(/^([+\-−]?\d+(?:\.\d+)?)(\(.+\))$/);
+    if (!m) return null;
+    var par = m[2];
+    var depth = 0;
+    var i;
+    for (i = 0; i < par.length; i++) {
+      var ch = par.charAt(i);
+      if (ch === "(") depth += 1;
+      else if (ch === ")") {
+        depth -= 1;
+        if (depth < 0) return null;
+      }
+    }
+    if (depth !== 0) return null;
+    return { den: m[1], rest: m[2] };
+  }
+
   MathField.prototype.serializeSlot = function (val) {
     if (isFracNode(val)) {
       var n = this.serializeSlot(val.num);
       var d = this.serializeSlot(val.den);
+      var pulled = splitNumericDenParens(d);
+      if (pulled && /^-?\d+$/.test(String(n).replace(/−/g, "-")) && /^-?\d+$/.test(String(pulled.den).replace(/−/g, "-"))) {
+        return "(" + String(n).replace(/-/g, "−") + "/" + pulled.den + ")" + pulled.rest;
+      }
       if (/^-?\d+$/.test(n) && /^-?\d+$/.test(d) && d !== "0" && d !== "-0") return n + "/" + d;
       return "(" + n + ")/(" + d + ")";
     }
@@ -258,13 +282,23 @@
   MathField.prototype.serialize = function () {
     this.readInputs();
     var self = this;
-    return this.parts
-      .map(function (part) {
-        return self.serializePart(part);
-      })
-      .join("")
-      .replace(/\s+/g, " ")
-      .trim();
+    var bits = this.parts.map(function (part) {
+      return self.serializePart(part);
+    });
+    var i;
+    for (i = 0; i < bits.length; i++) {
+      var cur = String(bits[i] || "");
+      var next = String(bits[i + 1] || "");
+      if (
+        this.parts[i] &&
+        this.parts[i].type === "frac" &&
+        /^-?\d+\/-?\d+$/.test(cur.replace(/−/g, "-")) &&
+        /^\s*[\(xyXY]/.test(next)
+      ) {
+        bits[i] = "(" + cur + ")";
+      }
+    }
+    return bits.join("").replace(/\s+/g, " ").trim();
   };
 
   MathField.prototype.setDisabled = function (disabled) {

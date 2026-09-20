@@ -10,7 +10,23 @@ function createGeometryHandler(engine) {
       return { error: "unknown topic", message: "unknown topic" };
     }
     var capability = String(body.capability || "lengths");
-    if (capability === "lengths" || capability === "areas" || capability === "points" || capability === "line-mb" || capability === "line-match") return handleLengths(engine, body);
+    if (
+      capability === "lengths" ||
+      capability === "areas" ||
+      capability === "points" ||
+      capability === "line-mb" ||
+      capability === "line-match" ||
+      capability === "line-intersect" ||
+      capability === "line-eq" ||
+      capability === "slope" ||
+      capability === "parallel" ||
+      capability === "axis-lines" ||
+      capability === "midpoint" ||
+      capability === "perpendicular" ||
+      capability === "distance"
+    ) {
+      return handleLengths(engine, body);
+    }
     return { error: "unknown capability", message: "unknown capability" };
   }
   return { handle: handle };

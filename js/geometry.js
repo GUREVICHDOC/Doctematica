@@ -619,7 +619,52 @@
   function finishLineEq(task, show, doneMap, partialMap, coordsMap, pack, progress) {
     return GeoLineEq.finishLineEq(task, show, doneMap, partialMap, coordsMap, pack, progress);
   }
+  function openPointClaimsLinearEq(typed, pack, progress, pending) {
+    if (!typed || !pack) return false;
+    if (!looksLikeLinearEq(typed) && !/^\s*0\s*=/.test(String(typed))) return false;
+    var pts = (pending || []).filter(function (t) {
+      return t && t.kind === "point" && !(progress && progress.done && progress.done[t.id]);
+    });
+    if (!pts.length) return false;
+    var A = global.DoctematicaAlgebra;
+    var i;
+    for (i = 0; i < pts.length; i++) {
+      var t = pts[i];
+      var raw = lineForPointTask(pack, progress, t);
+      if (!raw) continue;
+      var L = parseLineSpec(raw);
+      var startY = startPlugYEq(raw, t.answerY);
+      var startXplug = L ? "y = " + substYRhs(L, t.answerX) : "";
+      if (startY && (eqNormEqual(typed, startY) || normEqText(typed) === normEqText(startY))) return true;
+      if (startXplug && eqNormEqual(typed, startXplug)) return true;
+      if (typedMatchesImplicitAfterZero(typed, raw, "y") || typedMatchesImplicitAfterZero(typed, raw, "x")) return true;
+      var prev = progress && progress.lastExpr && progress.lastExpr[t.id];
+      if (prev && A && typeof A.checkStep === "function") {
+        var from = prev;
+        if (eqIsBareAxis(prev, "y") && startY) from = startY;
+        if (eqIsBareAxis(prev, "x") && startXplug) from = startXplug;
+        try {
+          var r = A.checkStep(from, typed);
+          if (r && r.ok) return true;
+          if (startY && from !== startY) {
+            var r0 = A.checkStep(startY, typed);
+            if (r0 && r0.ok) return true;
+          }
+        } catch (err) {}
+      }
+    }
+    return false;
+  }
+
   function checkLineEq(typed, pack, progress, pending, doneMap, partialMap, coordsMap) {
+    var skipToEq = (pending || []).some(function (t) {
+      return t && t.kind === "lineEq" && lineEqComplete(typed, t);
+    });
+    if (!skipToEq) {
+      var chain = parseMChain(typed);
+      if (chain && chain.names && chain.names.length) return null;
+      if (openPointClaimsLinearEq(typed, pack, progress, pending)) return null;
+    }
     return GeoLineEq.checkLineEq(typed, pack, progress, pending, doneMap, partialMap, coordsMap);
   }
   function canonicalLineEqSteps(task) {
@@ -899,6 +944,7 @@
   function parseSlopeFormula(typed) {
     var s = rewriteMixedNum(typed)
       .replace(/[−–—]/g, "-")
+      .replace(/÷/g, "/")
       .replace(/\s+/g, "");
     s = s.replace(/^m(?:_?[A-Za-z]{2,3})?(?:=|:)/i, "");
     if (!s || s.indexOf("/") < 0) return null;
@@ -2927,7 +2973,8 @@
       .replace(/\s+/g, "");
     if (t.indexOf("=") < 0) return false;
     if (/^[xyXY]=/.test(t) && !/[xyXY]/.test(t.replace(/^[xyXY]=/, ""))) return false;
-    return /[xy]/i.test(t);
+    var stripped = t.replace(/m_?(III|II|I|[A-Za-z]{1,4}|\d+)/gi, "");
+    return /[xy]/i.test(stripped);
   }
 
   function eqNormEqual(a, b) {
@@ -6182,7 +6229,16 @@
   }
 
   function isBareNumberExpr(s) {
-    return parseNumberToken(s) != null;
+    if (parseNumberToken(s) == null) return false;
+    var t = String(s || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "");
+    var frac = t.match(/^(-?\d+)\/(-?\d+)$/);
+    if (!frac) return true;
+    var n = parseInt(frac[1], 10);
+    var d = parseInt(frac[2], 10);
+    if (!d) return true;
+    return gcdInt(n, d) === 1;
   }
 
   function extractAnswerValue(typed) {
@@ -7639,25 +7695,30 @@
     var wrongPlug = wrongFigureLinePlugResult(typed, pack, progress, phit);
     if (wrongPlug) return wrongPlug;
     if (cfLine.x && cfLine.y) return null;
+    // y ידוע רק אם x כבר ידוע (חיתוך / תאום אנכי / missing:y). תאום אופקי:
+    // y מהמקביל עדיין לא נותן את x — צריך להציב במשוואה.
     if ((miss === "y" || miss === "both") && !cfLine.y && yEqGivesCoord(typed, phit.answerY)) {
-      var mapsSkipY = cloneMaps(doneMap, partialMap, coordsMap, progress);
-      if (!mapsSkipY.coords[phit.id]) mapsSkipY.coords[phit.id] = { x: false, y: false };
-      mapsSkipY.coords[phit.id].x = true;
-      mapsSkipY.coords[phit.id].y = true;
-      mapsSkipY.partial[phit.id] = true;
-      mapsSkipY.lastExpr[phit.id] = "y = " + fmtNum(phit.answerY);
-      return {
-        ok: true,
-        solved: false,
-        done: mapsSkipY.done,
-        partial: mapsSkipY.partial,
-        coords: mapsSkipY.coords,
-        lastExpr: mapsSkipY.lastExpr,
-        task: phit,
-        show: mapsSkipY.lastExpr[phit.id],
-        rawStep: true,
-        message: "נכון. עכשיו רשמו " + phit.label + "(x;y).",
-      };
+      var xAlreadyKnown = !!cfLine.x || miss === "y";
+      if (xAlreadyKnown) {
+        var mapsSkipY = cloneMaps(doneMap, partialMap, coordsMap, progress);
+        if (!mapsSkipY.coords[phit.id]) mapsSkipY.coords[phit.id] = { x: false, y: false };
+        mapsSkipY.coords[phit.id].x = true;
+        mapsSkipY.coords[phit.id].y = true;
+        mapsSkipY.partial[phit.id] = true;
+        mapsSkipY.lastExpr[phit.id] = "y = " + fmtNum(phit.answerY);
+        return {
+          ok: true,
+          solved: false,
+          done: mapsSkipY.done,
+          partial: mapsSkipY.partial,
+          coords: mapsSkipY.coords,
+          lastExpr: mapsSkipY.lastExpr,
+          task: phit,
+          show: mapsSkipY.lastExpr[phit.id],
+          rawStep: true,
+          message: "נכון. עכשיו רשמו " + phit.label + "(x;y).",
+        };
+      }
     }
     if ((miss === "x" || miss === "both") && !cfLine.y && yEqGivesCoord(typed, phit.answerY)) {
       var mapsKnownY = cloneMaps(doneMap, partialMap, coordsMap, progress);
@@ -8670,6 +8731,7 @@
     near0: near0,
     nearNum: nearNum,
     fmtSimpleFrac: fmtSimpleFrac,
+    gcdInt: gcdInt,
     slopeWant: slopeWant,
     slopeLhs: slopeLhs,
     slopeLhsFromTyped: slopeLhsFromTyped,
@@ -8821,6 +8883,24 @@
         var cf = coordsMap[t.id];
         return !!(cf && (cf.x || cf.y)) || !!partialMap[t.id];
       });
+      var lenClaim = (pending || []).filter(function (t) {
+        return (
+          (t.kind === "origin" || t.kind === "segment" || t.kind === "axis") &&
+          parsed.value != null &&
+          nearNum(parsed.value, t.answer)
+        );
+      });
+      if (lenClaim.length) {
+        var focLen = currentFocusTask(pack, progress);
+        if (
+          (focLen && (focLen.kind === "origin" || focLen.kind === "segment" || focLen.kind === "axis")) ||
+          lenClaim.some(function (t) {
+            return !!partialMap[t.id];
+          })
+        ) {
+          pointPending = [];
+        }
+      }
     }
     if (
       pointPending.length &&

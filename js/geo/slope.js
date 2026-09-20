@@ -4,6 +4,7 @@
     var near0 = dep.near0;
     var nearNum = dep.nearNum;
     var fmtSimpleFrac = dep.fmtSimpleFrac;
+    var gcdInt = dep.gcdInt;
     var slopeWant = dep.slopeWant;
     var slopeLhs = dep.slopeLhs;
     var slopeLhsFromTyped = dep.slopeLhsFromTyped;
@@ -107,6 +108,57 @@
     return /[\/÷]/.test(s) && /[-−–—(]/.test(s);
   }
 
+  function slopeFracGcd(n, d) {
+    if (!gcdInt) return 1;
+    var ni = Math.round(n);
+    var di = Math.round(d);
+    if (!nearNum(n, ni) || !nearNum(d, di) || near0(di)) return 1;
+    if (di < 0) {
+      ni = -ni;
+      di = -di;
+    }
+    return gcdInt(ni, di) || 1;
+  }
+
+  function slopeUnreducedAtomic(formula) {
+    if (!formula || !formula.atomic || !formula.num || !formula.den) return false;
+    if (!isFinite(formula.num.value) || !isFinite(formula.den.value) || near0(formula.den.value)) return false;
+    return slopeFracGcd(formula.num.value, formula.den.value) > 1;
+  }
+
+  function slopeAtomicFracText(formula) {
+    if (!formula || !formula.num || !formula.den) return "";
+    return fmtNum(formula.num.value) + "/" + fmtNum(formula.den.value);
+  }
+
+  function slopeNormFracToken(s) {
+    return String(s || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "");
+  }
+
+  function slopeAtomicIsFinal(formula, want) {
+    if (!formula || !formula.atomic || want == null || !isFinite(want)) return false;
+    var n = formula.num && formula.num.value;
+    var d = formula.den && formula.den.value;
+    if (!isFinite(n) || !isFinite(d) || near0(d) || !nearNum(n / d, want)) return false;
+    if (slopeUnreducedAtomic(formula)) return false;
+    var final = slopeNormFracToken(fmtSimpleFrac(want) || fmtNum(want));
+    if (final.indexOf("/") < 0) return false;
+    var written = slopeNormFracToken(slopeAtomicFracText(formula));
+    if (written === final) return true;
+    var ni = Math.round(n);
+    var di = Math.round(d);
+    if (!nearNum(n, ni) || !nearNum(d, di)) return false;
+    if (di < 0) {
+      ni = -ni;
+      di = -di;
+    }
+    if (!gcdInt || gcdInt(ni, di) !== 1) return false;
+    var red = (ni < 0 ? "-" : "") + Math.abs(ni) + "/" + di;
+    return red === final;
+  }
+
   function slopeMidFracText(p1, p2, lhs) {
     var num = p2.y - p1.y;
     var den = p2.x - p1.x;
@@ -156,12 +208,26 @@
       if (normSlopeStepLine(steps[i]) === p) return steps[i + 1];
     }
     var fa = parseSlopeFormula(prev);
+    function unreducedMid() {
+      var j;
+      for (j = 0; j < steps.length; j++) {
+        var fj = parseSlopeFormula(steps[j]);
+        if (fj && fj.atomic && slopeUnreducedAtomic(fj)) return steps[j];
+      }
+      return "";
+    }
     if (fa && !fa.atomic) {
       for (i = 0; i < steps.length - 1; i++) {
         var fb = parseSlopeFormula(steps[i]);
         if (fb && !fb.atomic && nearNum(fa.value, fb.value)) return steps[i + 1];
       }
-      return steps[1] || steps[0];
+      return unreducedMid() || steps[1] || steps[0];
+    }
+    if (fa && fa.atomic && slopeUnreducedAtomic(fa)) {
+      return steps[steps.length - 1];
+    }
+    if (/[\/÷]/.test(String(prev || "")) && /[-−–—(]/.test(String(prev || ""))) {
+      return unreducedMid() || steps[1] || steps[steps.length - 1];
     }
     return steps[steps.length - 1];
   }
@@ -326,7 +392,13 @@
         return { ok: false, message: "המכנה הוא 0 — בדקו את שיעורי ה-x." };
       }
       if (formula.atomic) {
-        if (nearNum(formula.value, want)) return finish(slopeLhsFromTyped(typed, task) + " = " + fmtNum(want));
+        if (nearNum(formula.value, want)) {
+          var lhsA = slopeLhsFromTyped(typed, task);
+          if (slopeAtomicIsFinal(formula, want)) {
+            return finish(lhsA + " = " + (fmtSimpleFrac(want) || fmtNum(want)));
+          }
+          return partial(lhsA + " = " + slopeAtomicFracText(formula), "נכון. עכשיו חלקו.");
+        }
         if (!near0(want) && nearNum(formula.value, 1 / want)) {
           return {
             ok: false,
@@ -371,7 +443,20 @@
         if (!/^m/i.test(showF)) showF = slopeLhs(task) + " = " + showF;
         return partial(showF, "נכון. עכשיו חשבו את המונה ואת המכנה.");
       }
-      return finish(slopeLhs(task) + " = " + fmtNum(want));
+      var atomicGot = parseSlopeFormula(typed);
+      if (atomicGot && atomicGot.atomic && !slopeAtomicIsFinal(atomicGot, want)) {
+        return partial(
+          slopeLhsFromTyped(typed, task) + " = " + slopeAtomicFracText(atomicGot),
+          "נכון. עכשיו חלקו."
+        );
+      }
+      if (atomicGot && slopeUnreducedAtomic(atomicGot)) {
+        return partial(
+          slopeLhsFromTyped(typed, task) + " = " + slopeAtomicFracText(atomicGot),
+          "נכון. עכשיו חלקו."
+        );
+      }
+      return finish(slopeLhs(task) + " = " + (fmtSimpleFrac(want) || fmtNum(want)));
     }
     if (gotVal != null && !nearNum(gotVal, want)) {
       if (!near0(want) && nearNum(gotVal, 1 / want)) {
@@ -417,7 +502,11 @@
       var msgM = "הציבו " + lhsH + " = (y₂ − y₁)/(x₂ − x₁) (או m = …). אפשר לבחור איזו נקודה היא 1 ואיזו 2.";
       if (prevM) {
         stepM = nextSlopeCanonicalStep(stepsM, prevM) || (lhsH + " = " + wantShow);
-        msgM = "חשבו את המונה ואת המכנה, ואז את השיפוע.";
+        var prevF = parseSlopeFormula(prevM);
+        msgM =
+          prevF && prevF.atomic
+            ? "נכון. עכשיו חלקו."
+            : "חשבו את המונה ואת המכנה, ואז את השיפוע.";
       }
       return {
         task: t,
