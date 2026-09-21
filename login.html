@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Doctematica — כניסה</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&family=Frank+Ruhl+Libre:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/login.css" />
+  </head>
+  <body>
+    <div class="sky" aria-hidden="true"></div>
+    <div class="math math-tl" aria-hidden="true">
+      <span class="eq">a² + b² = c²</span>
+      <svg class="graph" viewBox="0 0 120 72" fill="none">
+        <path d="M8 64H112M20 8v56" stroke="currentColor" stroke-width="1.4" />
+        <path d="M20 48c18-2 28-28 44-28 14 0 22 20 40 28" stroke="currentColor" stroke-width="2" />
+        <text x="24" y="14" fill="currentColor" font-size="11" font-style="italic">f(x)</text>
+      </svg>
+      <span class="eq">x = (−b ± √(b² − 4ac)) / 2a</span>
+      <span class="eq">∫ f(x) dx</span>
+    </div>
+    <div class="math math-tr" aria-hidden="true">
+      <p class="script">מתמטיקה<br />פותחת דלתות<br />לעתיד טוב יותר</p>
+      <svg class="tri" viewBox="0 0 120 80" fill="none">
+        <path d="M12 68h96L60 10z" stroke="currentColor" stroke-width="1.6" />
+        <path d="M60 10v58" stroke="currentColor" stroke-width="1.2" stroke-dasharray="3 3" />
+        <text x="8" y="78" fill="currentColor" font-size="11">A</text>
+        <text x="104" y="78" fill="currentColor" font-size="11">B</text>
+        <text x="56" y="9" fill="currentColor" font-size="11">C</text>
+      </svg>
+      <span class="eq">lim sin x / x = 1</span>
+      <span class="eq">Σ 1/n!</span>
+    </div>
+
+    <header class="brand">
+      <h1>Doctematica <span class="leaf" aria-hidden="true">🍃</span></h1>
+      <p class="tag">מתרגלים. מבינים. משתפרים.</p>
+    </header>
+
+    <main class="card" id="card">
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab on" id="tab-login" role="tab" aria-selected="true">כניסה</button>
+        <button type="button" class="tab" id="tab-signup" role="tab" aria-selected="false">הרשמה</button>
+      </div>
+      <h2 id="card-title">ברוכים הבאים!</h2>
+      <p class="lead" id="card-lead">המשיכו את מסע המתמטיקה שלכם.</p>
+      <p class="msg" id="msg" hidden></p>
+
+      <form id="login-form" autocomplete="on">
+        <label>
+          <span>שם משתמש</span>
+          <input name="username" type="text" dir="ltr" maxlength="32" required />
+        </label>
+        <label>
+          <span>סיסמה</span>
+          <input name="password" type="password" dir="ltr" maxlength="128" required />
+        </label>
+        <button type="submit" class="go">כניסה ←</button>
+      </form>
+
+      <form id="signup-form" class="hidden" autocomplete="on">
+        <label>
+          <span>שם משתמש</span>
+          <input name="username" type="text" dir="ltr" maxlength="32" required />
+        </label>
+        <label>
+          <span>אימייל</span>
+          <input name="email" type="email" dir="ltr" maxlength="254" required />
+        </label>
+        <label>
+          <span>סיסמה</span>
+          <input name="password" type="password" dir="ltr" maxlength="128" required />
+        </label>
+        <label>
+          <span>אישור סיסמה</span>
+          <input name="confirmPassword" type="password" dir="ltr" maxlength="128" required />
+        </label>
+        <button type="submit" class="go">הרשמה ←</button>
+      </form>
+    </main>
+
+    <aside class="desk" aria-hidden="true">
+      <div class="books">
+        <span>Algebra</span>
+        <span>Geometry</span>
+        <span>Calculus</span>
+        <span>Problem Solving</span>
+      </div>
+      <div class="mug">
+        <p>התלמידים<br />של היום</p>
+      </div>
+    </aside>
+    <script src="/js/auth.js"></script>
+  </body>
+</html>
