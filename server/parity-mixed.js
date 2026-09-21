@@ -62,6 +62,7 @@ function postMixed(payload) {
 function clean(res) {
   res = JSON.parse(JSON.stringify(res || {}));
   delete res.lcd;
+  delete res.offerFormula;
   return res;
 }
 

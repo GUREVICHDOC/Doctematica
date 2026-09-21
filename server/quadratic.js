@@ -178,6 +178,20 @@ function handleSqrtSolution(engine, body) {
   };
 }
 
+function mixedOfferFormula(engine, body) {
+  var Q = engine.DoctematicaQuadratic;
+  if (!Q || typeof Q.isAbcOrder !== "function" || typeof Q.parseABC !== "function") return false;
+  var hist = body && Array.isArray(body.history) ? body.history : [];
+  var last = hist.length ? String(hist[hist.length - 1] || "") : String((body && body.start) || "");
+  try {
+    if (!Q.isAbcOrder(last)) return false;
+    var parsed = Q.parseABC(last);
+    return !!(parsed && parsed.a);
+  } catch (err) {
+    return false;
+  }
+}
+
 function createQuadraticHandler(engine) {
   var handleFactor = require("./quad-factor").handleFactor;
   var handleFormula = require("./quad-formula").handleFormula;
@@ -200,7 +214,13 @@ function createQuadraticHandler(engine) {
     }
     if (subtopic === "factor") return handleFactor(engine, body);
     if (subtopic === "formula") return handleFormula(engine, body);
-    if (subtopic === "mixed") return handleMixed(engine, body);
+    if (subtopic === "mixed") {
+      var mixed = handleMixed(engine, body);
+      if (mixed && typeof mixed === "object") {
+        mixed.offerFormula = mixedOfferFormula(engine, body);
+      }
+      return mixed;
+    }
     return { error: "unknown subtopic", message: "unknown subtopic" };
   }
 

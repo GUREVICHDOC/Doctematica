@@ -390,8 +390,10 @@
       })
       .then(function (remote) {
         equationsCheckBusy = false;
+        if (remote && remote.offerFormula != null) state.offerFormula = !!remote.offerFormula;
         applyLcdOffer(remote || {});
         onResult(remote || {});
+        updateFormulaBtn();
       })
       .catch(function (err) {
         equationsCheckBusy = false;
@@ -1043,13 +1045,14 @@
     state.factor.eqs = [e1, e2];
     if (!state.factor.trails[0].length && !state.factor.trails[1].length) {
       state.factor.trails = [[e1], [e2]];
+      var lin = Q && typeof Q.linearSolved === "function" ? function (eq) { return !!Q.linearSolved(eq); } : function () { return false; };
       if (pack && pack.high) {
         state.factor.solved = [
-          !!(Q.linearSolved(e1) && /x\s*=\s*0/i.test(e1)),
+          !!(lin(e1) && /x\s*=\s*0/i.test(e1)),
           false,
         ];
       } else {
-        state.factor.solved = [Q.linearSolved(e1), Q.linearSolved(e2)];
+        state.factor.solved = [lin(e1), lin(e2)];
       }
     }
   }
@@ -1139,23 +1142,6 @@
     if (!t || String(t.resultKind || "point") !== "point") return false;
     var st = t && state.geo && state.geo.distUnk && state.geo.distUnk[t.id];
     return !!(st && st.keepFound && st.keepFound.length);
-  }
-
-  function ensureGeoMixedPack() {
-    if (!geoEqSolveActive() || !DoctematicaQuadratic || !DoctematicaQuadratic.analyzeMixedStart) return false;
-    var last = lastHistoryEq();
-    if (!last) return false;
-    try {
-      var pack = DoctematicaQuadratic.analyzeMixedStart(last);
-      state.problem.mixed = pack;
-      if (pack.factor) state.problem.factor = pack.factor;
-      if (pack.quad) state.problem.quad = pack.quad;
-      if (pack.sqrt) state.problem.sqrt = pack.sqrt;
-      state.mixed = state.mixed || emptyMixedState();
-      return true;
-    } catch (err) {
-      return false;
-    }
   }
 
   function finishEqSolveForGeo(answer) {
@@ -1248,32 +1234,10 @@
   }
 
   function canSplitFactor() {
-    if (geoEqSolveActive()) ensureGeoMixedPack();
     if (isFactorServerMode() || isHighFactorServerMode() || (isMixedServerMode() && mixedPath() === "factor")) {
       return !!(state.factor && state.factor.canSplit && !state.locked);
     }
-    if ((!factorWorkActive() && !geoEqSolveActive()) || state.locked || !state.problem || !state.problem.factor) return false;
-    var st = state.factor || emptyFactorState();
-    var last = lastHistoryEq();
-    var Q = DoctematicaQuadratic;
-    var pack = state.problem.factor;
-    if (pack && pack.high) {
-      if (!st.split) {
-        var hi = Q.parseHighProductEq(last);
-        return !!(hi && Q.highProductMatches(pack, hi));
-      }
-      var bi;
-      for (bi = 0; bi < 2; bi++) {
-        if (st.solved && st.solved[bi]) continue;
-        var beq = (st.eqs && st.eqs[bi]) || "";
-        var bp = Q.parseProductEq(beq) || Q.parseHighProductEq(beq);
-        if (bp && (bp.e2Kind === "linear" || (bp.f1 && bp.f2))) return true;
-      }
-      return false;
-    }
-    if (st.split) return false;
-    var prod = Q.parseProductEq(last);
-    return !!(prod && Q.productMatches(pack, prod));
+    return false;
   }
 
   function updateSplitBtn() {
@@ -1284,14 +1248,9 @@
 
   function canUseMixedFormula() {
     if (state.locked || !state.problem) return false;
-    if (geoEqSolveActive()) ensureGeoMixedPack();
     if (!isMixedEqMode() && !geoEqSolveActive()) return false;
     if (mixedPath()) return false;
-    var last = lastHistoryEq();
-    var Q = DoctematicaQuadratic;
-    if (!Q.isAbcOrder(last)) return false;
-    var p = Q.parseABC(last);
-    return !!(p && p.a);
+    return !!state.offerFormula;
   }
 
   function updateFormulaBtn() {
@@ -1862,51 +1821,7 @@
       );
       return true;
     }
-    var res;
-    var trail = (state.domain && state.domain.trail) || [];
-    if (domainMulti()) {
-      var br = state.domain.activeBranch || 0;
-      res = DoctematicaTeach.checkDomainProgress(
-        eq,
-        typed,
-        {
-          items: domainProgressItems(),
-          split: true,
-          activeBranch: br,
-        },
-        {}
-      );
-    } else {
-      res = DoctematicaTeach.checkDomain(eq, typed, {
-        previous:
-          trail.length
-            ? trail[trail.length - 1].display
-            : (state.domain.info.items && state.domain.info.items[0] && state.domain.info.items[0].rawPart) ||
-              state.domain.info.rawDisplay,
-        started: trail.length > 0,
-      });
-    }
-    if (!res.ok) {
-      showFeedback(false, "<strong>עוד לא.</strong> " + res.message);
-      return true;
-    }
-    if (res.partial || (res.progressItems && res.itemIndex != null)) {
-      applyDomainItemResult(res);
-      return true;
-    }
-    if (res.done) {
-      applyDomainDone(res.display || state.domain.info.display, {
-        message: "<strong>נכון.</strong> תחום הצבה: " + (res.display || state.domain.info.display) + ".",
-      });
-      return true;
-    }
-    if (res.phase === "raw" || res.phase === "work") {
-      applyDomainRaw(res.display, res.parts, res.message);
-      return true;
-    }
-    applyDomainDone(res.display || state.domain.info.display, {
-      message: "<strong>נכון.</strong> תחום הצבה: " + (res.display || state.domain.info.display) + ".",
-    });
+    showBasicEqServerUnavailable();
     return true;
   }
 
@@ -1952,19 +1867,7 @@
       );
       return;
     }
-    var info = DoctematicaTeach.analyzeLcdNeed(lastHistoryEq());
-    if (!info) {
-      showFeedback(false, "<strong>עוד לא.</strong> כרגע אין צורך במכנה משותף.");
-      return;
-    }
-    state.lcd = { phase: "ask", info: info, lcd: null, got: [] };
-    renderLcdGuide();
-    updateLcdBtn();
-    showFeedback(
-      true,
-      "<strong>מכנה משותף.</strong> רשמו את המכנה המשותף המצומצם ביותר, ואז מעל כל איבר — בכמה מכפילים.",
-      "tip"
-    );
+    showBasicEqServerUnavailable();
   }
 
   function lcdTermSignParts(text) {
@@ -2324,93 +2227,8 @@
   function handleLcdSubmit() {
     if (!state.lcd || !state.lcd.phase) return false;
     if (isDomainLcdServerMode()) return handleDenomLcdSubmit();
-    var Teach = DoctematicaTeach;
-    if (state.lcd.phase === "ask") {
-      var box = lcdGuideEl && lcdGuideEl.querySelector("#lcd-value");
-      var typed = box ? box.value : "";
-      var res = Teach.checkLcdValue(lastHistoryEq(), typed);
-      state.stats.try += 1;
-      saveStats();
-      renderStats();
-      if (!res.ok) {
-        showFeedback(false, "<strong>עוד לא.</strong> " + res.message);
-        if (box) box.focus();
-        return true;
-      }
-      state.lcd.phase = "muls";
-      state.lcd.lcd = res.lcd;
-      state.lcd.info = res.info || Teach.analyzeLcdNeed(lastHistoryEq());
-      state.lcd.got = [];
-      renderLcdGuide();
-      showFeedback(true, "<strong>נכון.</strong> " + res.message, "tip");
-      return true;
-    }
-    if (state.lcd.phase === "muls") {
-      var info = state.lcd.info;
-      var got = state.lcd.got ? state.lcd.got.slice() : [];
-      var i;
-      var anyTyped = false;
-      for (i = 0; i < info.terms.length; i++) {
-        if (got[i]) continue;
-        var el = lcdGuideEl.querySelector('[data-lcd-mul="' + i + '"]');
-        var raw = el ? String(el.value || "").trim() : "";
-        if (!raw) continue;
-        anyTyped = true;
-        var mulRes = Teach.checkLcdMultiplier(info.terms[i], raw);
-        if (!mulRes.ok) {
-          state.stats.try += 1;
-          saveStats();
-          renderStats();
-          showFeedback(false, "<strong>עוד לא.</strong> " + mulRes.message);
-          if (el) el.focus();
-          return true;
-        }
-        got[i] = true;
-      }
-      state.stats.try += 1;
-      saveStats();
-      renderStats();
-      if (!anyTyped && !info.terms.every(function (_, idx) { return got[idx]; })) {
-        showFeedback(false, "<strong>עוד לא.</strong> רשמו מעל האיברים בכמה מכפילים כל אחד.");
-        var firstEmpty = lcdGuideEl.querySelector(".lcd-mul:not(:disabled)");
-        if (firstEmpty) firstEmpty.focus();
-        return true;
-      }
-      state.lcd.got = got;
-      var allDone = info.terms.every(function (_, idx) {
-        return got[idx];
-      });
-      if (!allDone) {
-        renderLcdGuide();
-        showFeedback(true, "<strong>נכון.</strong> המשיכו למלא את שאר המכפילים.", "tip");
-        return true;
-      }
-      var lcdVal = state.lcd.lcd;
-      var mark = {
-        lcd: lcdVal,
-        muls: info.terms.map(function (t) {
-          return t.mulDisplay != null ? t.mulDisplay : t.mul;
-        }),
-        terms: info.terms.map(function (t) {
-          return {
-            text: t.text,
-            mul: t.mulDisplay != null ? t.mulDisplay : t.mul,
-            den: t.den,
-            side: t.side,
-          };
-        }),
-        leftN: info.leftTerms.length,
-      };
-      clearLcdAssist();
-      pushLcdMarksStep(mark, {
-        message:
-          "<strong>צעד חוקי.</strong> סימנתם את המכפילים למכנה משותף " +
-          lcdVal +
-          ". עכשיו הקלידו את המשוואה אחרי הכפל בכל איבר.",
-      });
-      return true;
-    }
-    return false;
+    showBasicEqServerUnavailable();
+    return true;
   }
 
   function pushLcdMarksStep(mark, opts) {
@@ -2483,23 +2301,7 @@
       );
       return true;
     }
-    if (!DoctematicaTeach || typeof DoctematicaTeach.analyzeLcdNeed !== "function") return false;
-    if (lastStepHasLcdMarks()) return false;
-    var info;
-    try {
-      info = DoctematicaTeach.analyzeLcdNeed(lastHistoryEq());
-    } catch (err) {
-      return false;
-    }
-    if (!info) return false;
-    clearLcdAssist();
-    pushLcdMarksStep(markFromLcdInfo(info), {
-      message:
-        "<strong>צעד.</strong> מכנה משותף " +
-        info.lcd +
-        " — המכפילים מעל כל איבר (כמו במחברת). הצעד הבא: כפלו והורידו מכנים.",
-    });
-    return true;
+    return false;
   }
 
   function renderFactorGuide() {
@@ -2537,109 +2339,10 @@
       );
       return;
     }
-    if (geoEqSolveActive()) {
-      state.mixed = state.mixed || emptyMixedState();
-      state.mixed.path = "factor";
-    }
-    var Q = DoctematicaQuadratic;
-    var pack = state.problem.factor;
-    state.factor = state.factor || emptyFactorState();
-
-    if (pack && pack.high && state.factor.split) {
-      var which = -1;
-      var prod2 = null;
-      var bi;
-      for (bi = 0; bi < 2; bi++) {
-        if (state.factor.solved && state.factor.solved[bi]) continue;
-        var beq = (state.factor.eqs && state.factor.eqs[bi]) || "";
-        var bp = Q.parseProductEq(beq) || Q.parseHighProductEq(beq);
-        if (bp && (bp.e2Kind === "linear" || (bp.f1 && bp.f2))) {
-          which = bi;
-          prod2 = bp;
-          break;
-        }
-      }
-      if (which < 0 || !prod2) {
-        showFeedback(false, "<strong>עוד לא.</strong> אין מכפלה לפיצול בענף.");
-        return;
-      }
-      var zEq = null;
-      var otherEq = prod2.e2;
-      var e1z =
-        /^x\s*=\s*0$/i.test(String(prod2.e1 || "").replace(/\s+/g, "")) ||
-        (Q.linearSolved(prod2.e1) && /x\s*=\s*0/i.test(prod2.e1));
-      var e2z =
-        /^x\s*=\s*0$/i.test(String(prod2.e2 || "").replace(/\s+/g, "")) ||
-        (Q.linearSolved(prod2.e2) && /x\s*=\s*0/i.test(prod2.e2));
-      if (e1z) {
-        zEq = prod2.e1;
-        otherEq = prod2.e2;
-      } else if (e2z) {
-        zEq = prod2.e2;
-        otherEq = prod2.e1;
-      } else if (prod2.e2Kind === "linear") {
-        otherEq = prod2.e2;
-        var e1raw = String(prod2.e1 || "").replace(/\s+/g, "");
-        if (/^x=0$/i.test(e1raw) || /^x$/i.test(e1raw.replace(/=0$/, ""))) {
-          zEq = prod2.e1.indexOf("=") >= 0 ? prod2.e1 : "x=0";
-        }
-      }
-      // מציגים שוב את שני הגורמים אחרי הפיצול השני
-      if (zEq) appendFactorTrail(which, zEq);
-      appendFactorTrail(which, otherEq);
-      state.factor.eqs[which] = otherEq;
-      state.factor.solved[which] = false;
-      renderFactorGuide();
-      renderSteps();
-      showFeedback(
-        true,
-        "<strong>חילקנו שוב.</strong> שוב קיבלתם x = 0 (כבר מהענף הראשון) ואת המשוואה " +
-          otherEq +
-          " — בודדו את x עד הסוף.",
-        "tip"
-      );
-      mathField.focus();
-      return;
-    }
-
-    var prod = pack.high
-      ? Q.parseHighProductEq(lastHistoryEq())
-      : Q.parseProductEq(lastHistoryEq());
-    startFactorTrails(prod.e1, prod.e2);
-    renderFactorGuide();
-    renderSteps();
-    var both = state.factor.solved[0] && state.factor.solved[1];
-    if (both) {
-      if (finishEqSolveForGeo(state.problem.factor.answer || "")) return;
-      markSolved();
-      mathField.setDisabled(true);
-      checkBtn.disabled = true;
-      nextAfterSolveBtn.classList.remove("hidden");
-      showFeedback(true, "<strong>כל הכבוד.</strong> " + (state.problem.factor.answer || ""));
-      return;
-    }
-    var tip =
-      pack.high && prod && prod.e2Kind === "axbx"
-        ? "חילקנו. בענף השני אפשר להוציא שוב גורם x ואז לפצל פעם נוספת."
-        : "מכפלה שווה אפס רק אם אחד הגורמים אפס. פתרו כל משוואה בנפרד.";
-    showFeedback(true, "<strong>חילקנו.</strong> " + tip, "tip");
-    mathField.focus();
+    showBasicEqServerUnavailable();
   }
 
-  function highBranchDone(eq, pack, which) {
-    if (which === 0) {
-      return /^x\s*=\s*0$/i.test(String(eq || "").replace(/\s+/g, ""));
-    }
-    if (pack && pack.e2Kind === "linear" && pack.linRoot != null) {
-      // רק x = מספר נחשב סיום — לא x−2=0
-      if (!DoctematicaQuadratic.linearSolved(eq)) return false;
-      try {
-        var sol = DoctematicaAlgebra.solutionOf(DoctematicaAlgebra.parseEquation(eq));
-        return sol != null && Math.abs(sol - pack.linRoot) < 1e-6;
-      } catch (err) {
-        return false;
-      }
-    }
+  function highBranchDone() {
     return false;
   }
 
@@ -2681,7 +2384,7 @@
       }
     } else if (res.split && !wasSplit) {
       var startEqs = res.eqs;
-      if (!isHighFactorServerMode()) {
+      if (!isHighFactorServerMode() && Q && typeof Q.parseProductEq === "function") {
         var p0 = Q.parseProductEq(lastHistoryEq());
         if (p0) startEqs = [p0.e1, p0.e2];
       }
@@ -2772,77 +2475,8 @@
       );
       return true;
     }
-    if (isHighPowerTopic()) {
-      showBasicEqServerUnavailable();
-      return true;
-    }
-    state.stats.try += 1;
-    saveStats();
-    renderStats();
-    var Q = DoctematicaQuadratic;
-    var prev = lastHistoryEq();
-    var pack = state.problem.factor;
-    state.factor = state.factor || emptyFactorState();
-    var res = Q.checkFactorTyped(prev, typed, pack, state.factor);
-    if (!res.ok) {
-      showFeedback(false, "<strong>עוד לא.</strong> " + res.message);
-      return false;
-    }
-    var wasSplit = !!state.factor.split;
-    if (res.factored) {
-      if (state.history[state.history.length - 1] !== shownTyped) state.history.push(shownTyped);
-    } else if (res.rearrange) {
-      if (state.history[state.history.length - 1] !== shownTyped) state.history.push(shownTyped);
-    } else if (res.split && !wasSplit) {
-      var startEqs = res.eqs;
-      var p0 = pack.high
-        ? Q.parseHighProductEq(prev)
-        : Q.parseProductEq(prev);
-      if (p0) startEqs = [p0.e1, p0.e2];
-      if (startEqs && startEqs.length >= 2) startFactorTrails(startEqs[0], startEqs[1]);
-    }
-    if (res.eqs) state.factor.eqs = res.eqs;
-    if (Array.isArray(res.solvedFlags)) state.factor.solved = res.solvedFlags;
-    else if (Array.isArray(res.solved)) state.factor.solved = res.solved;
-    if (res.split) state.factor.split = true;
-    if (res.progress) state.factor.progress = res.progress;
-    if (res.sqrtProg) state.factor.sqrtProg = res.sqrtProg;
-    if (typeof res.which === "number") {
-      if (res.trailAlso) appendFactorTrail(res.which, res.trailAlso);
-      appendFactorTrail(res.which, shownTyped);
-    } else if (res.solved === true && res.progress) {
-      if (res.progress.z) appendFactorTrail(0, "x = 0");
-      if (pack.high && pack.quadRoot && res.progress.o && res.progress.n) {
-        appendFactorTrail(1, "x = ±" + Q.fmtDisp(pack.quadRoot));
-      } else if (pack.high && pack.e2Kind === "linear" && res.progress.o) {
-        appendFactorTrail(1, "x = " + Q.fmtDisp(pack.linRootF || pack.otherF));
-      } else if (pack.high && pack.quadKind === "none" && res.progress.n) {
-        appendFactorTrail(1, "אין פתרון ממשי");
-      } else if (res.progress.o) {
-        appendFactorTrail(1, "x = " + Q.fmtDisp(pack.otherF));
-      }
-    } else if (res.progress) {
-      if (res.progress.z && !wasSplit) appendFactorTrail(0, shownTyped);
-      if (res.progress.o || res.progress.n) appendFactorTrail(1, shownTyped);
-    }
-    renderSteps();
-    renderFactorGuide();
-    var done = res.solvedAll || res.solved === true;
-    if (done) {
-      if (finishEqSolveForGeo((state.problem.factor && state.problem.factor.answer) || shownTyped)) return true;
-      markSolved();
-      mathField.setDisabled(true);
-      checkBtn.disabled = true;
-      renderSteps();
-      nextAfterSolveBtn.classList.remove("hidden");
-      showFeedback(true, "<strong>כל הכבוד.</strong> " + res.message);
-      return true;
-    }
-    mathField.clear();
-    var label = res.factored || res.solvedOne || res.solved ? "נכון" : "צעד חוקי";
-    showFeedback(true, "<strong>" + label + ".</strong> " + res.message);
-    mathField.focus();
-    return true;
+    showBasicEqServerUnavailable();
+    return false;
   }
 
   function isGuidedMode() {
@@ -2857,9 +2491,16 @@
   }
 
   function topicLevels() {
+    var all = (state.catalog && state.catalog.levels) || [];
     var sub =
       state.topic === "equations" || state.topic === "analytic" ? state.subtopic : null;
-    return DoctematicaContent.levels(state.topic, sub);
+    if (!state.topic) return all;
+    return all.filter(function (item) {
+      if ((item.topic || "equations") !== state.topic) return false;
+      if (state.topic === "equations" && sub) return (item.subtopic || "basic") === sub;
+      if (state.topic === "analytic" && sub) return (item.subtopic || "segments") === sub;
+      return true;
+    });
   }
 
   function isWorksheet() {
@@ -2957,7 +2598,7 @@
 
   function renderTopics() {
     topicsEl.innerHTML = "";
-    DoctematicaProblems.topics.forEach(function (topic) {
+    ((state.catalog && state.catalog.topics) || []).forEach(function (topic) {
       var btn = document.createElement("button");
       btn.type = "button";
       btn.textContent = topic.label;
@@ -2967,7 +2608,7 @@
         state.source = "worksheet";
         state.exerciseIndex = 0;
         if (topic.id === "equations" || topic.id === "analytic") {
-          var subs = (DoctematicaProblems.subtopics && DoctematicaProblems.subtopics[topic.id]) || [];
+          var subs = ((state.catalog && state.catalog.subtopics) || {})[topic.id] || [];
           state.subtopic = state.subtopic || (subs[0] && subs[0].id);
           if (!subs.some(function (s) { return s.id === state.subtopic; })) {
             state.subtopic = subs[0] ? subs[0].id : null;
@@ -2976,10 +2617,7 @@
             state.source = "worksheet";
           }
         }
-        var first = DoctematicaContent.levels(
-          topic.id,
-          topic.id === "equations" || topic.id === "analytic" ? state.subtopic : null
-        )[0];
+        var first = topicLevels()[0];
         state.levelId = first ? first.id : "level-01";
         renderTopics();
         renderSubtopics();
@@ -2992,7 +2630,7 @@
   }
 
   function renderSubtopics() {
-    var list = (DoctematicaProblems.subtopics && DoctematicaProblems.subtopics[state.topic]) || [];
+    var list = ((state.catalog && state.catalog.subtopics) || {})[state.topic] || [];
     if (!list.length) {
       subtopicsWrap.classList.add("hidden");
       return;
@@ -3033,6 +2671,10 @@
     }
     kindsWrap.classList.remove("hidden");
     eqActions.classList.remove("hidden");
+    if (typeof DoctematicaBank === "undefined" || !DoctematicaBank.kinds) {
+      kindsWrap.classList.add("hidden");
+      return;
+    }
     DoctematicaBank.kinds.forEach(function (kind) {
       var btn = document.createElement("button");
       btn.type = "button";
@@ -3056,13 +2698,13 @@
   }
 
   function currentTopicLabel() {
-    var found = DoctematicaProblems.topics.find(function (t) {
+    var found = ((state.catalog && state.catalog.topics) || []).filter(function (t) {
       return t.id === state.topic;
-    });
+    })[0];
     var label = found ? found.label : "";
     if (state.topic === "equations" || state.topic === "analytic") {
       var subList =
-        (DoctematicaProblems.subtopics && DoctematicaProblems.subtopics[state.topic]) || [];
+        ((state.catalog && state.catalog.subtopics) || {})[state.topic] || [];
       var sub = (subList.filter(function (s) {
         return s.id === state.subtopic;
       })[0] || {}).label;
@@ -4554,8 +4196,8 @@
       }
       if (parts.num && parts.num.more) q.root.lastNum = fields.num;
       pushRootTrail(sign, q.root.lastNum, q.root.lastDen);
-      if (q.root.numDone) q.root.lastNum = String(Q.numWant(want, sign));
-      if (q.root.denDone) q.root.lastDen = String(Q.denWant(want));
+      if (q.root.numDone && String(Q.numWant(want, sign) || "")) q.root.lastNum = String(Q.numWant(want, sign));
+      if (q.root.denDone && String(Q.denWant(want) || "")) q.root.lastDen = String(Q.denWant(want));
       showFeedback(true, "<strong>נכון.</strong> " + res.message);
       renderQuadGuide();
       renderSteps();
@@ -4739,136 +4381,11 @@
       requestQuadCheck({}, applyQuadServerResult);
       return;
     }
-    var Q = DoctematicaQuadratic;
-    var want = quadView();
-    var q = state.quad;
-    if (q.phase === "abc") {
-      var letter = q.abcAt || "a";
-      var one = Q.checkCoeff(want, letter, slotVal(letter));
-      if (!one.ok) {
-        state.stats.try += 1;
-        saveStats();
-        renderStats();
-        showFeedback(false, "<strong>עוד לא.</strong> " + one.message);
-        return;
-      }
-      if (!q.abcGot) q.abcGot = {};
-      q.abcGot[letter] = slotVal(letter);
-      if (letter === "a") {
-        state.stats.try += 1;
-        saveStats();
-        renderStats();
-        q.abcAt = "b";
-        showFeedback(true, "<strong>נכון.</strong> עכשיו b.");
-        renderQuadGuide();
-        return;
-      }
-      if (letter === "b") {
-        state.stats.try += 1;
-        saveStats();
-        renderStats();
-        q.abcAt = "c";
-        showFeedback(true, "<strong>נכון.</strong> עכשיו c.");
-        renderQuadGuide();
-        return;
-      }
-      applyQuadResult({ ok: true, message: "המקדמים נכונים. עכשיו הציבו בנוסחת השורשים." });
-      return;
-    }
-    if (q.phase === "plug") {
-      applyQuadResult(
-        Q.checkPlug(want, {
-          a1: slotVal("a1"),
-          a2: slotVal("a2"),
-          b1: slotVal("b1"),
-          b2: slotVal("b2"),
-          c: slotVal("c"),
-        })
-      );
-      return;
-    }
-    if (q.phase === "compute") {
-      var c = q.compute || {};
-      applyQuadResult(
-        Q.checkCompute(want, {
-          negB: c.negBDone ? String(-want.b) : slotVal("negB"),
-          disc: c.discDone ? String(want.D) : slotVal("disc"),
-          den: c.denDone ? String(2 * want.a) : slotVal("den"),
-        })
-      );
-      return;
-    }
-    if (q.phase === "sqrt") {
-      applyQuadResult(Q.checkSqrt(want, slotVal("s")), { typed: slotVal("s") });
-      return;
-    }
-    if (q.phase === "nosol") {
-      applyQuadResult(Q.checkNone(slotVal("none")));
-      return;
-    }
-    if (q.phase === "rootwork") {
-      handleRootWorkSubmit();
-    }
+    showBasicEqServerUnavailable();
   }
 
   function handleRootWorkSubmit() {
-    state.stats.try += 1;
-    saveStats();
-    renderStats();
-    var want = quadView();
-    var q = state.quad;
-    var Q = DoctematicaQuadratic;
-    var sign = q.root.at || 1;
-    if (!q.root.numDone || !q.root.denDone) {
-      var fields = {
-        num: q.root.numDone ? String(Q.numWant(want, sign)) : slotVal("rnum"),
-        den: q.root.denDone ? String(Q.denWant(want)) : slotVal("rden"),
-      };
-      var result = Q.checkRootCompute(want, sign, fields);
-      if (!result.ok) {
-        showFeedback(false, "<strong>עוד לא.</strong> " + result.message);
-        return;
-      }
-      if (!q.root.numDone) q.root.lastNum = fields.num;
-      if (!q.root.denDone) q.root.lastDen = fields.den;
-      var parts = result.parts || {};
-      if (parts.num && parts.num.ok && !parts.num.empty && !parts.num.more) q.root.numDone = true;
-      if (parts.den && parts.den.ok && !parts.den.empty && !parts.den.more) q.root.denDone = true;
-      if (parts.num && parts.num.more) q.root.lastNum = fields.num;
-      pushRootTrail(sign, q.root.lastNum, q.root.lastDen);
-      if (q.root.numDone) q.root.lastNum = String(Q.numWant(want, sign));
-      if (q.root.denDone) q.root.lastDen = String(Q.denWant(want));
-      showFeedback(true, "<strong>נכון.</strong> " + result.message);
-      renderQuadGuide();
-      renderSteps();
-      return;
-    }
-    var typed = slotVal("rval");
-    if (!String(typed).trim()) {
-      showFeedback(false, "<strong>עוד לא.</strong> חשבו את השבר לתוצאה.");
-      return;
-    }
-    var fin = Q.checkRootFinal(want, sign, typed);
-    if (!fin.ok) {
-      showFeedback(false, "<strong>עוד לא.</strong> " + fin.message);
-      return;
-    }
-    if (fin.more) {
-      q.root.val = "";
-      showFeedback(true, "<strong>נכון.</strong> " + fin.message);
-      renderQuadGuide();
-      return;
-    }
-    pushRootTrail(sign, q.root.lastNum, q.root.lastDen, Q.fmt(Q.rootWant(want, sign)));
-    if (sign > 0 && want.kind === "two") {
-      q.root.plusDone = true;
-      openRootChain(-1);
-      showFeedback(true, "<strong>נכון.</strong> עכשיו חשבו את x₂.");
-      renderQuadGuide();
-      renderSteps();
-      return;
-    }
-    finishQuad(want.answer.replace(/-/g, "−") + ".");
+    showBasicEqServerUnavailable();
   }
 
   function fillQuadStep() {
@@ -4876,64 +4393,7 @@
       requestQuadCheck({ intent: "one-step" }, applyQuadServerResult);
       return;
     }
-    var want = quadView();
-    var q = state.quad;
-    if (q.phase === "abc") {
-      q.abcGot = { a: want.a, b: want.b, c: want.c };
-      q.abcAt = "c";
-      applyQuadResult({ ok: true, message: "המקדמים נכונים. עכשיו הציבו בנוסחת השורשים." });
-      return;
-    }
-    if (q.phase === "plug") {
-      quadGuideEl.querySelector('[data-q="b1"]').value = String(want.b);
-      quadGuideEl.querySelector('[data-q="b2"]').value =
-        want.b < 0 ? "(" + want.b + ")" : String(want.b);
-      quadGuideEl.querySelector('[data-q="a1"]').value = String(want.a);
-      quadGuideEl.querySelector('[data-q="a2"]').value = String(want.a);
-      quadGuideEl.querySelector('[data-q="c"]').value = String(want.c);
-      handleQuadSubmit();
-      return;
-    }
-    if (q.phase === "compute") {
-      var nB = quadGuideEl.querySelector('[data-q="negB"]');
-      var dI = quadGuideEl.querySelector('[data-q="disc"]');
-      var dN = quadGuideEl.querySelector('[data-q="den"]');
-      if (nB) nB.value = String(-want.b);
-      if (dI) dI.value = String(want.D);
-      if (dN) dN.value = String(2 * want.a);
-      handleQuadSubmit();
-      return;
-    }
-    if (q.phase === "sqrt") {
-      var sI = quadGuideEl.querySelector('[data-q="s"]');
-      if (sI) sI.value = String(want.s);
-      handleQuadSubmit();
-      return;
-    }
-    if (q.phase === "count") {
-      applyQuadResult(DoctematicaQuadratic.checkCount(want, want.kind));
-      return;
-    }
-    if (q.phase === "nosol") {
-      applyQuadResult(DoctematicaQuadratic.checkNone("אין פתרון ממשי"));
-      return;
-    }
-    if (q.phase === "rootwork") {
-      if (!q.root.numDone || !q.root.denDone) {
-        var nEl = quadGuideEl.querySelector('[data-q="rnum"]');
-        var dEl = quadGuideEl.querySelector('[data-q="rden"]');
-        if (nEl) nEl.value = String(DoctematicaQuadratic.numWant(want, q.root.at || 1));
-        if (dEl) dEl.value = String(DoctematicaQuadratic.denWant(want));
-      } else {
-        var vEl = quadGuideEl.querySelector('[data-q="rval"]');
-        if (vEl) {
-          vEl.value = DoctematicaQuadratic.fmt(
-            DoctematicaQuadratic.rootWant(want, q.root.at || 1)
-          );
-        }
-      }
-      handleRootWorkSubmit();
-    }
+    showBasicEqServerUnavailable();
   }
 
   function handleSqrtEqSubmit() {
@@ -5025,7 +4485,7 @@
       highlight: highlight || null,
       drawConfig: drawConfig,
       drawState: state.geo.draw || { heights: [], auxPoints: [] },
-      pointMap: pack.map || {},
+      pointMap: (state.view && state.view.pointMap) || pack.map || {},
       onDrawChange: function (ds) {
         state.geo.draw = ds;
         updateGeoFootHint();
@@ -5074,11 +4534,7 @@
     if (
       !requestGeometryAction({ intent: "check", action: action }, function (remote) {
         if (remote && remote.local) {
-          applyLineMatchResultLocal(
-            type === "lineMatch.line"
-              ? DoctematicaGeometry.submitLineMatchLine(taskId, extra.lineKey, state.problem.geo, state.geo)
-              : DoctematicaGeometry.submitLineMatchReason(taskId, extra.reasonId, state.problem.geo, state.geo)
-          );
+          showBasicEqServerUnavailable();
           return;
         }
         var log =
@@ -5112,6 +4568,7 @@
       pack && DoctematicaGeometry.currentPartText
         ? DoctematicaGeometry.currentPartText(pack, state.geo)
         : null;
+    if (res.view) applyGeoView(res.view);
     if (res.done) state.geo.done = res.done;
     if (res.lineMatch) state.geo.lineMatch = res.lineMatch;
     if (res.lineEq) state.geo.lineEq = Object.assign({}, state.geo.lineEq || {}, res.lineEq);
@@ -5243,12 +4700,11 @@
         b.disabled = !!state.locked || row.done;
         b.addEventListener("click", function () {
           if (state.locked) return;
-          if ((isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage()) && isGeoLengthMode()) {
+          if (isGeoLengthMode()) {
             requestLineMatchAction("lineMatch.line", row.task.id, { lineKey: opt.key });
             return;
           }
-          var r = DoctematicaGeometry.submitLineMatchLine(row.task.id, opt.key, pack, state.geo);
-          applyLineMatchResult(r);
+          showBasicEqServerUnavailable();
         });
         pick.appendChild(b);
       });
@@ -5262,12 +4718,11 @@
         noneBtn.disabled = !!state.locked || row.done;
         noneBtn.addEventListener("click", function () {
           if (state.locked) return;
-          if ((isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage()) && isGeoLengthMode()) {
+          if (isGeoLengthMode()) {
             requestLineMatchAction("lineMatch.line", row.task.id, { lineKey: "none" });
             return;
           }
-          var r = DoctematicaGeometry.submitLineMatchLine(row.task.id, "none", pack, state.geo);
-          applyLineMatchResult(r);
+          showBasicEqServerUnavailable();
         });
         pick.appendChild(noneBtn);
       }
@@ -5285,12 +4740,11 @@
           rb.className = "line-match-reason-btn";
           rb.textContent = opt.label;
           rb.addEventListener("click", function () {
-            if ((isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage()) && isGeoLengthMode()) {
+            if (isGeoLengthMode()) {
               requestLineMatchAction("lineMatch.reason", row.task.id, { reasonId: opt.id });
               return;
             }
-            var r = DoctematicaGeometry.submitLineMatchReason(row.task.id, opt.id, pack, state.geo);
-            applyLineMatchResult(r);
+            showBasicEqServerUnavailable();
           });
           reason.appendChild(rb);
         });
@@ -5455,7 +4909,7 @@
           { intent: "check", typed: typed },
           function (remote) {
             if (remote && remote.local) {
-              finishGeoCheckResult(typed, DoctematicaGeometry.checkTyped(typed, pack, state.geo), true);
+              showBasicEqServerUnavailable();
               return;
             }
             finishGeoCheckResult(typed, remote, true);
@@ -5466,7 +4920,8 @@
       }
       return true;
     }
-    return finishGeoCheckResult(typed, DoctematicaGeometry.checkTyped(typed, pack, state.geo), false);
+    showBasicEqServerUnavailable();
+    return false;
   }
 
   function geoTaskFromId(pack, id) {
@@ -5498,6 +4953,7 @@
     var doneBefore = Object.assign({}, (state.geo && state.geo.done) || {});
     if (partBefore && partBefore.label) ensureGeoPartHeader(partBefore.label);
     applyGeoResultState(res);
+    if (res.view) applyGeoView(res.view);
     if (res.task && isGeoServerKind(res.task.kind)) {
       if (!state.geo.lengthLog) state.geo.lengthLog = [];
       var logLine = String(typed || "").trim();
@@ -5628,7 +5084,6 @@
     showFeedback(true, "<strong>נכון.</strong> " + okMsg);
     renderGeoAskUi();
     setModeUi();
-    if (geoEqSolveActive()) ensureGeoMixedPack();
     updateSplitBtn();
     updateFormulaBtn();
     var askNow = DoctematicaGeometry.lineAsk && DoctematicaGeometry.lineAsk(pack, state.geo);
@@ -5663,16 +5118,7 @@
   }
 
   function geoHintLocal() {
-    var pack = state.problem && state.problem.geo;
-    if (!pack) return;
-    var h = DoctematicaGeometry.nextHint(pack, state.geo);
-    var msg = h.message || "";
-    if (DoctematicaMath && DoctematicaMath.proseHTML) {
-      msg = DoctematicaMath.proseHTML(msg);
-    } else if (DoctematicaGeometry.formatPartHtml) {
-      msg = DoctematicaGeometry.formatPartHtml(msg);
-    }
-    showFeedback(true, "<strong>רמז.</strong> " + msg, "tip");
+    showBasicEqServerUnavailable();
   }
 
   function applyRequiredReason(text) {
@@ -5682,7 +5128,7 @@
       if (
         !requestGeometryAction({ intent: "check", typed: text }, function (remote) {
           if (remote && remote.local) {
-            applyRequiredReasonLocal(text);
+            showBasicEqServerUnavailable();
             return;
           }
           finishGeoCheckResult(text, remote, false);
@@ -5696,32 +5142,8 @@
   }
 
   function applyRequiredReasonLocal(text) {
-    var pack = state.problem && state.problem.geo;
-    if (!pack) return false;
-    var res = DoctematicaGeometry.submitReason(text, pack, state.geo);
-    if (!res.ok) {
-      showFeedback(false, "<strong>עוד לא.</strong> " + res.message);
-      return false;
-    }
-    state.geo.done = res.done || state.geo.done || {};
-    state.geo.partial = res.partial || {};
-    state.geo.coords = res.coords || state.geo.coords || {};
-    state.geo.lastExpr = res.lastExpr || state.geo.lastExpr || {};
-    attachStepNote(res.reasonText || text);
-    renderSteps();
-    renderGeoPart();
-    renderGeoAskUi();
-    if (res.solved) {
-      markSolved();
-      mathField.setDisabled(true);
-      checkBtn.disabled = true;
-      nextAfterSolveBtn.classList.remove("hidden");
-      showFeedback(true, "<strong>כל הכבוד.</strong> " + res.message);
-      return true;
-    }
-    showFeedback(true, "<strong>נכון.</strong> " + res.message);
-    mathField.focus();
-    return true;
+    showBasicEqServerUnavailable();
+    return false;
   }
 
   function geoOneStep() {
@@ -5740,8 +5162,17 @@
     geoOneStepLocal();
   }
 
+  function applyGeoView(view) {
+    if (!view) return;
+    state.view = view;
+    window.DoctematicaUI = window.DoctematicaUI || {};
+    window.DoctematicaUI.view = view;
+    if (view.draw && state.geo) state.geo.draw = view.draw;
+  }
+
   function applyGeoLengthsOneStep(pack, remote) {
     remote = remote || {};
+    if (remote.view) applyGeoView(remote.view);
     if (remote.local) {
       geoOneStepLocal();
       return;
@@ -5776,134 +5207,7 @@
   }
 
   function geoOneStepLocal() {
-    var pack = state.problem && state.problem.geo;
-    if (!pack || state.locked) return;
-    if (geoEqSolveActive()) {
-      var gPathEarly = mixedPath();
-      if (gPathEarly === "formula") return fillQuadStep();
-      if (gPathEarly === "factor") return factorOneStep();
-      if (gPathEarly === "sqrt") return sqrtOneStep();
-      if (gPathEarly === "linear") return stepOneStep();
-      var duTask = geoDistUnkTask();
-      if (duTask && DoctematicaGeometry.nextDistUnknownStep) {
-        var geoNxt = DoctematicaGeometry.nextDistUnknownStep(duTask, pack, state.geo);
-        var lastDu = (state.geo.lastExpr && state.geo.lastExpr[duTask.id]) || "";
-        if (geoNxt && String(geoNxt).replace(/\s+/g, "") !== String(lastDu).replace(/\s+/g, "")) {
-          applyGeoTyped(geoNxt);
-          return;
-        }
-      }
-      ensureGeoMixedPack();
-      var gPath = mixedPath();
-      if (gPath === "formula") return fillQuadStep();
-      if (gPath === "factor") return factorOneStep();
-      if (gPath === "sqrt") return sqrtOneStep();
-      if (gPath === "linear") return stepOneStep();
-      var mixPack = state.problem.mixed;
-      if (mixPack && DoctematicaQuadratic && DoctematicaQuadratic.nextMixedStep) {
-        var act = DoctematicaQuadratic.nextMixedStep(lastHistoryEq(), mixPack);
-        if (act && act.path === "formula") {
-          enterMixedFormula();
-          return;
-        }
-        if (act && act.path === "factor" && act.eq) {
-          state.mixed = state.mixed || emptyMixedState();
-          state.mixed.path = "factor";
-          if (mixPack.factor) state.problem.factor = mixPack.factor;
-          applyFactorTyped(act.eq);
-          return;
-        }
-        if (act && act.path === "sqrt" && act.eq) {
-          state.mixed = state.mixed || emptyMixedState();
-          state.mixed.path = "sqrt";
-          if (mixPack.sqrt) state.problem.sqrt = mixPack.sqrt;
-          applySqrtEqTyped(act.eq);
-          return;
-        }
-        if (act && act.eq) {
-          applyGeoTyped(rewriteLetterGeo(act.eq, "x", geoEqLetter()));
-          return;
-        }
-      }
-    }
-    if (
-      DoctematicaGeometry.lineMatchPartActive &&
-      DoctematicaGeometry.lineMatchPartActive(pack, state.geo)
-    ) {
-      var lmStep = DoctematicaGeometry.lineMatchOneStep(pack, state.geo);
-      if (!lmStep) {
-        showFeedback(true, "<strong>רמז.</strong> התרגיל כבר נפתר.");
-        return;
-      }
-      if (lmStep.action === "line") {
-        applyLineMatchResult(
-          DoctematicaGeometry.submitLineMatchLine(lmStep.taskId, lmStep.lineKey, pack, state.geo)
-        );
-      } else {
-        applyLineMatchResult(
-          DoctematicaGeometry.submitLineMatchReason(lmStep.taskId, lmStep.reasonId, pack, state.geo)
-        );
-      }
-      return;
-    }
-    var ask =
-      DoctematicaGeometry.lineAsk && DoctematicaGeometry.lineAsk(pack, state.geo);
-    if (ask && ask.stage === "yesno") {
-      var yesAns =
-        ask.task &&
-        (ask.task.kind === "parallel" || ask.task.kind === "perpendicular" || ask.task.kind === "yesNo")
-          ? !!ask.task.answer
-          : !!ask.task.on;
-      applyGeoTyped(yesAns ? "כן" : "לא");
-      return;
-    }
-    if (ask && ask.stage === "reason") {
-      applyRequiredReason(ask.task.reason || "לפי החישוב.");
-      return;
-    }
-    var h = DoctematicaGeometry.nextHint(pack, state.geo);
-    if (h.footCalc) {
-      applyGeoTyped(h.step || h.answer);
-      return;
-    }
-    if (h.addHeight && DoctematicaGeometry.siteAddHeight) {
-      DoctematicaGeometry.siteAddHeight(pack, state.geo, h.task);
-      renderGeoScene(null);
-      var heightMsg =
-        (state.geo.draw && state.geo.draw.note) || h.message || "הגובה נוסף לשרטוט.";
-      if (DoctematicaMath && DoctematicaMath.proseHTML) heightMsg = DoctematicaMath.proseHTML(heightMsg);
-      else if (DoctematicaGeometry.formatPartHtml) heightMsg = DoctematicaGeometry.formatPartHtml(heightMsg);
-      showFeedback(true, "<strong>נכון.</strong> " + heightMsg);
-      return;
-    }
-    if (!h.task) {
-      var doneMsg = h.message || "התרגיל כבר נפתר.";
-      if (DoctematicaMath && DoctematicaMath.proseHTML) doneMsg = DoctematicaMath.proseHTML(doneMsg);
-      else if (DoctematicaGeometry.formatPartHtml) doneMsg = DoctematicaGeometry.formatPartHtml(doneMsg);
-      showFeedback(true, "<strong>רמז.</strong> " + doneMsg, "tip");
-      return;
-    }
-    var typed = h.step || h.answer;
-    if (h.rawStep) typed = h.step;
-    // בסגירת קטע שהתחיל: עדיף מספר מתויג כדי לא להתבלבל עם סעיפים אחרים
-    if (
-      h.task &&
-      state.geo.partial &&
-      state.geo.partial[h.task.id] &&
-      (h.task.kind === "segment" ||
-        h.task.kind === "origin" ||
-        h.task.kind === "axis" ||
-        h.task.kind === "distSeg" ||
-        h.task.kind === "area")
-    ) {
-      if (h.task.kind === "area" || h.task.fromArea || h.task.kind === "lineEq") {
-        typed = h.step || h.answer;
-      } else {
-        var tag = String(h.task.label || "").replace(/→/g, "").replace(/->/g, "");
-        typed = tag + "=" + (h.answer || h.step);
-      }
-    }
-    applyGeoTyped(typed);
+    showBasicEqServerUnavailable();
   }
 
   function geoShowSolution() {
@@ -5934,6 +5238,7 @@
     state.geo.notes = {};
     state.geo.noteOpen = null;
     state.history = (remote.steps || []).slice();
+    if (remote.view) applyGeoView(remote.view);
     state.geo.done = remote.done || {};
     state.geo.partial = {};
     state.geo.coords = remote.coords || {};
@@ -5958,228 +5263,7 @@
   }
 
   function geoShowSolutionLocal() {
-    var pack = state.problem && state.problem.geo;
-    if (!pack) return;
-    if (!state.geo) state.geo = {};
-    state.geo.notes = {};
-    state.geo.noteOpen = null;
-    state.history = [];
-    var parts = pack.parts || [];
-    if (parts.length) {
-      parts.forEach(function (part) {
-        if (part.label) state.history.push("סעיף:" + part.label);
-        else if (String(part.text || "").trim()) state.history.push("שאלה:" + String(part.text).trim());
-        if (DoctematicaGeometry.canonicalGivenLineRearrangeSteps) {
-          var rearrLines = DoctematicaGeometry.canonicalGivenLineRearrangeSteps(pack) || [];
-          if (rearrLines.length && (part.taskIds || []).some(function (id) {
-            var tt = (pack.tasks || []).filter(function (u) { return u.id === id; })[0];
-            return tt && (tt.kind === "lineIntersect" || tt.kind === "slope" || tt.kind === "lineEq");
-          })) {
-            state.history.push("משימה:סידור משוואת הישר");
-            rearrLines.forEach(function (line) {
-              state.history.push(line);
-            });
-          }
-        }
-        (part.taskIds || []).forEach(function (id) {
-          var task = (pack.tasks || []).filter(function (t) {
-            return t.id === id;
-          })[0];
-          if (task) {
-            var pairSol =
-              DoctematicaGeometry.axisMidPairTasks &&
-              DoctematicaGeometry.axisMidPairTasks(pack, {});
-            var pairSolL =
-              DoctematicaGeometry.lineMidPairTasks &&
-              DoctematicaGeometry.lineMidPairTasks(pack, {});
-            if (
-              pairSol &&
-              (task.id === pairSol.yEnd.id || task.id === pairSol.xEnd.id)
-            ) {
-              if (task.id === pairSol.yEnd.id && DoctematicaGeometry.canonicalAxisMidPairSteps) {
-                DoctematicaGeometry.canonicalAxisMidPairSteps(pack, {}).forEach(function (line) {
-                  state.history.push(line);
-                });
-              }
-              return;
-            }
-            if (
-              pairSolL &&
-              (task.id === pairSolL.yEnd.id || task.id === pairSolL.xEnd.id)
-            ) {
-              if (task.id === pairSolL.yEnd.id && DoctematicaGeometry.canonicalLineMidPairSteps) {
-                DoctematicaGeometry.canonicalLineMidPairSteps(pack, {}).forEach(function (line) {
-                  state.history.push(line);
-                });
-              }
-              return;
-            }
-            if (
-              DoctematicaGeometry.partStepByTask &&
-              DoctematicaGeometry.partStepByTask(part, pack)
-            ) {
-              var taskHead =
-                DoctematicaGeometry.taskStepLabel && DoctematicaGeometry.taskStepLabel(task);
-              if (taskHead) state.history.push("משימה:" + taskHead);
-            }
-            var taskLine =
-              part.line ||
-              (pack.line ? pack.line : null);
-            if (taskLine && (task.kind === "onLine" || task.kind === "freePoint") && DoctematicaGeometry.canonicalOnLineSteps) {
-              var plugIdx = state.history.length;
-              DoctematicaGeometry.canonicalOnLineSteps(task, pack).forEach(function (line) {
-                state.history.push(line);
-              });
-              if (!state.geo.notes) state.geo.notes = {};
-              if (task.kind === "onLine" && DoctematicaGeometry.onLinePlugReason) {
-                state.geo.notes[plugIdx] = DoctematicaGeometry.onLinePlugReason();
-              }
-              if (task.reason) {
-                state.geo.notes[state.history.length - 1] = task.reason;
-              }
-            } else if (task.kind === "midpoint" && DoctematicaGeometry.canonicalMidpointSteps) {
-              DoctematicaGeometry.canonicalMidpointSteps(task, pack, state.geo).forEach(function (line) {
-                state.history.push(line);
-              });
-            } else if (task.kind === "slope" && DoctematicaGeometry.canonicalSlopeSteps) {
-              var slopeIdx = state.history.length;
-              DoctematicaGeometry.canonicalSlopeSteps(task, pack).forEach(function (line) {
-                state.history.push(line);
-              });
-              if (task.parallel) {
-                if (!state.geo.notes) state.geo.notes = {};
-                state.geo.notes[slopeIdx] = "ישרים מקבילים — שיפועים שווים.";
-              }
-              if (task.perpendicular) {
-                if (!state.geo.notes) state.geo.notes = {};
-                state.geo.notes[slopeIdx] = "ישרים מאונכים — מכפלת השיפועים היא −1.";
-              }
-            } else if (task.kind === "distance" && DoctematicaGeometry.canonicalDistanceSteps) {
-              DoctematicaGeometry.canonicalDistanceSteps(task, pack).forEach(function (line) {
-                state.history.push(line);
-              });
-            } else if (task.kind === "distUnknown" && DoctematicaGeometry.canonicalDistUnknownSteps) {
-              DoctematicaGeometry.canonicalDistUnknownSteps(task, pack).forEach(function (line) {
-                state.history.push(line);
-              });
-            } else if (task.kind === "perimeter" && DoctematicaGeometry.canonicalPerimeterSteps) {
-              DoctematicaGeometry.canonicalPerimeterSteps(task, pack).forEach(function (line) {
-                state.history.push(line);
-              });
-            } else if (task.kind === "equalLen") {
-              state.history.push(task.segs && task.segs.length >= 2 ? String(task.segs[0]).toUpperCase() + "=" + String(task.segs[1]).toUpperCase() : "AB=BC");
-            } else if (task.kind === "lineMb" && DoctematicaGeometry.canonicalLineMbSteps) {
-              DoctematicaGeometry.canonicalLineMbSteps(task, pack).forEach(function (line) {
-                state.history.push(line);
-              });
-            } else if (task.kind === "parallel" && DoctematicaGeometry.canonicalParallelSteps) {
-              var parSteps = DoctematicaGeometry.canonicalParallelSteps(task, pack);
-              var parIdx = state.history.length;
-              parSteps.forEach(function (line) {
-                state.history.push(line);
-              });
-              if (!state.geo.notes) state.geo.notes = {};
-              if (task.reason) state.geo.notes[state.history.length - 1] = task.reason;
-            } else if (task.kind === "perpendicular" && DoctematicaGeometry.canonicalPerpendicularSteps) {
-              var perpSteps = DoctematicaGeometry.canonicalPerpendicularSteps(task, pack);
-              var perpBase = state.history.length;
-              perpSteps.forEach(function (line) {
-                state.history.push(line);
-              });
-              if (!state.geo.notes) state.geo.notes = {};
-              var perpNote = DoctematicaGeometry.perpSlopeReason
-                ? DoctematicaGeometry.perpSlopeReason(task, pack)
-                : "";
-              var pk;
-              for (pk = 0; pk < perpSteps.length; pk++) {
-                var pln = String(perpSteps[pk] || "");
-                if (/^(כן|לא)$/.test(pln) || /^ולכן/.test(pln)) continue;
-                if (/[·×*]/.test(pln) && /=/.test(pln)) {
-                  state.geo.notes[perpBase + pk] = perpNote;
-                  break;
-                }
-              }
-            } else if (task.kind === "yesNo") {
-              state.history.push(task.answer ? "כן" : "לא");
-            } else if (task.kind === "lineEq" && DoctematicaGeometry.canonicalLineEqSteps) {
-              DoctematicaGeometry.canonicalLineEqSteps(task).forEach(function (line) {
-                state.history.push(line);
-              });
-            } else if (task.kind === "lineIntersect" && DoctematicaGeometry.canonicalLineIntersectSteps) {
-              DoctematicaGeometry.canonicalLineIntersectSteps(task, pack).forEach(function (line) {
-                state.history.push(line);
-              });
-            } else if (
-              (task.kind === "point" || task.kind === "noIntercept") &&
-              DoctematicaGeometry.canonicalLineSteps
-            ) {
-              var lineSteps = DoctematicaGeometry.canonicalLineSteps(task, pack);
-              if (lineSteps.length) {
-                lineSteps.forEach(function (line) {
-                  state.history.push(line);
-                });
-              } else if (task.kind === "point") {
-                state.history.push(DoctematicaGeometry.canonicalStep(task, pack.map));
-              }
-            } else if (task.kind === "area" && DoctematicaGeometry.canonicalAreaSteps) {
-              DoctematicaGeometry.canonicalAreaSteps(task, pack.map).forEach(function (line) {
-                state.history.push(line);
-              });
-            } else if (DoctematicaGeometry.canonicalDiffChain) {
-              state.history.push(DoctematicaGeometry.canonicalDiffChain(task, pack.map));
-            } else {
-              state.history.push(DoctematicaGeometry.canonicalStep(task, pack.map));
-            }
-          }
-        });
-      });
-    } else {
-      state.history = state.history.concat(pack.steps || []);
-    }
-    var done = {};
-    pack.tasks.forEach(function (t) {
-      done[t.id] = true;
-    });
-    state.geo.done = done;
-    state.geo.partial = {};
-    state.geo.coords = {};
-    if (
-      pack.line &&
-      DoctematicaGeometry.lineMbNeedsUnsorted &&
-      DoctematicaGeometry.lineMbNeedsUnsorted(pack.line) &&
-      DoctematicaGeometry.sortedLineEq
-    ) {
-      state.geo.lineEqDisplay = DoctematicaGeometry.sortedLineEq(pack.line);
-    } else if (
-      pack.tasks &&
-      pack.tasks.some(function (t) {
-        return t.kind === "lineEq";
-      }) &&
-      pack.line &&
-      DoctematicaGeometry.sortedLineEq
-    ) {
-      state.geo.lineEqDisplay = DoctematicaGeometry.sortedLineEq(pack.line);
-    } else {
-      state.geo.lineEqDisplay = null;
-    }
-    state.geo.draw = DoctematicaGeometry.initDrawProgress
-      ? DoctematicaGeometry.initDrawProgress(pack, {})
-      : null;
-    if (DoctematicaGeometry.siteAddAllHeights) {
-      state.geo.draw = DoctematicaGeometry.siteAddAllHeights(pack, state.geo);
-    }
-    pack.tasks.forEach(function (t) {
-      if (t.kind === "point" || t.kind === "midpoint") state.geo.coords[t.id] = { x: true, y: true };
-    });
-    markSolved();
-    renderSteps();
-    renderGeoPart();
-    renderGeoScene(null);
-    renderGeoAskUi();
-    mathField.setDisabled(true);
-    checkBtn.disabled = true;
-    nextAfterSolveBtn.classList.remove("hidden");
-    showFeedback(true, "<strong>פתרון מלא.</strong> כל הצעדים מוצגים בהיסטוריה.");
+    showBasicEqServerUnavailable();
   }
 
   function applyHighRootTyped(typed) {
@@ -6337,93 +5421,8 @@
       );
       return true;
     }
-    if (DoctematicaAlgebra.missingEqualsSign(typed)) {
-      state.stats.try += 1;
-      saveStats();
-      renderStats();
-      showFeedback(false, "<strong>עוד לא.</strong> חסר סימן שווה");
-      return false;
-    }
-    state.stats.try += 1;
-    saveStats();
-    renderStats();
-    var prev = lastHistoryEq();
-    var pack = state.problem.sqrt;
-    var Q = DoctematicaQuadratic;
-    if (Q.hasVisibleLinearX && Q.hasVisibleLinearX(prev)) {
-      var mixedPack = state.problem.mixed;
-      var nextP = Q.parseABC(typed);
-      var isoT = Q.isolatedK(typed);
-      if (mixedPack && nextP && Q.abcEquivalent(mixedPack, nextP) && isoT && (isoT.kind === "value" || isoT.kind === "unreduced" || isoT.kind === "expr")) {
-        state.history.push(shownTyped);
-        renderSteps();
-        mathField.clear();
-        showFeedback(true, "<strong>נכון.</strong> x² מבודד. עכשיו הוציאו שורש משני האגפים.");
-        mathField.focus();
-        return true;
-      }
-    }
-    var both = Q.checkSqrtBothSides(prev, typed);
-    if (both) {
-      if (!both.ok) {
-        showFeedback(false, "<strong>עוד לא.</strong> " + both.message);
-        return false;
-      }
-      state.history.push(shownTyped);
-      renderSteps();
-      mathField.clear();
-      showFeedback(true, "<strong>נכון.</strong> " + both.message);
-      mathField.focus();
-      return true;
-    }
-    var isolated = false;
-    var h;
-    for (h = 0; h < state.history.length; h++) {
-      var isoH = Q.isolatedK(geoEngineTyped(state.history[h]));
-      if (isoH && (isoH.kind === "value" || isoH.kind === "unreduced")) isolated = true;
-    }
-    var rootAns = Q.isRootAnswerText(typed);
-    var stillX2 = Q.hasX2(typed);
-    if ((!isolated || stillX2) && !rootAns) {
-      var result = DoctematicaAlgebra.checkStep(prev, typed, { unknown: "x2" });
-      if (!result.ok) {
-        showFeedback(false, "<strong>עוד לא.</strong> " + result.message);
-        return false;
-      }
-      state.history.push(shownTyped);
-      renderSteps();
-      mathField.clear();
-      showFeedback(
-        true,
-        result.isolated
-          ? "<strong>נכון.</strong> " + result.message
-          : "<strong>צעד חוקי.</strong> " + result.message
-      );
-      mathField.focus();
-      return true;
-    }
-    var fin = Q.checkSqrtFinish(typed, pack, state.sqrtProg || { pos: false, neg: false });
-    if (!fin.ok) {
-      showFeedback(false, "<strong>עוד לא.</strong> " + fin.message);
-      return false;
-    }
-    if (fin.progress) state.sqrtProg = fin.progress;
-    state.history.push(shownTyped);
-    renderSteps();
-    if (fin.solved) {
-      if (finishEqSolveForGeo(shownTyped || (pack && pack.answer) || "")) return true;
-      markSolved();
-      mathField.setDisabled(true);
-      checkBtn.disabled = true;
-      renderSteps();
-      nextAfterSolveBtn.classList.remove("hidden");
-      showFeedback(true, "<strong>כל הכבוד.</strong> " + fin.message);
-      return true;
-    }
-    mathField.clear();
-    showFeedback(true, "<strong>נכון.</strong> " + fin.message);
-    mathField.focus();
-    return true;
+    showBasicEqServerUnavailable();
+    return false;
   }
 
   function applyLinearTyped(typed) {
@@ -6475,7 +5474,8 @@
       );
       return true;
     }
-    return applyLinearVerdict(DoctematicaAlgebra.checkStep(prevEq, typed));
+    showBasicEqServerUnavailable();
+    return false;
   }
 
   function beginMixedFormulaFromServer(res, md53) {
@@ -6502,7 +5502,6 @@
   }
 
   function enterMixedFormula() {
-    if (geoEqSolveActive()) ensureGeoMixedPack();
     if (isMixedServerMode()) {
       requestQuadraticAction(
         {
@@ -6518,30 +5517,10 @@
       );
       return;
     }
-    var pack = state.problem.mixed;
-    if (!state.problem.quad && pack) {
-      state.problem.quad = pack.quad || DoctematicaQuadratic.analyze(pack.a, pack.b, pack.c, pack.standard);
-    }
-    if (!state.problem.quad) {
-      showFeedback(false, "<strong>עוד לא.</strong> קודם הביאו לצורה ax²+bx+c=0.");
-      return;
-    }
-    state.mixed = state.mixed || emptyMixedState();
-    state.mixed.path = "formula";
-    state.mixed.md53 = false;
-    startQuadSession();
-    renderQuadGuide();
-    renderSteps();
-    updateFormulaBtn();
-    showFeedback(
-      true,
-      "<strong>נוסחת שורשים.</strong> a, b, c הם המקדמים אחרי האיסוף, בצורה ax²+bx+c=0.",
-      "tip"
-    );
+    showBasicEqServerUnavailable();
   }
 
   function enterMixedMd53() {
-    if (geoEqSolveActive()) ensureGeoMixedPack();
     if (isMixedServerMode()) {
       requestQuadraticAction(
         {
@@ -6557,26 +5536,7 @@
       );
       return;
     }
-    var last = lastHistoryEq();
-    var Q = DoctematicaQuadratic;
-    var p = Q.parseABC(last);
-    if (!p || !p.a) {
-      showFeedback(false, "<strong>עוד לא.</strong> קודם סדרו ל־ax²+bx+c=0 (גם אם b או c אפס).");
-      return;
-    }
-    state.problem.quad = Q.analyze(p.a, p.b, p.c, last);
-    state.mixed = state.mixed || emptyMixedState();
-    state.mixed.path = "formula";
-    state.mixed.md53 = true;
-    startQuadSession();
-    renderQuadGuide();
-    renderSteps();
-    updateFormulaBtn();
-    showFeedback(
-      true,
-      "<strong>md53.</strong> כמו במחשבון: רשמו a, אחר כך b, אחר כך c. אחרי שלושתם מופיע הפתרון. גם אם b=0 או c=0.",
-      "tip"
-    );
+    showBasicEqServerUnavailable();
   }
 
   function applyMixedTyped(typed) {
@@ -6614,83 +5574,8 @@
       );
       return true;
     }
-    if (path === "sqrt") return applySqrtEqTyped(shownTyped);
-    if (path === "factor") return applyFactorTyped(shownTyped);
-    if (path === "linear") return applyLinearTyped(shownTyped);
-
-    var pack = state.problem.mixed;
-    var Q = DoctematicaQuadratic;
-    var res = Q.checkMixedTyped(lastHistoryEq(), typed, pack);
-    if (!res.ok) {
-      state.stats.try += 1;
-      saveStats();
-      renderStats();
-      showFeedback(false, "<strong>עוד לא.</strong> " + res.message);
-      return false;
-    }
-    if (res.path === "factor") {
-      if (res.factor) state.problem.factor = res.factor;
-      state.mixed.path = "factor";
-      return applyFactorTyped(shownTyped);
-    }
-    if (res.enter === "sqrt") {
-      if (!state.problem.sqrt && pack && pack.sqrt) state.problem.sqrt = pack.sqrt;
-      if (!state.problem.sqrt && pack) {
-        try {
-          state.problem.sqrt = Q.analyzeSqrtStart(pack.standard);
-        } catch (err) {}
-      }
-      state.mixed.path = "sqrt";
-      state.sqrtProg = { pos: false, neg: false };
-      return applySqrtEqTyped(shownTyped);
-    }
-    if (res.enter === "linear") {
-      state.mixed.path = "linear";
-      state.stats.try += 1;
-      saveStats();
-      renderStats();
-      state.history.push(shownTyped);
-      renderSteps();
-      mathField.clear();
-      try {
-        var lin = DoctematicaAlgebra.parseEquation(typed);
-        if (DoctematicaAlgebra.isSolved(lin)) {
-          markSolved();
-          mathField.setDisabled(true);
-          checkBtn.disabled = true;
-          renderSteps();
-          nextAfterSolveBtn.classList.remove("hidden");
-          showFeedback(true, "<strong>כל הכבוד.</strong> " + res.message);
-          return true;
-        }
-      } catch (err2) {}
-      showFeedback(true, "<strong>נכון.</strong> " + res.message);
-      mathField.focus();
-      return true;
-    }
-    if (res.solved) {
-      state.stats.try += 1;
-      saveStats();
-      renderStats();
-      state.history.push(shownTyped);
-      markSolved();
-      mathField.setDisabled(true);
-      checkBtn.disabled = true;
-      renderSteps();
-      nextAfterSolveBtn.classList.remove("hidden");
-      showFeedback(true, "<strong>כל הכבוד.</strong> " + res.message);
-      return true;
-    }
-    state.stats.try += 1;
-    saveStats();
-    renderStats();
-    clearLcdAssist();
-    state.history.push(shownTyped);
-    renderSteps();
-    mathField.clear();
-    showFeedback(true, "<strong>צעד חוקי.</strong> " + res.message);
-    mathField.focus();
-    return true;
+    showBasicEqServerUnavailable();
+    return false;
   }
 
   function applyMixedServerResult(shownTyped, res) {
@@ -6820,14 +5705,7 @@
       );
       return;
     }
-    var pack = state.problem.mixed;
-    var path = mixedPath();
-    if (path === "sqrt") return sqrtHint();
-    if (path === "factor") return factorHint();
-    if (path === "formula") return quadHint();
-    if (path === "linear") return stepHint();
-    var act = DoctematicaQuadratic.nextMixedStep(lastHistoryEq(), pack);
-    showFeedback(true, "<strong>רמז.</strong> " + ((act && act.hint) || DoctematicaQuadratic.mixedHintFor(pack, lastHistoryEq())), "tip");
+    showBasicEqServerUnavailable();
   }
 
   function mixedOneStep() {
@@ -6905,29 +5783,7 @@
       return;
     }
     var pack = state.problem.mixed;
-    var path = mixedPath();
-    if (path === "sqrt") return sqrtOneStep();
-    if (path === "factor") return factorOneStep();
-    if (path === "formula") return fillQuadStep();
-    if (path === "linear") return stepOneStep();
-    if (maybeApplyLcdMarksOneStep()) return;
-    var act = DoctematicaQuadratic.nextMixedStep(lastHistoryEq(), pack);
-    if (!act) return;
-    if (act.path === "formula") {
-      enterMixedFormula();
-      return;
-    }
-    if (act.path === "factor" && act.eq) {
-      if (pack.factor) state.problem.factor = pack.factor;
-      state.mixed.path = "factor";
-      applyFactorTyped(act.eq);
-      return;
-    }
-    if (act.eq) {
-      applyMixedTyped(act.eq);
-      return;
-    }
-    showFeedback(true, "<strong>רמז.</strong> " + (act.hint || "התרגיל כבר פתור."), "tip");
+    showBasicEqServerUnavailable();
   }
 
   var MATH_FIELD_HINT =
@@ -7020,20 +5876,7 @@
       );
       return;
     }
-    var tips = {
-      abc: "a מקדם x², b מקדם x, c החופשי. כאן a = " + want.a + ".",
-      plug: "הציבו a, b, c. אם b שלילי, ב־b² כתבו עם סוגריים, למשל (−4)².",
-      compute:
-        "חשבו −b, את " +
-        DoctematicaQuadratic.discExpr(want.a, want.b, want.c) +
-        ", ואת 2a. שני מינוסים הופכים לפלוס.",
-      sqrt: "√(" + want.D + ") הוא מספר שלם.",
-      count: "הסתכלו על סימן הדיסקרימיננטה Δ = " + want.D + ". אפשר גם ללחוץ המשך.",
-      nosol: "רשמו שאין פתרון ממשי.",
-      rootwork: "חשבו קודם את המונה, ואז את השבר עם קו השבר. אחר כך את התוצאה.",
-      roots: "x = (−b ± √Δ) / (2a). צמצמו את השבר.",
-    };
-    showFeedback(true, "<strong>רמז.</strong> " + (tips[state.quad.phase] || "התרגיל כבר פתור."), "tip");
+    showBasicEqServerUnavailable();
   }
 
   function sqrtHint() {
@@ -7051,10 +5894,7 @@
       );
       return;
     }
-    var cur = lastHistoryEq();
-    var act = DoctematicaTeach.nextAction(cur, { unknown: "x2" });
-    var extra = (act.isolated || act.done) && DoctematicaQuadratic.nextSqrtStep(cur, state.problem.sqrt);
-    showFeedback(true, "<strong>רמז.</strong> " + ((extra && extra.hint) || act.hint), "tip");
+    showBasicEqServerUnavailable();
   }
 
   function sqrtOneStep() {
@@ -7076,18 +5916,7 @@
       );
       return;
     }
-    var cur = lastHistoryEq();
-    var act = DoctematicaTeach.nextAction(cur, { unknown: "x2" });
-    var nextEq = act.eq;
-    if (!nextEq) {
-      var fin = DoctematicaQuadratic.nextSqrtStep(cur, state.problem.sqrt);
-      nextEq = fin && fin.eq;
-    }
-    if (!nextEq) {
-      showFeedback(true, "<strong>רמז.</strong> " + (act.hint || "התרגיל כבר פתור."));
-      return;
-    }
-    applySqrtEqTyped(nextEq);
+    showBasicEqServerUnavailable();
   }
 
   function factorHint() {
@@ -7132,12 +5961,7 @@
       showBasicEqServerUnavailable();
       return;
     }
-    var act = DoctematicaQuadratic.nextFactorStep(
-      lastHistoryEq(),
-      state.problem.factor,
-      state.factor || emptyFactorState()
-    );
-    showFeedback(true, "<strong>רמז.</strong> " + ((act && act.hint) || "הוציאו גורם משותף x."), "tip");
+    showBasicEqServerUnavailable();
   }
 
   function factorOneStep() {
@@ -7193,20 +6017,7 @@
       showBasicEqServerUnavailable();
       return;
     }
-    var act = DoctematicaQuadratic.nextFactorStep(
-      lastHistoryEq(),
-      state.problem.factor,
-      state.factor || emptyFactorState()
-    );
-    if (act && act.split) {
-      doFactorSplit();
-      return;
-    }
-    if (!act || !act.eq) {
-      showFeedback(true, "<strong>רמז.</strong> " + ((act && act.hint) || "התרגיל כבר פתור."), "tip");
-      return;
-    }
-    applyFactorTyped(act.eq);
+    showBasicEqServerUnavailable();
   }
 
   function currentDomainWorkIndex() {
@@ -7271,21 +6082,10 @@
         );
         return;
       }
-      var items = domainItems();
-      if (!items.length) return;
-      if (!currentDomainStarted()) {
-        showFeedback(
-          true,
-          "<strong>רמז.</strong> רשמו באחד התאים מכנה≠0 או x≠… — איזה מכנה שתרצו. התא השני יהיה למכנה שנשאר.",
-          "tip"
-        );
-        return;
-      }
-      var nxt = DoctematicaTeach.domainNextStep(currentDomainConstraint());
-      showFeedback(true, "<strong>רמז.</strong> " + (nxt.hint || nxt.display), "tip");
+      showBasicEqServerUnavailable();
       return;
     }
-    if (isDomainLcdServerMode() && state.lcd && state.lcd.phase) {
+        if (isDomainLcdServerMode() && state.lcd && state.lcd.phase) {
       requestDomainLcdAction(
         {
           intent: "lcd-hint",
@@ -7315,8 +6115,7 @@
     ) {
       return;
     }
-    var act = DoctematicaTeach.nextAction(hintEq);
-    showFeedback(true, "<strong>רמז.</strong> " + act.hint, act.done ? undefined : "tip");
+    showBasicEqServerUnavailable();
   }
 
   function stepOneStep() {
@@ -7339,17 +6138,10 @@
         );
         return;
       }
-      var items = domainItems();
-      if (!currentDomainStarted()) {
-        var first = domainItemForSlot(currentDomainWorkIndex());
-        tryApplyDomainTyped((first && first.rawPart) || items[0].rawPart);
-        return;
-      }
-      var nxt = DoctematicaTeach.domainNextStep(currentDomainConstraint());
-      tryApplyDomainTyped(nxt.display);
+      showBasicEqServerUnavailable();
       return;
     }
-    if (maybeApplyLcdMarksOneStep()) return;
+        if (maybeApplyLcdMarksOneStep()) return;
     var cur = lastHistoryEq();
     function applySiteStep(actEq, actHint, result) {
       if (!result.ok) {
@@ -7391,23 +6183,7 @@
     ) {
       return;
     }
-    var actEq = null;
-    var actHint = null;
-    if (lastStepHasLcdMarks() && typeof DoctematicaTeach.clearEqDens === "function") {
-      actEq = DoctematicaTeach.clearEqDens(cur);
-      actHint = "כפלו כל איבר במכפיל והורידו את המכנים.";
-    }
-    if (!actEq) {
-      var act = DoctematicaTeach.nextAction(cur);
-      if (act.done || !act.eq) {
-        showFeedback(true, "<strong>רמז.</strong> " + (act.hint || "המשוואה כבר פתורה."));
-        return;
-      }
-      actEq = act.eq;
-      actHint = act.hint;
-    }
-    clearLcdAssist();
-    applySiteStep(actEq, actHint, DoctematicaAlgebra.checkStep(cur, actEq));
+    showBasicEqServerUnavailable();
   }
 
   function currentGuide() {
@@ -7546,7 +6322,6 @@
     }
     if (isGeoLengthMode() || (isAnalyticTopic() && state.problem && state.problem.mode === "geo-length")) {
       if (geoEqSolveActive()) {
-        ensureGeoMixedPack();
         var gMix = mixedPath();
         if (gMix === "formula") {
           return {
@@ -8080,7 +6855,6 @@
         mathField.setMDistEnabled(false);
       }
     }
-    if (geoEqSolveActive()) ensureGeoMixedPack();
     updateSplitBtn();
     updateFormulaBtn();
   }
@@ -8145,16 +6919,50 @@
     showSolutionBtn.classList.remove("hidden");
     eqActions.classList.remove("hidden");
     formEl.classList.remove("hidden");
-    if (isWorksheet()) {
-      var level = currentLevel();
-      if (state.exerciseIndex < 0) state.exerciseIndex = 0;
-      if (state.exerciseIndex >= level.exercises.length) {
-        state.exerciseIndex = level.exercises.length - 1;
-      }
-      state.problem = DoctematicaContent.problem(level.id, state.exerciseIndex);
-    } else {
-      state.problem = DoctematicaProblems.generate(state.topic, levelEl.value, state.kind);
+    if (!isWorksheet()) {
+      showBasicEqServerUnavailable();
+      return;
     }
+    var level = currentLevel();
+    if (!level || !level.exercises || !level.exercises.length) return;
+    if (state.exerciseIndex < 0) state.exerciseIndex = 0;
+    if (state.exerciseIndex >= level.exercises.length) {
+      state.exerciseIndex = level.exercises.length - 1;
+    }
+    requestStudentProblem(level.id, state.exerciseIndex);
+  }
+
+  function requestStudentProblem(levelId, index) {
+    fetch(API_ROOT + "/api/problem", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ levelId: levelId, exerciseIndex: index }),
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error("problem");
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !data.problem) {
+          showBasicEqServerUnavailable();
+          return;
+        }
+        state.problem = data.problem;
+        state.offerFormula = !!(data.problem && data.problem.offerFormula);
+        if (data.view) applyGeoView(data.view);
+        else {
+          state.view = null;
+          if (window.DoctematicaUI) window.DoctematicaUI.view = null;
+        }
+        presentLoadedProblem();
+      })
+      .catch(function () {
+        showBasicEqServerUnavailable();
+      });
+  }
+
+  function presentLoadedProblem() {
     if (isSystemMode()) {
       startSystemSession(state.problem);
       state.history = [];
@@ -8431,35 +7239,11 @@
         }
       }
       if (requestBasicEqCheck(prevEq, typedNow, applyStepVerdict)) return;
-      applyStepVerdict(DoctematicaAlgebra.checkStep(prevEq, typedNow));
+      showBasicEqServerUnavailable();
       return;
     }
 
-    var parsed = parseAnswer(typedAnswer());
-    var ok = answersMatch(parsed, state.problem);
-    state.locked = true;
-    answerEl.disabled = true;
-    state.stats.try += 1;
-    if (ok) {
-      state.stats.ok += 1;
-      state.streak += 1;
-      if (state.streak > state.stats.best) state.stats.best = state.streak;
-    } else {
-      state.streak = 0;
-    }
-    saveStats();
-    renderStats();
-    if (ok) {
-      showFeedback(true, "<strong>נכון.</strong> " + state.problem.explain);
-    } else {
-      showFeedback(
-        false,
-        "<strong>עוד לא.</strong> התשובה הנכונה היא " +
-          state.problem.answer +
-          ". " +
-          state.problem.explain
-      );
-    }
+    showBasicEqServerUnavailable();
   });
 
   showSolutionBtn.addEventListener("click", function () {
@@ -8526,10 +7310,25 @@
   newBtn.addEventListener("click", nextProblem);
   levelEl.addEventListener("change", nextProblem);
 
-  renderTopics();
-  renderSubtopics();
-  renderSources();
-  renderKinds();
-  renderStats();
-  nextProblem();
+  function loadCatalog() {
+    fetch(API_ROOT + "/api/catalog", { credentials: "same-origin" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("catalog");
+        return res.json();
+      })
+      .then(function (data) {
+        state.catalog = data || { topics: [], subtopics: {}, levels: [] };
+        renderTopics();
+        renderSubtopics();
+        renderSources();
+        renderKinds();
+        renderStats();
+        nextProblem();
+      })
+      .catch(function () {
+        showBasicEqServerUnavailable();
+      });
+  }
+
+  loadCatalog();
 })();

@@ -11,6 +11,7 @@ var createSystemsHandler = require("./systems").createSystemsHandler;
 var createGeometryHandler = require("./geometry").createGeometryHandler;
 var db = require("./db");
 var auth = require("./auth");
+var studentDto = require("./student-dto");
 
 var ROOT = path.resolve(__dirname, "..");
 var PORT = Number(process.env.DOCTEMATICA_API_PORT || process.env.PORT || 8787);
@@ -160,12 +161,31 @@ function handleMathPost(req, res, run) {
   });
 }
 
+var PRIVATE_JS = {
+  "js/algebra.js": true,
+  "js/quadratic.js": true,
+  "js/systems.js": true,
+  "js/teach.js": true,
+  "js/errors.js": true,
+  "js/bank.js": true,
+  "js/geometry.js": true,
+  "js/content.js": true,
+  "js/problems.js": true,
+  "js/geo/distance.js": true,
+  "js/geo/dist-unknown.js": true,
+  "js/geo/perp.js": true,
+  "js/geo/parallel.js": true,
+  "js/geo/slope.js": true,
+  "js/geo/midpoint.js": true,
+  "js/geo/axis-lines.js": true,
+  "js/geo/line-eq.js": true,
+};
+
 function allowedStaticRel(rel) {
   if (rel === "index.html" || rel === "login.html") return true;
   if (rel.indexOf("css/") === 0) return true;
-  if (rel.indexOf("js/") === 0) return true;
-  if (rel.indexOf("data/") === 0) return true;
   if (rel.indexOf("img/") === 0) return true;
+  if (rel.indexOf("js/") === 0) return !PRIVATE_JS[rel];
   return false;
 }
 
@@ -332,6 +352,25 @@ function handleRequest(req, res) {
   if (req.method === "POST" && pathname === "/api/quadratic") {
     handleMathPost(req, res, function (body) {
       return quadratic.handle(body);
+    });
+    return;
+  }
+  if (req.method === "GET" && pathname === "/api/catalog") {
+    requireAppUser(req, res, function () {
+      try {
+        sendJson(res, 200, studentDto.catalog(engine));
+      } catch (err) {
+        logErr(err);
+        sendServerError(res);
+      }
+    });
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/problem") {
+    handleMathPost(req, res, function (body) {
+      var opened = studentDto.openProblem(engine, body.levelId, Number(body.exerciseIndex));
+      if (!opened) return { error: "unknown exercise", message: "unknown exercise" };
+      return opened;
     });
     return;
   }

@@ -960,18 +960,71 @@ function handleSolution(engine, pack, body) {
   };
 }
 
+function overlayProgress(progress, result) {
+  if (!result) return progress;
+  if (result.done) progress.done = result.done;
+  if (result.partial) progress.partial = result.partial;
+  if (result.lastExpr) progress.lastExpr = result.lastExpr;
+  if (result.coords) progress.coords = result.coords;
+  if (result.footCoords) progress.footCoords = result.footCoords;
+  if (result.lineEq) progress.lineEq = result.lineEq;
+  if (result.lineMatch) progress.lineMatch = result.lineMatch;
+  if (result.intersect) progress.intersect = result.intersect;
+  if (result.distUnk) progress.distUnk = result.distUnk;
+  if (result.pointRoute) progress.pointRoute = result.pointRoute;
+  if (result.draw) progress.draw = result.draw;
+  if (result.mbRearranged) progress.mbRearranged = true;
+  if (result.mbRearrangeExpr) progress.mbRearrangeExpr = result.mbRearrangeExpr;
+  if (result.lineEqDisplay) progress.lineEqDisplay = result.lineEqDisplay;
+  return progress;
+}
+
+function progressForView(engine, pack, body, result) {
+  var geoCopy = {};
+  try {
+    geoCopy = JSON.parse(JSON.stringify((body && body.geo) || {}));
+  } catch (err) {
+    geoCopy = {};
+  }
+  var progress = reconstruct(engine, pack, (body && body.history) || [], geoCopy);
+  overlayProgress(progress, result);
+  if (result && result.addHeight && engine.DoctematicaGeometry.siteAddHeight) {
+    var task = result.task;
+    var full =
+      task &&
+      (pack.tasks || []).filter(function (t) {
+        return t.id === task.id;
+      })[0];
+    engine.DoctematicaGeometry.siteAddHeight(pack, progress, full || task);
+  }
+  return progress;
+}
+
 function handleLengths(engine, body) {
   var pack = packFor(engine, body.levelId, body.n, body.exerciseIndex);
   if (!pack) {
     return { error: "unknown exercise", message: "unknown exercise" };
   }
   var intent = String(body.intent || "");
-  if (intent === "setup") return handleSetup(engine, pack, body);
-  if (intent === "check") return handleCheck(engine, pack, body);
-  if (intent === "hint") return handleHint(engine, pack, body);
-  if (intent === "one-step") return handleOneStep(engine, pack, body);
-  if (intent === "solution") return handleSolution(engine, pack, body);
-  return { error: "unknown intent", message: "unknown intent" };
+  var result;
+  if (intent === "setup") result = handleSetup(engine, pack, body);
+  else if (intent === "check") result = handleCheck(engine, pack, body);
+  else if (intent === "hint") result = handleHint(engine, pack, body);
+  else if (intent === "one-step") result = handleOneStep(engine, pack, body);
+  else if (intent === "solution") result = handleSolution(engine, pack, body);
+  else return { error: "unknown intent", message: "unknown intent" };
+  if (result && !result.error) {
+    try {
+      result.view = require("./student-dto").buildClientView(
+        engine,
+        pack,
+        progressForView(engine, pack, body, result)
+      );
+    } catch (err) {
+      result.view = null;
+    }
+  }
+  return result;
 }
 
 module.exports = {
