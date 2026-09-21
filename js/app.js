@@ -164,11 +164,16 @@
     return state.topic === "equations" && (state.subtopic === "basic" || state.subtopic === "denom");
   }
 
-  var EQUATIONS_URL = "http://127.0.0.1:8787/api/equations";
-  var QUADRATIC_URL = "http://127.0.0.1:8787/api/quadratic";
-  var HIGH_POWER_URL = "http://127.0.0.1:8787/api/high-power";
-  var SYSTEMS_URL = "http://127.0.0.1:8787/api/systems";
-  var GEOMETRY_URL = "http://127.0.0.1:8787/api/geometry";
+  var API_ROOT =
+    (typeof window !== "undefined" && window.DOCTEMATICA_API) ||
+    (typeof location !== "undefined" && location.protocol === "file:"
+      ? "http://127.0.0.1:8787"
+      : "");
+  var EQUATIONS_URL = API_ROOT + "/api/equations";
+  var QUADRATIC_URL = API_ROOT + "/api/quadratic";
+  var HIGH_POWER_URL = API_ROOT + "/api/high-power";
+  var SYSTEMS_URL = API_ROOT + "/api/systems";
+  var GEOMETRY_URL = API_ROOT + "/api/geometry";
   var equationsCheckBusy = false;
 
   function isBasicEqServerMode() {
@@ -284,12 +289,13 @@
     );
   }
 
-  function showGeometryProcessingError() {
+  function showServerProcessingError() {
     showFeedback(
       false,
       "<strong>הבדיקה נכשלה.</strong> שגיאה בעיבוד בשרת. זה לא אומר שהשרת כבוי — נסו שוב."
     );
   }
+  var showGeometryProcessingError = showServerProcessingError;
 
   function requestBasicEqAction(payload, onResult) {
     var intent = String((payload && payload.intent) || "");
@@ -323,7 +329,11 @@
       body: JSON.stringify(body),
     })
       .then(function (res) {
-        if (!res.ok) throw new Error("equations http " + res.status);
+        if (!res.ok) {
+          var httpErr = new Error("equations http " + res.status);
+          httpErr.status = res.status;
+          throw httpErr;
+        }
         return res.json();
       })
       .then(function (remote) {
@@ -331,9 +341,10 @@
         applyLcdOffer(remote || {});
         onResult(remote || {});
       })
-      .catch(function () {
+      .catch(function (err) {
         equationsCheckBusy = false;
-        showBasicEqServerUnavailable();
+        if (err && err.status >= 500) showServerProcessingError();
+        else showBasicEqServerUnavailable();
       });
     return true;
   }
@@ -370,7 +381,11 @@
       body: JSON.stringify(body),
     })
       .then(function (res) {
-        if (!res.ok) throw new Error("quadratic http " + res.status);
+        if (!res.ok) {
+          var httpErr = new Error("quadratic http " + res.status);
+          httpErr.status = res.status;
+          throw httpErr;
+        }
         return res.json();
       })
       .then(function (remote) {
@@ -378,9 +393,10 @@
         applyLcdOffer(remote || {});
         onResult(remote || {});
       })
-      .catch(function () {
+      .catch(function (err) {
         equationsCheckBusy = false;
-        showBasicEqServerUnavailable();
+        if (err && err.status >= 500) showServerProcessingError();
+        else showBasicEqServerUnavailable();
       });
     return true;
   }
@@ -457,9 +473,22 @@
     return id === "geo-distance-1";
   }
 
+  function isGeoExtraPointPage() {
+    var id = (state.problem && state.problem.levelId) || state.levelId;
+    return (
+      id === "geo-segments-1" ||
+      id === "geo-triangle-area-1" ||
+      id === "geo-rect-area-1" ||
+      id === "geo-line-intersect-1" ||
+      id === "geo-line-eq-1" ||
+      id === "geo-slope-1"
+    );
+  }
+
   function isGeoPracticeServerPage() {
     return (
       isGeoPointPage() ||
+      isGeoExtraPointPage() ||
       isGeoSummaryPage() ||
       isGeoParallelPage() ||
       isGeoAxisLinesPage() ||
@@ -478,14 +507,14 @@
     if (isGeoLengthKind(kind) || isGeoAreaKind(kind)) return true;
     if (isGeoPracticeServerPage() && isGeoPointKind(kind)) return true;
     if ((isGeoLineMbPage() || isGeoParallelPage()) && kind === "lineMb") return true;
-    if ((isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage()) && kind === "lineMatch") return true;
+    if ((isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage() || isGeoSlopePage()) && kind === "lineMatch") return true;
     if (
-      (isGeoLineIntersectPage() || isGeoSummaryPage() || isGeoParallelPage() || isGeoAxisLinesPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage()) &&
+      (isGeoLineIntersectPage() || isGeoSummaryPage() || isGeoParallelPage() || isGeoAxisLinesPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage() || isGeoLineEqPage() || isGeoSlopePage()) &&
       (kind === "lineIntersect" || kind === "rearrange")
     ) {
       return true;
     }
-    if ((isGeoLineEqPage() || isGeoParallelPage() || isGeoAxisLinesPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage()) && kind === "lineEq") return true;
+    if ((isGeoLineEqPage() || isGeoParallelPage() || isGeoAxisLinesPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage() || isGeoSlopePage()) && kind === "lineEq") return true;
     if ((isGeoSlopePage() || isGeoParallelPage() || isGeoAxisLinesPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage()) && kind === "slope") return true;
     if (isGeoParallelPage() && kind === "parallel") return true;
     if (isGeoAxisLinesPage() && kind === "yesNo") return true;
@@ -501,10 +530,10 @@
     if (isGeoAreaKind(kind)) return "areas";
     if (isGeoPointKind(kind) && isGeoPracticeServerPage()) return "points";
     if (kind === "lineMb" && (isGeoLineMbPage() || isGeoParallelPage())) return "line-mb";
-    if (kind === "lineMatch" && (isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage())) return "line-match";
+    if (kind === "lineMatch" && (isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage() || isGeoSlopePage())) return "line-match";
     if (
       (kind === "lineIntersect" || kind === "rearrange") &&
-      (isGeoLineIntersectPage() || isGeoSummaryPage() || isGeoParallelPage() || isGeoAxisLinesPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage())
+      (isGeoLineIntersectPage() || isGeoSummaryPage() || isGeoParallelPage() || isGeoAxisLinesPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage() || isGeoLineEqPage() || isGeoSlopePage())
     ) {
       return "line-intersect";
     }
@@ -519,7 +548,7 @@
       if (isAxisParallelTask(axisFocus)) return "axis-lines";
       if (isGeoAxisLinesPage()) return "line-eq";
     }
-    if (kind === "lineEq" && (isGeoLineEqPage() || isGeoParallelPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage())) {
+    if (kind === "lineEq" && (isGeoLineEqPage() || isGeoParallelPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage() || isGeoSlopePage())) {
       return "line-eq";
     }
     if (kind === "slope" && (isGeoPerpPage() || isGeoDistancePage())) {
@@ -557,8 +586,22 @@
       if (focus && (focus.kind === "lineIntersect" || focus.kind === "rearrange")) return "line-intersect";
       return "points";
     }
-    if (isGeoLineEqPage()) return "line-eq";
-    if (isGeoSlopePage()) return "slope";
+    if (isGeoLineEqPage()) {
+      if (focus && isGeoPointKind(focus.kind)) return "points";
+      if (focus && (focus.kind === "lineIntersect" || focus.kind === "rearrange")) return "line-intersect";
+      if (focus && isGeoAreaKind(focus.kind)) return "areas";
+      if (focus && isGeoLengthKind(focus.kind)) return "lengths";
+      return "line-eq";
+    }
+    if (isGeoSlopePage()) {
+      if (focus && focus.kind === "lineMatch") return "line-match";
+      if (focus && isGeoPointKind(focus.kind)) return "points";
+      if (focus && (focus.kind === "lineIntersect" || focus.kind === "rearrange")) return "line-intersect";
+      if (focus && focus.kind === "lineEq") return "line-eq";
+      if (focus && isGeoAreaKind(focus.kind)) return "areas";
+      if (focus && isGeoLengthKind(focus.kind)) return "lengths";
+      return "slope";
+    }
     if (isGeoParallelPage()) {
       if (focus && focus.kind === "lineMatch") return "line-match";
       if (focus && (focus.kind === "lineIntersect" || focus.kind === "rearrange")) return "line-intersect";
@@ -638,14 +681,14 @@
       DoctematicaGeometry.lineMatchPartActive &&
       DoctematicaGeometry.lineMatchPartActive(pack, state.geo)
     ) {
-      return isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage();
+      return isGeoLineMatchPage() || isGeoSummaryPage() || isGeoParallelPage() || isGeoSlopePage();
     }
     var ask = DoctematicaGeometry.lineAsk && DoctematicaGeometry.lineAsk(pack, state.geo);
     if (ask) {
       if (ask.task && isGeoServerKind(ask.task.kind)) {
         /* keep server for parallel yes/no and other migrated asks */
       } else if (
-        !((isGeoPointPage() || isGeoSummaryPage() || isGeoAxisLinesPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage()) && ask.task && isGeoPointKind(ask.task.kind))
+        !((isGeoPointPage() || isGeoExtraPointPage() || isGeoSummaryPage() || isGeoAxisLinesPage() || isGeoMidpointPage() || isGeoPerpPage() || isGeoDistancePage()) && ask.task && isGeoPointKind(ask.task.kind))
       ) {
         return false;
       }
@@ -715,7 +758,7 @@
       rawBody = JSON.stringify(body);
     } catch (err) {
       equationsCheckBusy = false;
-      showGeometryProcessingError();
+      showServerProcessingError();
       return true;
     }
     fetch(GEOMETRY_URL, {
@@ -750,12 +793,12 @@
         try {
           onResult(remote || {});
         } catch (err) {
-          showGeometryProcessingError();
+          showServerProcessingError();
         }
       })
       .catch(function (err) {
         equationsCheckBusy = false;
-        if (err && err.status) showGeometryProcessingError();
+        if (err && err.status) showServerProcessingError();
         else showBasicEqServerUnavailable();
       });
     return true;
@@ -782,16 +825,21 @@
       body: JSON.stringify(body),
     })
       .then(function (res) {
-        if (!res.ok) throw new Error("systems http " + res.status);
+        if (!res.ok) {
+          var httpErr = new Error("systems http " + res.status);
+          httpErr.status = res.status;
+          throw httpErr;
+        }
         return res.json();
       })
       .then(function (remote) {
         equationsCheckBusy = false;
         onResult(remote || {});
       })
-      .catch(function () {
+      .catch(function (err) {
         equationsCheckBusy = false;
-        showBasicEqServerUnavailable();
+        if (err && err.status >= 500) showServerProcessingError();
+        else showBasicEqServerUnavailable();
       });
     return true;
   }
@@ -817,16 +865,21 @@
       body: JSON.stringify(body),
     })
       .then(function (res) {
-        if (!res.ok) throw new Error("high-power http " + res.status);
+        if (!res.ok) {
+          var httpErr = new Error("high-power http " + res.status);
+          httpErr.status = res.status;
+          throw httpErr;
+        }
         return res.json();
       })
       .then(function (remote) {
         equationsCheckBusy = false;
         onResult(remote || {});
       })
-      .catch(function () {
+      .catch(function (err) {
         equationsCheckBusy = false;
-        showBasicEqServerUnavailable();
+        if (err && err.status >= 500) showServerProcessingError();
+        else showBasicEqServerUnavailable();
       });
     return true;
   }

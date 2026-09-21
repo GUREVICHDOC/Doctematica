@@ -3,6 +3,14 @@
 var LENGTH_KINDS = { origin: true, segment: true, axis: true, distSeg: true };
 var POINT_KINDS = { point: true, onLine: true, freePoint: true, noIntercept: true };
 var POINT_PAGE_IDS = { "geo-line-points-1": true, "geo-line-axis-1": true };
+var EXTRA_POINT_PAGE_IDS = {
+  "geo-segments-1": true,
+  "geo-triangle-area-1": true,
+  "geo-rect-area-1": true,
+  "geo-line-intersect-1": true,
+  "geo-line-eq-1": true,
+  "geo-slope-1": true,
+};
 var LINE_MB_PAGE_IDS = { "geo-line-mb-1": true };
 var LINE_MATCH_PAGE_IDS = { "geo-line-match-1": true };
 var LINE_INTERSECT_PAGE_IDS = { "geo-line-intersect-1": true };
@@ -141,8 +149,12 @@ function isParallelKind(kind) {
   return String(kind || "") === "parallel";
 }
 
+function isExtraPointPage(pack) {
+  return !!(pack && EXTRA_POINT_PAGE_IDS[pack._levelId]);
+}
+
 function isServerLineMatch(pack) {
-  return isLineMatchPage(pack) || isSummaryPage(pack) || isParallelPage(pack);
+  return isLineMatchPage(pack) || isSummaryPage(pack) || isParallelPage(pack) || isSlopePage(pack);
 }
 
 function isServerIntersect(pack) {
@@ -153,13 +165,16 @@ function isServerIntersect(pack) {
     isAxisLinesPage(pack) ||
     isMidpointPage(pack) ||
     isPerpPage(pack) ||
-    isDistancePage(pack)
+    isDistancePage(pack) ||
+    isLineEqPage(pack) ||
+    isSlopePage(pack)
   );
 }
 
 function isServerPoints(pack) {
   return (
     isPointPageLevel(pack) ||
+    isExtraPointPage(pack) ||
     isSummaryPage(pack) ||
     isParallelPage(pack) ||
     isAxisLinesPage(pack) ||
@@ -171,13 +186,12 @@ function isServerPoints(pack) {
 
 function isMigratedKind(kind, pack) {
   if (isLengthKind(kind) || isAreaKind(kind)) return true;
-  if (pack && isPointPageLevel(pack) && isPointKind(kind)) return true;
-  if (pack && isSummaryPage(pack) && isPointKind(kind)) return true;
+  if (pack && isServerPoints(pack) && isPointKind(kind)) return true;
   if (pack && isLineMbPage(pack) && isLineMbKind(kind)) return true;
   if (pack && isServerLineMatch(pack) && isLineMatchKind(kind)) return true;
   if (pack && isServerIntersect(pack) && (isLineIntersectKind(kind) || String(kind || "") === "rearrange")) return true;
   if (pack && isLineEqPage(pack) && isLineEqKind(kind)) return true;
-  if (pack && isSlopePage(pack) && isSlopeKind(kind)) return true;
+  if (pack && isSlopePage(pack) && (isSlopeKind(kind) || isLineEqKind(kind))) return true;
   if (pack && isParallelPage(pack)) {
     if (isParallelKind(kind) || isSlopeKind(kind) || isLineEqKind(kind) || isLineMbKind(kind)) return true;
     if (isPointKind(kind) || isLineIntersectKind(kind) || String(kind || "") === "rearrange") return true;
@@ -213,7 +227,11 @@ function capabilityForFocus(pack, focus) {
   if (focus && isLineMbPage(pack) && isLineMbKind(focus.kind)) return "line-mb";
   if (focus && isServerLineMatch(pack) && isLineMatchKind(focus.kind)) return "line-match";
   if (focus && isServerIntersect(pack) && (isLineIntersectKind(focus.kind) || focus.kind === "rearrange")) return "line-intersect";
+  if (focus && isLineEqPage(pack) && isPointKind(focus.kind)) return "points";
   if (focus && isLineEqPage(pack) && isLineEqKind(focus.kind)) return "line-eq";
+  if (focus && isSlopePage(pack) && isLineMatchKind(focus.kind)) return "line-match";
+  if (focus && isSlopePage(pack) && isPointKind(focus.kind)) return "points";
+  if (focus && isSlopePage(pack) && isLineEqKind(focus.kind)) return "line-eq";
   if (focus && isSlopePage(pack) && isSlopeKind(focus.kind)) return "slope";
   if (focus && isParallelPage(pack) && isParallelKind(focus.kind)) return "parallel";
   if (focus && isParallelPage(pack) && isSlopeKind(focus.kind)) return "slope";
@@ -340,6 +358,7 @@ function seedNonLengthProgress(pack, geo) {
       isLineIntersectPage(pack) ||
       isSummaryPage(pack) ||
       isLineEqPage(pack) ||
+      isSlopePage(pack) ||
       isParallelPage(pack) ||
       isAxisLinesPage(pack) ||
       isMidpointPage(pack) ||
@@ -360,6 +379,7 @@ function seedNonLengthProgress(pack, geo) {
     lineEqDisplay:
       isLineMbPage(pack) ||
       isLineEqPage(pack) ||
+      isSlopePage(pack) ||
       isParallelPage(pack) ||
       isAxisLinesPage(pack) ||
       isMidpointPage(pack) ||
@@ -382,6 +402,7 @@ function applyMigratedResult(pack, progress, res) {
     isServerIntersect(pack) && (res.intersect || res.lineEq || (res.task && isLineIntersectKind(res.task.kind)));
   var lineEqHit =
     (isLineEqPage(pack) ||
+      isSlopePage(pack) ||
       isParallelPage(pack) ||
       isAxisLinesPage(pack) ||
       isMidpointPage(pack) ||
@@ -658,13 +679,43 @@ function handleHint(engine, pack, body) {
   var G = engine.DoctematicaGeometry;
   var progress = reconstruct(engine, pack, body.history || [], body.geo || {});
   var h = G.nextHint(pack, progress);
-  if (h && h.footCalc && !(h.task && isMigratedKind(h.task.kind, pack))) {
+  if (h && h.footCalc && !(h.task && isMigratedKind(h.task.kind, pack)) && !allTasksAreMigrated(pack)) {
     return localHint(h);
   }
   if (h && h.task && !isMigratedKind(h.task.kind, pack)) {
     return localHint(h);
   }
   return snapshotHint(h);
+}
+
+function applyOneStepTyped(G, pack, progress, h, typed) {
+  var res = applyTypedProgress(G, pack, progress, String(typed));
+  if (res && res.ok) return { res: res, typed: String(typed) };
+  var msg = String((res && res.message) || "");
+  if (/גובה/.test(msg)) {
+    return { addHeight: true, message: msg, task: h && h.task, res: res };
+  }
+  var alts = [];
+  if (h && h.answer && String(h.answer) !== String(typed)) alts.push(h.answer);
+  if (h && h.task && isLineEqKind(h.task.kind) && G.canonicalLineEqSteps) {
+    alts = alts.concat(G.canonicalLineEqSteps(h.task) || []);
+  }
+  if (h && h.task && isLineIntersectKind(h.task.kind) && G.canonicalLineIntersectSteps) {
+    alts = alts.concat(G.canonicalLineIntersectSteps(h.task, pack) || []);
+  }
+  var i;
+  var beforeDone = JSON.stringify(progress.done || {});
+  var beforeLast = JSON.stringify(progress.lastExpr || {});
+  for (i = 0; i < alts.length; i++) {
+    if (!alts[i] || String(alts[i]) === String(typed)) continue;
+    var skip = applyTypedProgress(G, pack, progress, String(alts[i]));
+    if (skip && skip.ok) {
+      var progressed =
+        JSON.stringify(progress.done || {}) !== beforeDone || JSON.stringify(progress.lastExpr || {}) !== beforeLast;
+      if (progressed) return { res: skip, typed: String(alts[i]) };
+    }
+  }
+  return { res: res, typed: String(typed) };
 }
 
 function handleOneStep(engine, pack, body) {
@@ -697,7 +748,7 @@ function handleOneStep(engine, pack, body) {
     return matchOut;
   }
   var h = G.nextHint(pack, progress);
-  if (h && h.footCalc && !(h.task && isMigratedKind(h.task.kind, pack))) {
+  if (h && h.footCalc && !(h.task && isMigratedKind(h.task.kind, pack)) && !allTasksAreMigrated(pack)) {
     if (!((isAxisLinesPage(pack) || isMidpointPage(pack) || isPerpPage(pack) || isDistancePage(pack)) && (h.step || h.answer))) {
       return localHint(h);
     }
@@ -710,7 +761,7 @@ function handleOneStep(engine, pack, body) {
     heightOut.step = null;
     return heightOut;
   }
-  if ((isAxisLinesPage(pack) || isMidpointPage(pack) || isPerpPage(pack) || isDistancePage(pack)) && h && h.footCalc && (h.step || h.answer)) {
+  if (h && h.footCalc && (h.step || h.answer) && (allTasksAreMigrated(pack) || isAxisLinesPage(pack) || isMidpointPage(pack) || isPerpPage(pack) || isDistancePage(pack))) {
     var footTyped = h.rawStep ? h.step : h.step || h.answer;
     var footRes = applyTypedProgress(G, pack, progress, String(footTyped));
     var footOut = snapshotCheck(footRes);
@@ -735,9 +786,18 @@ function handleOneStep(engine, pack, body) {
   if (!typed) {
     return { ok: true, step: null, message: h.message || "", addHeight: !!h.addHeight, solved: false };
   }
-  var res = applyTypedProgress(G, pack, progress, String(typed));
-  var out = snapshotCheck(res);
-  out.step = String(typed);
+  var applied = applyOneStepTyped(G, pack, progress, h, typed);
+  if (applied.addHeight) {
+    return {
+      ok: true,
+      addHeight: true,
+      step: null,
+      message: applied.message || h.message || "",
+      task: slimTask(applied.task || h.task),
+    };
+  }
+  var out = snapshotCheck(applied.res);
+  out.step = String(applied.typed);
   out.hintMessage = h.message || "";
   return out;
 }
@@ -927,6 +987,7 @@ module.exports = {
   reconstruct: reconstruct,
   LENGTH_KINDS: LENGTH_KINDS,
   POINT_PAGE_IDS: POINT_PAGE_IDS,
+  EXTRA_POINT_PAGE_IDS: EXTRA_POINT_PAGE_IDS,
   LINE_MB_PAGE_IDS: LINE_MB_PAGE_IDS,
   LINE_MATCH_PAGE_IDS: LINE_MATCH_PAGE_IDS,
   LINE_INTERSECT_PAGE_IDS: LINE_INTERSECT_PAGE_IDS,

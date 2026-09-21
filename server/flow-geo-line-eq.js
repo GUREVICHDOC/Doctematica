@@ -6,6 +6,7 @@ var loadEngine = require("./load-engine").loadEngine;
 var createGeometryHandler = require("./geometry").createGeometryHandler;
 var isMigratedKind = require("./geo-lengths").isMigratedKind;
 var packFor = require("./geo-lengths").packFor;
+var walkMod = require("./flow-geo-walk");
 
 function fail(id, detail) {
   return { ok: false, id: id, detail: detail };
@@ -50,7 +51,9 @@ function capFor(kind) {
   if (kind === "area") return "areas";
   if (kind === "segment" || kind === "origin" || kind === "axis" || kind === "distSeg") return "lengths";
   if (kind === "lineEq") return "line-eq";
-  return "points";
+  if (kind === "lineIntersect" || kind === "rearrange") return "line-intersect";
+  if (kind === "onLine" || kind === "point" || kind === "freePoint" || kind === "noIntercept") return "points";
+  return "line-eq";
 }
 
 function walkExercise(engine, handler, levelId, ex) {
@@ -251,36 +254,21 @@ function main() {
   });
   add(lineEqCount === 26 ? { ok: true, id: "lineEq-26" } : fail("lineEq-26", String(lineEqCount)));
 
-  (level.exercises || []).forEach(function (ex) {
-    var out = walkExercise(engine, handler, "geo-line-eq-1", ex);
-    add(out.ok ? { ok: true, id: "full:geo-line-eq-1:" + ex.n } : out);
-    if (out.ok) {
-      var hasLocal = (out.pack.tasks || []).some(function (t) {
-        return !isMigratedKind(t.kind, out.pack);
-      });
-      var sol = via(handler, {
-        capability: "line-eq",
-        intent: "solution",
-        levelId: "geo-line-eq-1",
-        n: ex.n,
-        history: [],
-        geo: {},
-      });
-      if (hasLocal) {
-        add(sol && sol.local && sol.mixed ? { ok: true, id: "sol-mixed:" + ex.n } : fail("sol-mixed:" + ex.n, JSON.stringify(sol)));
-      } else {
-        add(
-          sol && !sol.local && sol.steps && sol.steps.length
-            ? { ok: true, id: "sol-server:" + ex.n }
-            : fail("sol-server:" + ex.n, JSON.stringify(sol && { mixed: sol.mixed, n: sol.steps && sol.steps.length }))
-        );
+  walkMod.addHybridSuite(add, engine, handler, "geo-line-eq-1", "line-eq", {
+    onWalk: function (addItem, ex, oneWalk) {
+      if (oneWalk.caps.indexOf("line-eq") >= 0 && oneWalk.caps.indexOf("points") >= 0) {
+        addItem({ ok: true, id: "transition-lineEq-point:" + ex.n });
       }
-      add(
-        remainingRequired(out.pack, out.geo.done).length === 0
-          ? { ok: true, id: "complete:" + ex.n }
-          : fail("complete:" + ex.n, JSON.stringify(out.geo.done))
-      );
-    }
+      if (oneWalk.caps.indexOf("line-eq") >= 0 && oneWalk.caps.indexOf("line-intersect") >= 0) {
+        addItem({ ok: true, id: "transition-lineEq-intersect:" + ex.n });
+      }
+    },
+  });
+  walkMod.addNoTrust(add, engine, handler, "geo-line-eq-1", 15, "points", {
+    done: { B: true },
+    coords: { B: { x: true, y: true } },
+    lastExpr: { B: "כן" },
+    pointRoute: { B: "skip" },
   });
 
   var psWalk = walkExercise(engine, handler, "geo-line-eq-1", level.exercises[0]);
@@ -300,15 +288,7 @@ function main() {
   var src = fs.readFileSync(path.join(__dirname, "../js/app.js"), "utf8");
   add(/isGeoLineEqPage/.test(src) ? { ok: true, id: "hybrid-eq-gate" } : fail("hybrid-eq-gate", "missing"));
   add(
-    /kind === "lineEq" && \(isGeoLineEqPage\(\) \|\| isGeoParallelPage\(\) \|\| isGeoAxisLinesPage\(\) \|\| isGeoMidpointPage\(\) \|\| isGeoPerpPage\(\) \|\| isGeoDistancePage\(\)\)/.test(src) ||
-      /kind === "lineEq" && \(isGeoLineEqPage\(\) \|\| isGeoParallelPage\(\) \|\| isGeoAxisLinesPage\(\) \|\| isGeoMidpointPage\(\)\)/.test(src) ||
-      /kind === "lineEq" && \(isGeoLineEqPage\(\) \|\| isGeoParallelPage\(\) \|\| isGeoAxisLinesPage\(\)\)/.test(src) ||
-      /kind === "lineEq" && \(isGeoLineEqPage\(\) \|\| isGeoParallelPage\(\) \|\| isGeoMidpointPage\(\)\)/.test(src) ||
-      /kind === "lineEq" && \(isGeoLineEqPage\(\) \|\| isGeoParallelPage\(\)\)/.test(src) ||
-      /\(isGeoLineEqPage\(\) \|\| isGeoParallelPage\(\) \|\| isGeoAxisLinesPage\(\) \|\| isGeoMidpointPage\(\) \|\| isGeoPerpPage\(\) \|\| isGeoDistancePage\(\)\) && kind === "lineEq"/.test(src) ||
-      /\(isGeoLineEqPage\(\) \|\| isGeoParallelPage\(\) \|\| isGeoAxisLinesPage\(\) \|\| isGeoMidpointPage\(\)\) && kind === "lineEq"/.test(src) ||
-      /\(isGeoLineEqPage\(\) \|\| isGeoParallelPage\(\) \|\| isGeoAxisLinesPage\(\)\) && kind === "lineEq"/.test(src) ||
-      /\(isGeoLineEqPage\(\) \|\| isGeoParallelPage\(\)\) && kind === "lineEq"/.test(src)
+    /kind === "lineEq"/.test(src) && /isGeoLineEqPage\(\)/.test(src) && /isGeoSlopePage\(\)/.test(src)
       ? { ok: true, id: "hybrid-kind-gate" }
       : fail("hybrid-kind-gate", "kind not gated")
   );

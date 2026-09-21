@@ -185,7 +185,7 @@ function main() {
   );
 
   var mixedSol = via({ intent: "solution", levelId: "geo-triangle-area-1", n: 5, history: [], geo: {} });
-  add(mixedSol && mixedSol.local && mixedSol.mixed ? { ok: true, id: "parity-solution-mixed-point-stays-local" } : fail("parity-solution-mixed-point-stays-local", JSON.stringify(mixedSol)));
+  add(mixedSol && !mixedSol.local && !mixedSol.mixed && mixedSol.steps && mixedSol.steps.length ? { ok: true, id: "parity-solution-n5-point-now-server" } : fail("parity-solution-n5-point-now-server", JSON.stringify(mixedSol)));
 
   var fakeDone = via({
     intent: "check",
@@ -255,12 +255,13 @@ function main() {
     history: [],
     geo: {},
   });
-  add(pointThen && pointThen.local && pointThen.task && pointThen.task.kind === "point" ? { ok: true, id: "rect-defers-point" } : fail("rect-defers-point", JSON.stringify(pointThen)));
+  add(pointThen && pointThen.ok && !pointThen.local && pointThen.task && pointThen.task.kind === "point" ? { ok: true, id: "rect-point-now-server" } : fail("rect-point-now-server", JSON.stringify(pointThen)));
 
   var src = fs.readFileSync(path.join(__dirname, "../js/app.js"), "utf8");
   add(/function isGeoAreaKind/.test(src) && /function isGeoServerKind/.test(src) ? { ok: true, id: "gate-area-kinds" } : fail("gate-area-kinds", "missing"));
   add(/geoServerCapability/.test(src) && /"areas"/.test(src) ? { ok: true, id: "gate-areas-capability" } : fail("gate-areas-capability", "missing"));
   add(/isGeoServerKind\(t\.kind\)/.test(src) ? { ok: true, id: "solution-all-server-kinds" } : fail("solution-all-server-kinds", "missing"));
+  add(/showBasicEqServerUnavailable/.test(src) && /isGeoExtraPointPage/.test(src) ? { ok: true, id: "node-off-wired" } : fail("node-off-wired", "missing"));
 
   var api = fs.readFileSync(path.join(__dirname, "api.js"), "utf8");
   add(/\/api\/geometry/.test(api) && !/\/api\/geometry\/areas/.test(api) ? { ok: true, id: "single-endpoint" } : fail("single-endpoint", "split endpoint"));

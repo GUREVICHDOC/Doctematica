@@ -298,7 +298,7 @@ function main() {
     geo: {},
     typed: "y = x + 4",
   });
-  add(n8skip && n8skip.local ? { ok: true, id: "n8-lineEq-live-local" } : fail("n8-lineEq-live-local", JSON.stringify(n8skip)));
+  add(n8skip && n8skip.ok && !n8skip.local && n8skip.done && n8skip.done.eq ? { ok: true, id: "n8-lineEq-now-server" } : fail("n8-lineEq-now-server", JSON.stringify(n8skip)));
   var rec8 = reconstruct(engine, packFor(engine, "geo-slope-1", 8), ["y = x + 4"], {});
   add(rec8.done && rec8.done.m && rec8.done.eq ? { ok: true, id: "n8-skip-replay-marks-slope" } : fail("n8-skip-replay-marks-slope", JSON.stringify(rec8.done)));
   var rec8fake = reconstruct(engine, packFor(engine, "geo-slope-1", 8), [], { done: { m: true, eq: true } });
@@ -313,7 +313,7 @@ function main() {
     history: ["m = 1"],
     geo: {},
   });
-  add(n8afterM && n8afterM.local ? { ok: true, id: "n8-lineEq-hint-local" } : fail("n8-lineEq-hint-local", JSON.stringify(n8afterM)));
+  add(n8afterM && n8afterM.ok && !n8afterM.local && /משוואת הישר/.test(n8afterM.message || "") ? { ok: true, id: "n8-lineEq-hint-server" } : fail("n8-lineEq-hint-server", JSON.stringify(n8afterM)));
 
   var fakeDone = via({
     intent: "one-step",
@@ -370,7 +370,7 @@ function main() {
   var sol7 = via({ intent: "solution", levelId: "geo-slope-1", n: 7, history: [], geo: {} });
   add(sol7 && !sol7.local && !sol7.mixed ? { ok: true, id: "n7-sol-server" } : fail("n7-sol-server", JSON.stringify(sol7)));
   var sol8 = via({ intent: "solution", levelId: "geo-slope-1", n: 8, history: [], geo: {} });
-  add(sol8 && sol8.local && sol8.mixed ? { ok: true, id: "n8-sol-mixed" } : fail("n8-sol-mixed", JSON.stringify(sol8)));
+  add(sol8 && !sol8.local && !sol8.mixed && sol8.steps && sol8.steps.length ? { ok: true, id: "n8-sol-server" } : fail("n8-sol-server", JSON.stringify(sol8)));
 
   var gatePar = handler.handle({
     topic: "analytic",

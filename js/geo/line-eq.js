@@ -364,7 +364,8 @@
     if (typedLooksLikeFindMidpoint(typed, pack, progress) && !typedLooksLikeLaterLineEq(typed, pack, progress)) {
       return null;
     }
-    if (checkGivenLineRearrange(typed, pack, progress)) return null;
+    var rearrHit = checkGivenLineRearrange(typed, pack, progress);
+    if (rearrHit && rearrHit.ok) return null;
     if (
       typedLooksLikeCoordStep(typed, extractAnswerValue(typed)) &&
       !typedLooksLikeLaterLineEq(typed, pack, progress)
@@ -375,7 +376,12 @@
         pendingEq.some(function (u) {
           return lineEqComplete(raw, u);
         });
-      if (!coordIsLine && !axisFocus) return null;
+      var siteForm = pendingEq.some(function (u) {
+        return (lineEqSiteSteps(u) || []).some(function (s) {
+          return normEqText(s) === normEqText(raw) || lineEqSysEquivalent(raw, s);
+        });
+      });
+      if (!coordIsLine && !axisFocus && !siteForm) return null;
     }
     if (!hits.length) {
       var slopeNow = currentPartSlopeTask(pack, progress);

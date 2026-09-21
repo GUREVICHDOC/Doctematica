@@ -660,10 +660,17 @@
     var skipToEq = (pending || []).some(function (t) {
       return t && t.kind === "lineEq" && lineEqComplete(typed, t);
     });
+    var partEq = preferPartTasks(
+      (pending || []).filter(function (t) {
+        return t && t.kind === "lineEq";
+      }),
+      pack,
+      progress
+    );
     if (!skipToEq) {
       var chain = parseMChain(typed);
       if (chain && chain.names && chain.names.length) return null;
-      if (openPointClaimsLinearEq(typed, pack, progress, pending)) return null;
+      if (!partEq.length && openPointClaimsLinearEq(typed, pack, progress, pending)) return null;
     }
     return GeoLineEq.checkLineEq(typed, pack, progress, pending, doneMap, partialMap, coordsMap);
   }
@@ -5341,6 +5348,23 @@
   function siteAddHeight(pack, progress, task) {
     progress = progress || {};
     var ends = drawHeightEnds(pack, task);
+    if (!ends || !ends.apex) {
+      var cfgH = resolveDrawConfig(pack);
+      var want = String((task && (task.point || task.label || task.to || task.heightFoot)) || "").toUpperCase();
+      var specH = ((cfgH && cfgH.heights) || []).filter(function (h) {
+        var foot = String(h.footLabel || "").toUpperCase();
+        var apex = String(h.from || "").toUpperCase();
+        if (want && (foot === want || apex === want)) return true;
+        if (task && task.kind === "area") return true;
+        return !want;
+      })[0];
+      if (specH) {
+        ends = {
+          apex: String(specH.from || "").toUpperCase(),
+          foot: String(specH.footLabel || "").toUpperCase(),
+        };
+      }
+    }
     if (!ends || !ends.apex) return null;
     if (ends.foot && heightFootSnapped(progress, ends.foot)) return null;
     progress.draw = initDrawProgress(pack, progress);
@@ -5364,7 +5388,16 @@
   function siteAddAllHeights(pack, progress) {
     progress = progress || {};
     (pack.tasks || []).forEach(function (t) {
-      if (t.drawHeight) siteAddHeight(pack, progress, t);
+      if (t.drawHeight || taskUsesDrawnHeight(t, pack)) siteAddHeight(pack, progress, t);
+    });
+    var cfgAll = resolveDrawConfig(pack);
+    ((cfgAll && cfgAll.heights) || []).forEach(function (spec) {
+      siteAddHeight(pack, progress, {
+        drawHeight: true,
+        kind: "segment",
+        from: spec.from,
+        to: spec.footLabel,
+      });
     });
     return progress.draw;
   }
@@ -5563,14 +5596,29 @@
         };
       }
       footCoords[targetLabel] = { x: exp.x, y: exp.y };
+      var doneFoot = Object.assign({}, doneMap);
+      var coordsFoot = Object.assign({}, coordsMap);
+      var lastFoot = Object.assign({}, progress.lastExpr || {});
+      var ptTask = (pack.tasks || []).filter(function (t) {
+        return (
+          t.kind === "point" &&
+          String(t.point || t.label || t.id || "").toUpperCase() === targetLabel
+        );
+      })[0];
+      if (ptTask) {
+        doneFoot[ptTask.id] = true;
+        coordsFoot[ptTask.id] = { x: true, y: true };
+        lastFoot[ptTask.id] = targetLabel + formatPointPair(exp.x, exp.y);
+      }
       return {
         ok: true,
         solved: false,
-        done: Object.assign({}, doneMap),
+        done: doneFoot,
         partial: Object.assign({}, partialMap),
-        coords: Object.assign({}, coordsMap),
-        lastExpr: progress.lastExpr || {},
+        coords: coordsFoot,
+        lastExpr: lastFoot,
         footCoords: footCoords,
+        task: ptTask || null,
         show: targetLabel + " " + formatPointPair(exp.x, exp.y),
         message:
           "נכון. " +
@@ -5593,14 +5641,29 @@
       var showAxis = targetLabel.toLowerCase() + axisName + " = " + fmtNum(want);
       var bothDone = cur.x != null && cur.y != null;
       if (bothDone && nearNum(cur.x, exp.x) && nearNum(cur.y, exp.y)) {
+        var doneBoth = Object.assign({}, doneMap);
+        var coordsBoth = Object.assign({}, coordsMap);
+        var lastBoth = Object.assign({}, progress.lastExpr || {});
+        var ptBoth = (pack.tasks || []).filter(function (t) {
+          return (
+            t.kind === "point" &&
+            String(t.point || t.label || t.id || "").toUpperCase() === targetLabel
+          );
+        })[0];
+        if (ptBoth) {
+          doneBoth[ptBoth.id] = true;
+          coordsBoth[ptBoth.id] = { x: true, y: true };
+          lastBoth[ptBoth.id] = targetLabel + formatPointPair(exp.x, exp.y);
+        }
         return {
           ok: true,
           solved: false,
-          done: Object.assign({}, doneMap),
+          done: doneBoth,
           partial: Object.assign({}, partialMap),
-          coords: Object.assign({}, coordsMap),
-          lastExpr: progress.lastExpr || {},
+          coords: coordsBoth,
+          lastExpr: lastBoth,
           footCoords: footCoords,
+          task: ptBoth || null,
           show: targetLabel + " " + formatPointPair(exp.x, exp.y),
           message:
             "נכון. " +
@@ -10141,6 +10204,27 @@
       progress
     );
     if (!pending.length) return { message: "התרגיל כבר נפתר." };
+
+    var heightNeed = pending.filter(function (t) {
+      return taskUsesDrawnHeight(t, pack);
+    })[0];
+    if (heightNeed) {
+      var heightEnds = drawHeightEnds(pack, heightNeed);
+      var heightFootLab = heightEnds && heightEnds.foot;
+      if (!heightFootLab && heightNeed.kind === "point") {
+        heightFootLab = String(heightNeed.point || heightNeed.label || "").toUpperCase();
+      }
+      if (heightFootLab && !heightFootSnapped(progress, heightFootLab)) {
+        return {
+          task: heightNeed,
+          addHeight: true,
+          message:
+            "הוסיפו גובה עם «+ גובה», בחרו את הקודקוד, וגררו את הרגל אל הצלע (או לציר).",
+          step: "",
+          answer: "",
+        };
+      }
+    }
 
     var footHintEarly = nextHeightFootHint(pack, progress);
     var inProgressEarly = pending.filter(function (t) {

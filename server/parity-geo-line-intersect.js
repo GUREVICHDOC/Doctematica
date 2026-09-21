@@ -200,9 +200,9 @@ function main() {
 
   var sol8 = via({ intent: "solution", levelId: "geo-line-intersect-1", n: 8, history: [], geo: {} });
   add(
-    sol8 && sol8.ok && sol8.local && sol8.mixed
-      ? { ok: true, id: "solution-n8-mixed" }
-      : fail("solution-n8-mixed", JSON.stringify(sol8))
+    sol8 && sol8.ok && !sol8.local && !sol8.mixed && sol8.steps && sol8.steps.length
+      ? { ok: true, id: "solution-n8-server" }
+      : fail("solution-n8-server", JSON.stringify(sol8))
   );
 
   var setup = via({ intent: "setup", levelId: "geo-line-intersect-1", n: 1, history: [], geo: {} });
@@ -226,6 +226,7 @@ function main() {
   var src = fs.readFileSync(path.join(__dirname, "../js/app.js"), "utf8");
   add(/isGeoLineIntersectPage/.test(src) && /geo-line-intersect-1/.test(src) ? { ok: true, id: "gate-page" } : fail("gate-page", "missing"));
   add(/"line-intersect"/.test(src) ? { ok: true, id: "gate-capability-client" } : fail("gate-capability-client", "missing"));
+  add(/showBasicEqServerUnavailable/.test(src) && /isGeoExtraPointPage/.test(src) ? { ok: true, id: "node-off-wired" } : fail("node-off-wired", "missing"));
 
   var geoApi = fs.readFileSync(path.join(__dirname, "geometry.js"), "utf8");
   add(/capability === "line-intersect"/.test(geoApi) ? { ok: true, id: "capability-wired" } : fail("capability-wired", geoApi));

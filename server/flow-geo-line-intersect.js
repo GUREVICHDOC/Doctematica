@@ -5,6 +5,7 @@ var path = require("path");
 var loadEngine = require("./load-engine").loadEngine;
 var createGeometryHandler = require("./geometry").createGeometryHandler;
 var isMigratedKind = require("./geo-lengths").isMigratedKind;
+var walkMod = require("./flow-geo-walk");
 
 function fail(id, detail) {
   return { ok: false, id: id, detail: detail };
@@ -45,6 +46,7 @@ function capFor(kind, pack) {
   if (kind === "area") return "areas";
   if (kind === "segment" || kind === "origin" || kind === "axis" || kind === "distSeg") return "lengths";
   if (kind === "lineIntersect") return "line-intersect";
+  if (kind === "point" || kind === "onLine" || kind === "freePoint" || kind === "noIntercept") return "points";
   return "line-intersect";
 }
 
@@ -148,33 +150,17 @@ function main() {
   var level = levels.filter(function (l) {
     return l.id === "geo-line-intersect-1";
   })[0];
-  (level.exercises || []).forEach(function (ex) {
-    var out = walkExercise(engine, handler, "geo-line-intersect-1", ex);
-    add(out.ok ? { ok: true, id: "full:geo-line-intersect-1:" + ex.n } : out);
-    if (out.ok) {
-      var hasLocal = (out.pack.tasks || []).some(function (t) {
-        return !isMigratedKind(t.kind, out.pack);
-      });
-      var sol = handler.handle({
-        topic: "analytic",
-        capability: "line-intersect",
-        intent: "solution",
-        levelId: "geo-line-intersect-1",
-        n: ex.n,
-        history: [],
-        geo: {},
-      });
-      if (hasLocal) {
-        add(sol && sol.local && sol.mixed ? { ok: true, id: "sol-mixed:" + ex.n } : fail("sol-mixed:" + ex.n, JSON.stringify(sol)));
-      } else {
-        add(sol && !sol.local && sol.steps && sol.steps.length ? { ok: true, id: "sol-server:" + ex.n } : fail("sol-server:" + ex.n, JSON.stringify(sol)));
+  walkMod.addHybridSuite(add, engine, handler, "geo-line-intersect-1", "line-intersect", {
+    onWalk: function (addItem, ex, oneWalk) {
+      if (oneWalk.caps.indexOf("points") >= 0 && oneWalk.caps.indexOf("line-intersect") >= 0) {
+        addItem({ ok: true, id: "transition-point-intersect:" + ex.n });
       }
-      add(
-        remainingRequired(out.pack, out.geo.done).length === 0
-          ? { ok: true, id: "complete:" + ex.n }
-          : fail("complete:" + ex.n, JSON.stringify(out.geo.done))
-      );
-    }
+    },
+  });
+  walkMod.addNoTrust(add, engine, handler, "geo-line-intersect-1", 8, "points", {
+    done: { A: true, B: true, C: true, D: true },
+    coords: { A: { x: true, y: true } },
+    lastExpr: { A: "A(0;0)" },
   });
 
   var eqToX = handler.handle({

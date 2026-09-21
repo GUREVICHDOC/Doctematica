@@ -345,7 +345,7 @@ function main() {
     history: ["m = 1"],
     geo: {},
   });
-  add(gateSlope && gateSlope.local ? { ok: true, id: "gate-slope-lineEq-local" } : fail("gate-slope-lineEq-local", JSON.stringify(gateSlope)));
+  add(gateSlope && gateSlope.ok && !gateSlope.local ? { ok: true, id: "gate-slope-lineEq-now-server" } : fail("gate-slope-lineEq-now-server", JSON.stringify(gateSlope)));
 
   var src = fs.readFileSync(path.join(__dirname, "../js/app.js"), "utf8");
   add(/isGeoLineEqPage/.test(src) && /geo-line-eq-1/.test(src) ? { ok: true, id: "gate-eq-page" } : fail("gate-eq-page", "missing"));
@@ -358,7 +358,7 @@ function main() {
   add(/\/api\/geometry/.test(fs.readFileSync(path.join(__dirname, "api.js"), "utf8")) ? { ok: true, id: "single-endpoint" } : fail("single-endpoint", "missing"));
 
   var mixed15 = via({ intent: "solution", levelId: "geo-line-eq-1", n: 15, history: [], geo: {} });
-  add(mixed15 && mixed15.local && mixed15.mixed ? { ok: true, id: "n15-sol-mixed" } : fail("n15-sol-mixed", JSON.stringify(mixed15)));
+  add(mixed15 && !mixed15.local && !mixed15.mixed && mixed15.steps && mixed15.steps.length ? { ok: true, id: "n15-sol-server" } : fail("n15-sol-server", JSON.stringify(mixed15)));
   var full1 = via({ intent: "solution", levelId: "geo-line-eq-1", n: 1, history: [], geo: {} });
   add(full1 && !full1.local && !full1.mixed ? { ok: true, id: "n1-sol-server" } : fail("n1-sol-server", JSON.stringify(full1)));
 

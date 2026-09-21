@@ -183,7 +183,7 @@ function main() {
   add(setup && setup.server && setup.capability === "points" && setup.task && setup.task.kind === "point" ? { ok: true, id: "setup-points-capability" } : fail("setup-points-capability", JSON.stringify(setup)));
 
   var gateArea = handler.handle({ topic: "analytic", capability: "points", intent: "one-step", levelId: "geo-triangle-area-1", n: 5, history: [], geo: {} });
-  add(gateArea && gateArea.local && gateArea.task && gateArea.task.kind === "point" ? { ok: true, id: "gate-area-point-stays-local" } : fail("gate-area-point-stays-local", JSON.stringify(gateArea)));
+  add(gateArea && gateArea.ok && !gateArea.local ? { ok: true, id: "gate-area-point-now-server" } : fail("gate-area-point-now-server", JSON.stringify(gateArea)));
 
   var gateMbFuture = handler.handle({ topic: "analytic", capability: "points", intent: "one-step", levelId: "geo-perp-1", n: 1, history: [], geo: {} });
   add(gateMbFuture && gateMbFuture.ok && !gateMbFuture.local ? { ok: true, id: "gate-perp-points-server" } : fail("gate-perp-points-server", JSON.stringify(gateMbFuture)));

@@ -149,7 +149,7 @@ function main() {
   add(sol.ok && !sol.mixed && sol.steps && sol.steps.length && sol.done && sol.done.OB ? { ok: true, id: "solution-all-lengths-ex1" } : fail("solution-all-lengths-ex1", JSON.stringify(sol)));
 
   var solMix = via({ intent: "solution", levelId: "geo-segments-1", n: 8, history: [], geo: {} });
-  add(solMix.ok && solMix.mixed && solMix.local ? { ok: true, id: "solution-mixed-point-ex8" } : fail("solution-mixed-point-ex8", JSON.stringify(solMix)));
+  add(solMix.ok && !solMix.mixed && !solMix.local && solMix.steps && solMix.steps.length ? { ok: true, id: "solution-point-ex8-now-server" } : fail("solution-point-ex8-now-server", JSON.stringify(solMix)));
 
   var axisEx = levelExercises(engine, "geo-segments-1").filter(function (ex) {
     var p = G.analyzeStart(ex);
@@ -198,6 +198,7 @@ function main() {
   add(/function isGeoLengthsServerActive/.test(src) ? { ok: true, id: "gate-fn" } : fail("gate-fn", "missing"));
   add(/intent: "check"/.test(src) && /geoServerCapability/.test(src) ? { ok: true, id: "gate-payload" } : fail("gate-payload", "missing"));
   add(/geoHintLocal/.test(src) && /geoOneStepLocal/.test(src) && /geoShowSolutionLocal/.test(src) ? { ok: true, id: "local-fallbacks" } : fail("local-fallbacks", "missing"));
+  add(/showBasicEqServerUnavailable/.test(src) && /isGeoExtraPointPage/.test(src) ? { ok: true, id: "node-off-extra-point-pages" } : fail("node-off-extra-point-pages", "missing"));
   add(/if \(!remote\.step\)/.test(src) ? { ok: true, id: "onestep-no-step-not-solved" } : fail("onestep-no-step-not-solved", "missing"));
 
   var api = fs.readFileSync(path.join(__dirname, "api.js"), "utf8");

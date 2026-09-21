@@ -5,6 +5,7 @@ var path = require("path");
 var loadEngine = require("./load-engine").loadEngine;
 var createGeometryHandler = require("./geometry").createGeometryHandler;
 var isLengthKind = require("./geo-lengths").isLengthKind;
+var walkMod = require("./flow-geo-walk");
 
 function fail(id, detail) {
   return { ok: false, id: id, detail: detail };
@@ -31,6 +32,7 @@ function remainingRequired(pack, done) {
 function walkExercise(engine, handler, levelId, ex) {
   var G = engine.DoctematicaGeometry;
   var pack = G.analyzeStart(ex);
+  pack._levelId = levelId;
   var history = [];
   var geo = emptyGeo();
   var saw = [];
@@ -42,10 +44,10 @@ function walkExercise(engine, handler, levelId, ex) {
     var h = G.nextHint(pack, geo);
     var kind = h && h.task && h.task.kind;
     saw.push(kind || "none");
-    if (kind && isLengthKind(kind)) {
+    if (kind && (isLengthKind(kind) || kind === "point")) {
       var one = handler.handle({
         topic: "analytic",
-        capability: "lengths",
+        capability: kind === "point" ? "points" : "lengths",
         intent: "one-step",
         levelId: levelId,
         n: ex.n,
@@ -92,13 +94,25 @@ function main() {
   }
 
   var levels = engine.DoctematicaCurriculum.levels;
+  walkMod.addHybridSuite(add, engine, handler, "geo-segments-1", "lengths", {
+    count: 14,
+    onWalk: function (addItem, ex, oneWalk) {
+      if (oneWalk.caps.indexOf("points") >= 0 && oneWalk.caps.indexOf("lengths") >= 0) {
+        addItem({ ok: true, id: "transition-point-length:" + ex.n });
+      }
+    },
+  });
+  walkMod.addNoTrust(add, engine, handler, "geo-segments-1", 8, "points", {
+    done: { B: true, D: true },
+    coords: { B: { x: true, y: true }, D: { x: true, y: true } },
+    partial: { B: true },
+    lastExpr: { B: "B(1;1)" },
+    pointRoute: { B: "skip" },
+  });
+
   var segLevel = levels.filter(function (l) {
     return l.id === "geo-segments-1";
   })[0];
-  (segLevel.exercises || []).forEach(function (ex) {
-    var out = walkExercise(engine, handler, "geo-segments-1", ex);
-    add(out.ok ? { ok: true, id: "full-seg:" + ex.n } : out);
-  });
 
   var triLevel = levels.filter(function (l) {
     return l.id === "geo-triangle-area-1";

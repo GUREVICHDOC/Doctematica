@@ -7,6 +7,7 @@ var createGeometryHandler = require("./geometry").createGeometryHandler;
 var isMigratedKind = require("./geo-lengths").isMigratedKind;
 var packFor = require("./geo-lengths").packFor;
 var reconstruct = require("./geo-lengths").reconstruct;
+var walkMod = require("./flow-geo-walk");
 
 function fail(id, detail) {
   return { ok: false, id: id, detail: detail };
@@ -89,11 +90,23 @@ function walkExercise(engine, handler, levelId, ex) {
     }
     if (G.lineMatchPartActive && G.lineMatchPartActive(pack, geo)) {
       saw.push("lineMatch");
-      var matchRes = applyLocalMatch(G, pack, geo);
-      if (!matchRes || !matchRes.ok) {
-        return fail("walk-match:" + levelId + ":" + ex.n, JSON.stringify(matchRes) + " saw=" + saw.join(">"));
+      var matchOne = handler.handle({
+        topic: "analytic",
+        capability: "line-match",
+        intent: "one-step",
+        levelId: levelId,
+        n: ex.n,
+        history: history,
+        geo: geo,
+      });
+      if (matchOne && matchOne.local) {
+        return fail("walk-match-local:" + levelId + ":" + ex.n, JSON.stringify(matchOne));
       }
-      applyRes(geo, matchRes);
+      if (!matchOne || !matchOne.ok) {
+        return fail("walk-match:" + levelId + ":" + ex.n, JSON.stringify(matchOne) + " saw=" + saw.join(">"));
+      }
+      applyRes(geo, matchOne);
+      if (matchOne.step) history.push(matchOne.step);
       continue;
     }
     var h = G.nextHint(pack, geo);
@@ -263,36 +276,24 @@ function main() {
       : fail("count-23", String(level && level.exercises && level.exercises.length))
   );
 
-  (level.exercises || []).forEach(function (ex) {
-    var out = walkExercise(engine, handler, "geo-slope-1", ex);
-    add(out.ok ? { ok: true, id: "full:geo-slope-1:" + ex.n } : out);
-    if (out.ok) {
-      var hasLocal = (out.pack.tasks || []).some(function (t) {
-        return !isMigratedKind(t.kind, out.pack);
-      });
-      var sol = via(handler, {
-        capability: "slope",
-        intent: "solution",
-        levelId: "geo-slope-1",
-        n: ex.n,
-        history: [],
-        geo: {},
-      });
-      if (hasLocal) {
-        add(sol && sol.local && sol.mixed ? { ok: true, id: "sol-mixed:" + ex.n } : fail("sol-mixed:" + ex.n, JSON.stringify(sol)));
-      } else {
-        add(
-          sol && !sol.local && sol.steps && sol.steps.length
-            ? { ok: true, id: "sol-server:" + ex.n }
-            : fail("sol-server:" + ex.n, JSON.stringify(sol && { mixed: sol.mixed, n: sol.steps && sol.steps.length }))
-        );
+  walkMod.addHybridSuite(add, engine, handler, "geo-slope-1", "slope", {
+    onWalk: function (addItem, ex, oneWalk) {
+      if (oneWalk.caps.indexOf("points") >= 0 && oneWalk.caps.indexOf("slope") >= 0) {
+        addItem({ ok: true, id: "transition-point-slope:" + ex.n });
       }
-      add(
-        remainingRequired(out.pack, out.geo.done).length === 0
-          ? { ok: true, id: "complete:" + ex.n }
-          : fail("complete:" + ex.n, JSON.stringify(out.geo.done))
-      );
-    }
+      if (oneWalk.caps.indexOf("line-match") >= 0) {
+        addItem({ ok: true, id: "transition-lineMatch:" + ex.n });
+      }
+      if (oneWalk.caps.indexOf("line-eq") >= 0 && oneWalk.caps.indexOf("slope") >= 0) {
+        addItem({ ok: true, id: "transition-slope-lineEq:" + ex.n });
+      }
+    },
+  });
+  walkMod.addNoTrust(add, engine, handler, "geo-slope-1", 18, "points", {
+    done: { P: true, Q: true, eq: true, m: true },
+    coords: { P: { x: true, y: true } },
+    lineMatch: { eq1: "I" },
+    lastExpr: { m: "1" },
   });
 
   var canon = walkExercise(engine, handler, "geo-slope-1", level.exercises[0]);

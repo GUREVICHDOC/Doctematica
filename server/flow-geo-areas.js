@@ -6,6 +6,7 @@ var loadEngine = require("./load-engine").loadEngine;
 var createGeometryHandler = require("./geometry").createGeometryHandler;
 var isLengthKind = require("./geo-lengths").isLengthKind;
 var isMigratedKind = require("./geo-lengths").isMigratedKind;
+var walkMod = require("./flow-geo-walk");
 
 function fail(id, detail) {
   return { ok: false, id: id, detail: detail };
@@ -30,8 +31,10 @@ function remainingRequired(pack, done) {
   });
 }
 
-function capFor(kind) {
-  return kind === "area" ? "areas" : "lengths";
+function capFor(kind, pack) {
+  if (kind === "area") return "areas";
+  if (kind === "point" || kind === "onLine" || kind === "freePoint" || kind === "noIntercept") return "points";
+  return "lengths";
 }
 
 function snapCurriculumHeights(engine, pack, geo) {
@@ -56,6 +59,7 @@ function snapCurriculumHeights(engine, pack, geo) {
 function walkExercise(engine, handler, levelId, ex) {
   var G = engine.DoctematicaGeometry;
   var pack = G.analyzeStart(ex);
+  pack._levelId = levelId;
   var history = [];
   var geo = emptyGeo();
   snapCurriculumHeights(engine, pack, geo);
@@ -81,10 +85,10 @@ function walkExercise(engine, handler, levelId, ex) {
       history.push(String(h.step));
       continue;
     }
-    if (kind && isMigratedKind(kind)) {
+    if (kind && isMigratedKind(kind, pack)) {
       var one = handler.handle({
         topic: "analytic",
-        capability: capFor(kind),
+        capability: capFor(kind, pack),
         intent: "one-step",
         levelId: levelId,
         n: ex.n,
@@ -131,36 +135,28 @@ function main() {
   }
 
   var levels = engine.DoctematicaCurriculum.levels;
-  ["geo-triangle-area-1", "geo-rect-area-1"].forEach(function (levelId) {
-    var level = levels.filter(function (l) {
-      return l.id === levelId;
-    })[0];
-    (level.exercises || []).forEach(function (ex) {
-      var out = walkExercise(engine, handler, levelId, ex);
-      add(out.ok ? { ok: true, id: "full:" + levelId + ":" + ex.n } : out);
-      if (out.ok) {
-        var kinds = (out.pack.tasks || []).map(function (t) {
-          return t.kind;
-        });
-        var hasLocal = kinds.some(function (k) {
-          return !isMigratedKind(k);
-        });
-        var sol = handler.handle({
-          topic: "analytic",
-          capability: "areas",
-          intent: "solution",
-          levelId: levelId,
-          n: ex.n,
-          history: [],
-          geo: {},
-        });
-        if (hasLocal) {
-          add(sol && sol.local && sol.mixed ? { ok: true, id: "sol-mixed:" + levelId + ":" + ex.n } : fail("sol-mixed:" + levelId + ":" + ex.n, JSON.stringify(sol)));
-        } else {
-          add(sol && !sol.local && sol.steps && sol.steps.length ? { ok: true, id: "sol-server:" + levelId + ":" + ex.n } : fail("sol-server:" + levelId + ":" + ex.n, JSON.stringify(sol)));
-        }
+  walkMod.addHybridSuite(add, engine, handler, "geo-triangle-area-1", "areas", {
+    onWalk: function (addItem, ex, oneWalk) {
+      if (oneWalk.caps.indexOf("points") >= 0 && oneWalk.caps.indexOf("areas") >= 0) {
+        addItem({ ok: true, id: "transition-point-area:" + ex.n });
       }
-    });
+      if (oneWalk.caps.indexOf("lengths") >= 0 && oneWalk.caps.indexOf("areas") >= 0) {
+        addItem({ ok: true, id: "transition-length-area:" + ex.n });
+      }
+    },
+  });
+  walkMod.addHybridSuite(add, engine, handler, "geo-rect-area-1", "areas", {
+    onWalk: function (addItem, ex, oneWalk) {
+      if (oneWalk.caps.indexOf("points") >= 0 && oneWalk.caps.indexOf("areas") >= 0) {
+        addItem({ ok: true, id: "rect-transition-point-area:" + ex.n });
+      }
+    },
+  });
+  walkMod.addNoTrust(add, engine, handler, "geo-triangle-area-1", 5, "points", {
+    done: { D: true },
+    coords: { D: { x: true, y: true } },
+    partial: { D: true },
+    lastExpr: { D: "D(1;1)" },
   });
 
   var packT = G.analyzeStart(levels.filter(function (l) { return l.id === "geo-triangle-area-1"; })[0].exercises[0]);
@@ -230,9 +226,9 @@ function main() {
     geo: emptyGeo(),
   });
   add(
-    footLocal && footLocal.local && footLocal.task && footLocal.task.kind === "point"
-      ? { ok: true, id: "height-foot-stays-local-point" }
-      : fail("height-foot-stays-local-point", JSON.stringify(footLocal))
+    footLocal && footLocal.ok && !footLocal.local && footLocal.task && footLocal.task.kind === "point"
+      ? { ok: true, id: "height-foot-now-server-point" }
+      : fail("height-foot-now-server-point", JSON.stringify(footLocal))
   );
 
   var rectLevel = levels.filter(function (l) { return l.id === "geo-rect-area-1"; })[0];

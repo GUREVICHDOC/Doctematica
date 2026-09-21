@@ -1,0 +1,12 @@
+{
+  "name": "doctematica",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Doctematica math practice",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server/api.js"
+  }
+}
