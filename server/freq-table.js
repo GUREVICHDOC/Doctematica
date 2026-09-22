@@ -957,10 +957,12 @@ function hintResponse(compiled, ex, progress) {
 function stepOnce(compiled, ex, progress) {
   var current = currentPart(ex, progress);
   if (!current) return null;
+  var phaseBefore = (progress.phase && progress.phase[current.task.id]) || "";
   var line = nextLine(compiled, current.task, progress);
   if (line == null) return null;
   var result = matchTask(compiled, current.task, line, progress);
   if (!result || !result.ok) return null;
+  if (phaseBefore === "expr" && (result.shows || []).length) result.joinPrev = true;
   var before = JSON.stringify(progress);
   applyMatch(progress, current.task, result);
   if (JSON.stringify(progress) === before && !(result.shows || []).length) return null;
@@ -982,6 +984,7 @@ function stepResponse(compiled, ex, progress) {
     status: status,
     message: stepped.result.message || (status === "solved" ? "כל הסעיפים נכונים." : "הצעד נוסף."),
     shows: stepped.shows,
+    joinPrev: !!(stepped.result && stepped.result.joinPrev),
     part: stepped.part,
   });
 }
@@ -993,8 +996,12 @@ function solutionResponse(compiled, ex, progress) {
     guard += 1;
     var stepped = stepOnce(compiled, ex, progress);
     if (!stepped) break;
-    stepped.shows.forEach(function (show) {
-      lines.push({ part: stepped.part, show: show });
+    stepped.shows.forEach(function (show, index) {
+      lines.push({
+        part: stepped.part,
+        show: show,
+        joinPrev: index === 0 && !!(stepped.result && stepped.result.joinPrev),
+      });
     });
   }
   return respond(ex, compiled, progress, {

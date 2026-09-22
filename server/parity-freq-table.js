@@ -208,15 +208,15 @@ function main() {
   var one = freq.handle(engine, {
     levelId: "stat-freq-1", exerciseId: "stat-freq-1-ex-a001", intent: "step",     progress: atLookup.progress,
   });
-  add(one.ok && one.shows[0] === "15 + 9 + 30" && one.status === "step" && !one.view.solved
+  add(one.ok && one.shows[0] === "15 + 9 + 30" && one.status === "step" && !one.view.solved && !one.joinPrev
     ? { ok: true, id: "sum-onestep-expr" }
     : fail("sum-onestep-expr", JSON.stringify({ shows: one.shows, status: one.status, msg: one.message })));
   var two = freq.handle(engine, {
     levelId: "stat-freq-1", exerciseId: "stat-freq-1-ex-a001", intent: "step", progress: one.progress,
   });
-  add(two.ok && two.shows[0] === "54" && two.progress.done.first3
+  add(two.ok && two.shows[0] === "54" && two.joinPrev && two.progress.done.first3
     ? { ok: true, id: "sum-onestep-total" }
-    : fail("sum-onestep-total", JSON.stringify({ shows: two.shows, done: two.progress && two.progress.done, msg: two.message })));
+    : fail("sum-onestep-total", JSON.stringify({ shows: two.shows, join: two.joinPrev, done: two.progress && two.progress.done, msg: two.message })));
 
   var modeHint = freq.handle(engine, {
     levelId: "stat-freq-1", exerciseId: "stat-freq-1-ex-a001", intent: "hint", progress: two.progress,
@@ -297,9 +297,15 @@ function main() {
   add(solution.view && solution.view.solved && solvedShows.indexOf("לא") >= 0 && solvedShows.indexOf("72") >= 0 && solvedShows[solvedShows.length - 1] === "3"
     ? { ok: true, id: "full-solution-ex2" }
     : fail("full-solution-ex2", solvedShows.join(" | ")));
-  add(solvedShows.indexOf("2 + 1 + 6") >= 0 && solvedShows.indexOf("9") >= 0
+  var sumLine = (solution.lines || []).filter(function (line) { return line.show === "2 + 1 + 6"; })[0];
+  var sumTotal = (solution.lines || []).filter(function (line) { return line.show === "9" && line.part === "ד"; })[0];
+  add(sumLine && !sumLine.joinPrev && sumTotal && sumTotal.joinPrev
     ? { ok: true, id: "solution-shows-sum-then-result" }
     : fail("solution-shows-sum-then-result", solvedShows.join(" | ")));
+  var weightedTotal = (solution.lines || []).filter(function (line) { return line.show === "72"; })[0];
+  add(weightedTotal && weightedTotal.joinPrev
+    ? { ok: true, id: "solution-joins-weighted" }
+    : fail("solution-joins-weighted", solvedShows.join(" | ")));
 
   var grades = {
     variable: { label: "ציון" },

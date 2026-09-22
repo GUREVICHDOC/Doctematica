@@ -1192,7 +1192,7 @@
     if (remote.progress) state.freq = remote.progress;
     if (remote.lines && remote.lines.length) {
       remote.lines.forEach(function (line) {
-        applyFreqLines(line.part, [line.show]);
+        applyFreqLines(line.part, [line.show], line.joinPrev);
       });
     } else {
       applyFreqLines(remote.part, remote.shows, remote.joinPrev);
