@@ -20,10 +20,14 @@ function main() {
   add(page && page.topic === "statistics" && page.subtopic === "freq-table" && page.mode === "freq-table"
     ? { ok: true, id: "page-hierarchy" }
     : fail("page-hierarchy", page && page.topic));
-  add(page && page.exercises.length === 2 ? { ok: true, id: "two-exercises" } : fail("two-exercises", ""));
-  add(page && page.exercises[0].id === "stat-freq-1-ex-a001" && page.exercises[1].id === "stat-freq-1-ex-a002"
+  add(page && page.exercises.length === 3 ? { ok: true, id: "two-exercises" } : fail("two-exercises", ""));
+  add(page && page.exercises[0].id === "stat-freq-1-ex-a001" && page.exercises[1].id === "stat-freq-1-ex-a002" &&
+    page.exercises[2].id === "stat-freq-1-ex-a003"
     ? { ok: true, id: "stable-ids" }
     : fail("stable-ids", ""));
+  add(page.exercises[2].parts.map(function (part) { return part.label; }).join(",") === "א,ב,ד,ה,ו,ז,ח"
+    ? { ok: true, id: "grades-parts-skip-gimel" }
+    : fail("grades-parts-skip-gimel", page.exercises[2].parts.map(function (part) { return part.label; }).join(",")));
 
   var topics = engine.DoctematicaProblems.topics.map(function (topic) { return topic.id; });
   add(topics.indexOf("statistics") >= 0 ? { ok: true, id: "topic-listed" } : fail("topic-listed", topics.join(",")));
@@ -450,6 +454,71 @@ function main() {
   add(probeNext.ok && probeNext.view.ask === "כמה תלמידים קיבלו ציון 1?"
     ? { ok: true, id: "probe-ask-q2" }
     : fail("probe-ask-q2", probeNext.view && probeNext.view.ask));
+
+  var gradesEx = studentDto.openProblem(engine, "stat-freq-1", 2);
+  var gradesDump = JSON.stringify(gradesEx);
+  add(gradesEx && gradesEx.problem.exerciseId === "stat-freq-1-ex-a003" && gradesEx.problem.displayNumber === 3 &&
+    gradesEx.problem.table.rows.length === 6 && gradesEx.problem.parts.length === 7 &&
+    !gradesEx.problem.parts[1].tasks && gradesDump.indexOf("\"kind\"") < 0 && gradesDump.indexOf("\"where\"") < 0
+    ? { ok: true, id: "grades-open-hides-solver" }
+    : fail("grades-open-hides-solver", gradesDump.slice(0, 240)));
+  add(gradesEx.view.ask === "קבעו עבור כל שורה (העליונה והתחתונה) האם היא מייצגת את המשתנה (התכונה הנבדקת) או מייצגת את השכיחות."
+    ? { ok: true, id: "grades-opening-ask" }
+    : fail("grades-opening-ask", gradesEx.view && gradesEx.view.ask));
+  runExercise("stat-freq-1-ex-a003", [
+    { id: "g-var", typed: "ציון", expect: function (r) { return r.ok && r.progress.done.var && !r.progress.done.freq; } },
+    { id: "g-freq", typed: "מס' תלמידים", expect: function (r) { return r.ok && r.view.part.label === "ב" && r.view.ask === "האם המשתנה הוא איכותי או כמותי בדיד או כמותי רציף?"; } },
+    { id: "g-scale-short", typed: "כמותי", expect: function (r) { return r.ok === false; } },
+    { id: "g-scale-cont", typed: "כמותי רציף", expect: function (r) { return r.ok === false; } },
+    { id: "g-scale", typed: "כמותי בדיד", expect: function (r) { return r.ok && r.shows[0] === "כמותי בדיד" && r.view.ask === "נמקו."; } },
+    { id: "g-reason-thin", typed: "כי כן", expect: function (r) { return r.ok === false; } },
+    { id: "g-reason", typed: "הערכים הם מספרים שלמים שאפשר לספור", expect: function (r) { return r.ok && r.view.part.label === "ד" && r.shows[0].indexOf("נפרדים") >= 0; } },
+    { id: "g-50", typed: "4", expect: function (r) { return r.ok && r.view.part.label === "ה"; } },
+    { id: "g-80", typed: "=12", expect: function (r) { return r.ok && r.shows[0] === "12" && r.view.part.label === "ו"; } },
+    { id: "g-total-expr", typed: "4 + 3 + 5 + 12 + 6 + 2", expect: function (r) { return r.ok && r.status === "step"; } },
+    { id: "g-total", typed: "=32", expect: function (r) { return r.ok && r.joinPrev && r.view.part.label === "ז"; } },
+    { id: "g-above-expr", typed: "12 + 6 + 2", expect: function (r) { return r.ok && r.status === "step"; } },
+    { id: "g-above", typed: "20", expect: function (r) { return r.ok && !r.joinPrev && r.view.part.label === "ח"; } },
+    { id: "g-atmost-line", typed: "4 + 3 + 5 = 12", expect: function (r) { return r.ok && r.shows.length === 1 && r.shows[0] === "4 + 3 + 5 = 12" && r.view.solved; } },
+  ]);
+  var gradesHint = freq.handle(engine, {
+    levelId: "stat-freq-1",
+    exerciseId: "stat-freq-1-ex-a003",
+    intent: "hint",
+    progress: { done: { var: true, freq: true }, phase: {}, found: {} },
+  });
+  add(gradesHint.ok && gradesHint.message.indexOf("בדיד") < 0 && gradesHint.message.indexOf("רציף") < 0
+    ? { ok: true, id: "grades-scale-hint-hides-choice" }
+    : fail("grades-scale-hint-hides-choice", gradesHint.message));
+  var gradesStep = freq.handle(engine, {
+    levelId: "stat-freq-1",
+    exerciseId: "stat-freq-1-ex-a003",
+    intent: "step",
+    progress: { done: { var: true, freq: true, scale: true }, phase: { why: "" }, found: {} },
+  });
+  add(gradesStep.ok && gradesStep.shows[0] === "ערכי המשתנה הם מספרים נפרדים שאפשר לספור."
+    ? { ok: true, id: "grades-reason-step" }
+    : fail("grades-reason-step", JSON.stringify(gradesStep.shows)));
+
+  var heights = {
+    variable: { label: "גובה" },
+    frequency: { label: "תלמידים" },
+    rows: [{ value: 1.5, freq: 3 }, { value: 1.7, freq: 4 }],
+  };
+  add(freq.assess(heights, { kind: "scale", depth: "full" }, "כמותי רציף").done
+    && !freq.assess(heights, { kind: "scale", depth: "full" }, "כמותי בדיד").ok
+    ? { ok: true, id: "scale-full-continuous" }
+    : fail("scale-full-continuous", ""));
+  add(freq.assess(heights, { kind: "reason", about: "scale" }, "הגובה מתקבל ממדידה ויכול לקבל כל ערך בקטע").done
+    ? { ok: true, id: "reason-continuous" }
+    : fail("reason-continuous", ""));
+  add(!freq.assess(grades, { kind: "scale", depth: "full" }, "כמותי רציף").ok
+    && freq.assess(grades, { kind: "scale", depth: "full" }, "כמותי בדיד").shows[0] === "כמותי בדיד"
+    ? { ok: true, id: "scale-full-discrete-other-table" }
+    : fail("scale-full-discrete-other-table", ""));
+  add(freq.assess(grades, { kind: "scale" }, "כמותי").done
+    ? { ok: true, id: "scale-short-still-quantitative" }
+    : fail("scale-short-still-quantitative", ""));
 
   var failed = checks.filter(function (item) { return !item.ok; });
   console.log("parity-freq-table: passed " + (checks.length - failed.length) + ", failed " + failed.length);

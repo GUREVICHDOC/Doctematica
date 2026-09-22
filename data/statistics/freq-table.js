@@ -1,6 +1,7 @@
 (function (global) {
   // טבלת שכיחויות. כל סעיף מתואר לפי סוג פעולה, לא לפי מספר תרגיל.
-  // identify (role: variable | frequency), scale,
+  // identify (role: variable | frequency), scale (depth: "full" לשלוש האפשרויות),
+  // reason (about: "scale"),
   // lookup (value), sumFreq (values או where), total,
   // matchValues (where), mode (of: value | frequency),
   // weightedSum, yesNo (calc, op, value).
@@ -162,6 +163,83 @@
               label: "ט",
               text: "מהו מספר הילדים במשפחות, שבהן השכיחות היא הגבוהה ביותר?",
               tasks: [{ id: "mode-kids", kind: "mode" }],
+            },
+          ],
+        },
+        {
+          id: "stat-freq-1-ex-a003",
+          n: 3,
+          stem: "בטבלה שלפניכם מתוארת התפלגות הציונים באמנות בכיתה מסוימת.",
+          table: {
+            variable: { label: "ציון" },
+            frequency: { label: "מס' תלמידים" },
+            rows: [
+              { value: 50, freq: 4 },
+              { value: 60, freq: 3 },
+              { value: 70, freq: 5 },
+              { value: 80, freq: 12 },
+              { value: 90, freq: 6 },
+              { value: 100, freq: 2 },
+            ],
+          },
+          parts: [
+            {
+              label: "א",
+              text: "קבעו עבור כל שורה (העליונה והתחתונה) האם היא מייצגת את המשתנה (התכונה הנבדקת) או מייצגת את השכיחות.",
+              tasks: [
+                { id: "var", kind: "identify", role: "variable" },
+                { id: "freq", kind: "identify", role: "frequency" },
+              ],
+            },
+            {
+              label: "ב",
+              text: "קבעו האם המשתנה הוא איכותי או כמותי בדיד או כמותי רציף. נמקו.",
+              tasks: [
+                {
+                  id: "scale",
+                  kind: "scale",
+                  depth: "full",
+                  ask: "האם המשתנה הוא איכותי או כמותי בדיד או כמותי רציף?",
+                },
+                { id: "why", kind: "reason", about: "scale", ask: "נמקו." },
+              ],
+            },
+            {
+              label: "ד",
+              text: "כמה תלמידים קיבלו את הציון 50?",
+              tasks: [{ id: "score50", kind: "lookup", value: 50 }],
+            },
+            {
+              label: "ה",
+              text: "מה השכיחות של הציון 80?",
+              tasks: [{ id: "score80", kind: "lookup", value: 80 }],
+            },
+            {
+              label: "ו",
+              text: "כמה תלמידים יש סך הכול בכיתה?",
+              tasks: [{ id: "class", kind: "total" }],
+            },
+            {
+              label: "ז",
+              text: "כמה תלמידים קיבלו ציון הגבוה מ-70?",
+              tasks: [
+                {
+                  id: "above70",
+                  kind: "sumFreq",
+                  where: { on: "variable", op: "gt", value: 70 },
+                },
+              ],
+            },
+            {
+              label: "ח",
+              text: "כמה תלמידים קיבלו ציון שהוא לכל היותר 70?",
+              tasks: [
+                {
+                  id: "atMost70",
+                  kind: "sumFreq",
+                  where: { on: "variable", op: "lte", value: 70 },
+                },
+              ],
             },
           ],
         },

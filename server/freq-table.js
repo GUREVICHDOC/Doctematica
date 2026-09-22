@@ -59,10 +59,12 @@ function compileTable(table) {
     };
   });
   var scale = variable.scale;
-  if (scale !== "qualitative" && scale !== "quantitative") {
-    scale = rows.length && rows.every(function (row) { return row.num != null; })
-      ? "quantitative"
-      : "qualitative";
+  if (scale !== "qualitative" && scale !== "quantitative" && scale !== "discrete" && scale !== "continuous") {
+    var numeric = rows.length && rows.every(function (row) { return row.num != null; });
+    var fractional = numeric && rows.some(function (row) {
+      return !sameNum(row.num, Math.round(row.num));
+    });
+    scale = !numeric ? "qualitative" : fractional ? "continuous" : "discrete";
   }
   return {
     variableLabel: variable.label || "",
@@ -282,18 +284,104 @@ function matchIdentify(compiled, task, typed) {
   return { ok: true, done: true, shows: [label], message: "" };
 }
 
-function matchScale(compiled, typed) {
+function scaleKind(compiled) {
+  var scale = compiled && compiled.scale;
+  if (scale === "qualitative" || scale === "quantitative" || scale === "discrete" || scale === "continuous") {
+    return scale;
+  }
+  return "qualitative";
+}
+
+function scaleAnswer(compiled, task) {
+  var kind = scaleKind(compiled);
+  if (task && task.depth === "full") {
+    if (kind === "qualitative") return "איכותי";
+    if (kind === "continuous") return "כמותי רציף";
+    if (kind === "quantitative") return "כמותי";
+    return "כמותי בדיד";
+  }
+  return kind === "qualitative" ? "איכותי" : "כמותי";
+}
+
+function canonicalReason(kind) {
+  if (kind === "qualitative") return "ערכי המשתנה הם שמות או קטגוריות, לא מספרים.";
+  if (kind === "continuous") return "ערכי המשתנה מתקבלים ממדידה ויכולים לקבל כל ערך בקטע.";
+  return "ערכי המשתנה הם מספרים נפרדים שאפשר לספור.";
+}
+
+function denies(text, word) {
+  return new RegExp("לא\\s*" + word + "|אינו\\s*" + word + "|אינם\\s*" + word + "|איננה\\s*" + word).test(text);
+}
+
+function reasonFits(kind, typed) {
   var text = normText(typed);
-  var quantitative = /כמותי/.test(text);
+  if (!text) return false;
+  if (kind === "qualitative") {
+    if ((/כמותי|בדיד|רציף/.test(text)) && !denies(text, "כמותי")) return false;
+    return /שמות|שם|קטגור|לא מספר|אינם מספרים|אינו מספר|מילים/.test(text);
+  }
+  if (kind === "continuous") {
+    if (/בדיד/.test(text) && !denies(text, "בדיד")) return false;
+    return /רציף|מדיד|כל ערך|בקטע/.test(text);
+  }
+  if ((/רציף/.test(text) && !denies(text, "רציף")) || (/איכותי/.test(text) && !denies(text, "איכותי"))) {
+    return false;
+  }
+  var discrete = /בדיד|נפרד|שלמים|שלם|ספיר|לספור|נספר/.test(text);
+  var numeric = /מספר|ערכ/.test(text);
+  return discrete && numeric;
+}
+
+function matchScale(compiled, task, typed) {
+  var text = normText(typed);
   var qualitative = /איכותי/.test(text);
-  if (quantitative === qualitative) {
+  var quantitative = /כמותי/.test(text);
+  var discrete = /בדיד/.test(text);
+  var continuous = /רציף/.test(text);
+  var kind = scaleKind(compiled);
+  var full = !!(task && task.depth === "full");
+  if (full) {
+    var ok = false;
+    if (kind === "qualitative") ok = qualitative && !quantitative && !discrete && !continuous;
+    else if (kind === "continuous") ok = continuous && !discrete && !qualitative;
+    else if (kind === "discrete") ok = (discrete || quantitative) && discrete && !continuous && !qualitative;
+    else ok = quantitative && !qualitative && !continuous && !discrete;
+    if (!ok) {
+      return { ok: false, message: "ציינו אם המשתנה איכותי, כמותי בדיד או כמותי רציף." };
+    }
+    return { ok: true, done: true, shows: [scaleAnswer(compiled, task)], message: "" };
+  }
+  var family = kind === "qualitative" ? "qualitative" : "quantitative";
+  if (quantitative === qualitative && !discrete && !continuous) {
     return { ok: false, message: "רשמו אם המשתנה כמותי או איכותי." };
   }
-  var word = compiled.scale === "quantitative" ? "כמותי" : "איכותי";
-  if ((compiled.scale === "quantitative" && !quantitative) || (compiled.scale !== "quantitative" && !qualitative)) {
+  if (family === "quantitative" && continuous && kind !== "continuous") {
     return { ok: false, message: "בדקו אם ערכי המשתנה הם מספרים או שמות." };
   }
-  return { ok: true, done: true, shows: [word], message: "" };
+  if (family === "quantitative" && discrete && kind === "continuous") {
+    return { ok: false, message: "בדקו אם ערכי המשתנה הם מספרים או שמות." };
+  }
+  if (family === "qualitative" && (quantitative || discrete || continuous) && !qualitative) {
+    return { ok: false, message: "בדקו אם ערכי המשתנה הם מספרים או שמות." };
+  }
+  if (family === "quantitative" && !quantitative && !discrete) {
+    return { ok: false, message: "בדקו אם ערכי המשתנה הם מספרים או שמות." };
+  }
+  if (family === "qualitative" && !qualitative) {
+    return { ok: false, message: "בדקו אם ערכי המשתנה הם מספרים או שמות." };
+  }
+  return { ok: true, done: true, shows: [scaleAnswer(compiled, task)], message: "" };
+}
+
+function matchReason(compiled, task, typed) {
+  if (task && task.about && task.about !== "scale") {
+    return { ok: false, message: "הנימוק לא נתמך." };
+  }
+  var kind = scaleKind(compiled);
+  if (!reasonFits(kind, typed)) {
+    return { ok: false, message: "הנימוק צריך להסביר את אופי הערכים בטבלה." };
+  }
+  return { ok: true, done: true, shows: [canonicalReason(kind)], message: "" };
 }
 
 function loneNumber(typed) {
@@ -648,7 +736,8 @@ function matchYesNo(compiled, task, typed, progress) {
 
 function matchTask(compiled, task, typed, progress) {
   if (task.kind === "identify") return matchIdentify(compiled, task, typed);
-  if (task.kind === "scale") return matchScale(compiled, typed);
+  if (task.kind === "scale") return matchScale(compiled, task, typed);
+  if (task.kind === "reason") return matchReason(compiled, task, typed);
   if (task.kind === "lookup") return matchLookup(compiled, task, typed);
   if (task.kind === "sumFreq" || task.kind === "total") return matchSum(compiled, task, typed, progress);
   if (task.kind === "weightedSum") return matchWeighted(compiled, task, typed, progress);
@@ -724,6 +813,7 @@ function questionsIn(text) {
 }
 
 function activeAsk(part, task) {
+  if (task && task.ask) return String(task.ask);
   var text = String((part && part.text) || "").trim();
   var q = task && task.q;
   if (q == null || q === "") return text;
@@ -764,8 +854,14 @@ function hintForTask(compiled, task, progress) {
   if (task.kind === "identify") {
     return "הסתכלו בכותרות הטבלה ומצאו את השורה שמתארת את המשתנה — מה שנמדד בכל עמודה.";
   }
+  if (task.kind === "scale" && task.depth === "full") {
+    return "הסתכלו בערכי המשתנה: שמות או קטגוריות, מספרים נפרדים, או מדידה שיכולה לקבל כל ערך.";
+  }
   if (task.kind === "scale") {
     return "אם ערכי המשתנה הם מספרים שאפשר לחבר ולהשוות, המשתנה כמותי. אם הם שמות או קטגוריות, המשתנה איכותי.";
+  }
+  if (task.kind === "reason") {
+    return "כתבו משפט שמסביר את הסיווג לפי אופי הערכים בטבלה.";
   }
   if (task.kind === "lookup") {
     return "מצאו בטבלה את הערך המבוקש, וקראו את השכיחות שמתאימה לו.";
@@ -815,7 +911,8 @@ function nextLine(compiled, task, progress) {
   if (task.kind === "identify") {
     return task.role === "frequency" ? compiled.frequencyLabel : compiled.variableLabel;
   }
-  if (task.kind === "scale") return compiled.scale === "quantitative" ? "כמותי" : "איכותי";
+  if (task.kind === "scale") return scaleAnswer(compiled, task);
+  if (task.kind === "reason") return canonicalReason(scaleKind(compiled));
   if (task.kind === "lookup") {
     var row = findRow(compiled.rows, task.value);
     return row ? formatInt(row.freq) : null;
