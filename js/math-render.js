@@ -68,7 +68,7 @@
   function emitTimesAfterFracIfNeeded(out, s, i) {
     var ch = s.charAt(i);
     if (isNumChar(ch) || ch === "(") {
-      out += '<span class="m-op">×</span>';
+      out += '<span class="m-op">·</span>';
     }
   }
 
@@ -344,6 +344,12 @@
             i = afterBal + balPowLen;
             continue;
           }
+          var slashDen = matchSlashDen(s, afterBal);
+          if (slashDen) {
+            out += fracWrap(sideToHTML(unwrapParens(bal)), sideToHTML(slashDen.den));
+            i = afterBal + slashDen.consumed;
+            continue;
+          }
         }
       }
       var wrappedFrac = s.slice(i).match(/^\((-?\d+)\)\s*\/\s*\((-?\d+)\)/);
@@ -381,7 +387,7 @@
       var ch = s.charAt(i);
       if (ch === "*" || ch === "×" || ch === "·") {
         if (!hideTimesSign(neighborChar(s, i, -1), neighborChar(s, i, 1))) {
-          out += '<span class="m-op">×</span>';
+          out += '<span class="m-op">·</span>';
         }
         i += 1;
         continue;
@@ -404,6 +410,12 @@
       if (ch === "^" && s.charAt(i + 1) === "2") {
         out += '<sup class="m-sup">2</sup>';
         i += 2;
+        continue;
+      }
+      var xIdx = s.slice(i).match(/^x(₁,₂|₁|₂)/);
+      if (xIdx) {
+        out += '<span class="m-x">x' + escapeHtml(xIdx[1]) + "</span>";
+        i += xIdx[0].length;
         continue;
       }
       if (ch === "x" || ch === "X") {

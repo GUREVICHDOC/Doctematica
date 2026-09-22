@@ -851,7 +851,12 @@ code {
 
 .freq-table {
   margin: 0 0 14px;
-  overflow-x: auto;
+  max-width: 100%;
+}
+
+.freq-fit {
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .freq-note {
@@ -903,12 +908,19 @@ code {
   color: #1e6b3a;
 }
 
+.freq-grid.freq-build .freq-build-col {
+  width: 4.8rem;
+  max-width: 4.8rem;
+  padding: 6px 4px;
+}
+
 .freq-build-value,
 .freq-build-freq {
-  width: 4.6rem;
+  width: 100%;
+  box-sizing: border-box;
   border: 1px solid rgba(20, 36, 26, 0.22);
   border-radius: 8px;
-  padding: 6px 4px;
+  padding: 6px 2px;
   text-align: center;
   font: inherit;
   font-weight: 700;
@@ -924,8 +936,9 @@ code {
 
 .freq-col-tools {
   display: flex;
-  justify-content: center;
-  gap: 4px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
   margin-bottom: 6px;
 }
 
@@ -934,10 +947,11 @@ code {
   border: 1px solid rgba(20, 36, 26, 0.16);
   background: #fff;
   border-radius: 8px;
-  padding: 2px 6px;
+  padding: 2px 4px;
   font: inherit;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
+  line-height: 1.2;
   cursor: pointer;
   color: inherit;
 }
@@ -949,11 +963,12 @@ code {
 }
 
 .freq-grid {
+  width: max-content;
   border-collapse: collapse;
   background: #fff;
-  min-width: 280px;
   border-radius: 14px;
   overflow: hidden;
+  transform-origin: top right;
 }
 
 .freq-grid th,
@@ -991,6 +1006,37 @@ code {
 .freq-math-line {
   direction: ltr;
   unicode-bidi: isolate;
+}
+
+.percent-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.percent-field-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  font-weight: 800;
+}
+
+.percent-field {
+  width: 8rem;
+  border: 1px solid rgba(20, 36, 26, 0.16);
+  border-radius: 12px;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  background: #fff;
+  color: var(--ink);
+}
+
+.percent-field:disabled {
+  background: rgba(47, 107, 69, 0.1);
 }
 
 .freq-answer {

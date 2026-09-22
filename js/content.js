@@ -114,6 +114,25 @@
         explain: "זהו a, b, c, הציבו בנוסחה, חשבו את הדיסקרימיננטה, ואז את הפתרונות הממשיים.",
       };
     }
+    if (level.mode === "percent") {
+      var percentProblem = {
+        mode: "percent",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction || "",
+        prompt: ex.stem || "",
+        stem: ex.stem || "",
+        explain: "",
+      };
+      if (ex.groups && ex.groups.length > 1) {
+        percentProblem.answers = ex.groups.map(function (group) {
+          return { id: group.id, label: group.label || "" };
+        });
+      }
+      return percentProblem;
+    }
     if (level.mode === "freq-table") {
       var table = ex.table || {};
       var variable = table.variable || {};
@@ -216,6 +235,9 @@
         }
         if (topicId === "statistics" && subtopicId) {
           return (item.subtopic || "freq-table") === subtopicId;
+        }
+        if (topicId === "percents" && subtopicId) {
+          return (item.subtopic || "find-part") === subtopicId;
         }
         return true;
       });

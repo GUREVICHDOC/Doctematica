@@ -25,9 +25,10 @@
     { id: "equations", label: "משוואות בנעלם אחד" },
     { id: "quadratic", label: "משוואות ריבועיות" },
     { id: "high-power", label: "משוואות בחזקה גבוהה" },
+    { id: "systems-sub", label: "מערכת משוואות" },
+    { id: "percents", label: "אחוזים" },
     { id: "analytic", label: "גאומטריה אנליטית" },
     { id: "statistics", label: "סטטיסטיקה" },
-    { id: "systems-sub", label: "מערכת משוואות" },
   ];
 
   var subtopics = {
@@ -39,6 +40,9 @@
       { id: "segments", label: "אורכי קטעים" },
       { id: "areas", label: "שטחים והיקפים" },
       { id: "line", label: "הישר" },
+    ],
+    percents: [
+      { id: "find-part", label: "מציאת כמות עבור אחוז" },
     ],
     statistics: [
       { id: "freq-table", label: "טבלת שכיחויות" },

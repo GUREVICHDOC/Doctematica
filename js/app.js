@@ -55,6 +55,7 @@
   var freqTableEl = document.getElementById("freq-table");
   var freqAskEl = document.getElementById("freq-ask");
   var freqAnswerEl = document.getElementById("freq-answer");
+  var percentFieldsEl = document.getElementById("percent-fields");
   var lineMatchPanelEl = document.getElementById("line-match-panel");
   var coordBoard = geoBoardEl ? new DoctematicaCoordBoard(geoBoardEl) : null;
   var quadGuideEl = document.getElementById("quad-guide");
@@ -180,6 +181,7 @@
   var SYSTEMS_URL = API_ROOT + "/api/systems";
   var GEOMETRY_URL = API_ROOT + "/api/geometry";
   var STATISTICS_URL = API_ROOT + "/api/statistics";
+  var PERCENTS_URL = API_ROOT + "/api/percents";
   var equationsCheckBusy = false;
 
   function isBasicEqServerMode() {
@@ -932,8 +934,16 @@
     return state.topic === "statistics";
   }
 
+  function isPercentTopic() {
+    return state.topic === "percents";
+  }
+
   function isFreqTableMode() {
     return !!(state.problem && state.problem.mode === "freq-table");
+  }
+
+  function isPercentMode() {
+    return !!(state.problem && state.problem.mode === "percent");
   }
 
   function emptyFreqProgress() {
@@ -962,6 +972,48 @@
       freqAskEl.innerHTML = "";
     }
     if (yesnoAskEl && !isGeoLengthMode()) yesnoAskEl.classList.add("hidden");
+    if (percentFieldsEl) {
+      percentFieldsEl.classList.add("hidden");
+      percentFieldsEl.innerHTML = "";
+    }
+  }
+
+  function readPercentFields() {
+    var out = {};
+    if (!percentFieldsEl) return out;
+    var inputs = percentFieldsEl.querySelectorAll(".percent-field");
+    var i;
+    for (i = 0; i < inputs.length; i++) out[inputs[i].getAttribute("data-id")] = inputs[i].value;
+    return out;
+  }
+
+  function renderPercentFields(fields) {
+    if (!percentFieldsEl) return;
+    if (!fields || !fields.length) {
+      percentFieldsEl.classList.add("hidden");
+      percentFieldsEl.innerHTML = "";
+      return;
+    }
+    var prev = readPercentFields();
+    percentFieldsEl.innerHTML = "";
+    percentFieldsEl.classList.remove("hidden");
+    fields.forEach(function (field) {
+      var row = document.createElement("label");
+      row.className = "percent-field-row";
+      var name = document.createElement("span");
+      name.textContent = field.label ? field.label + ":" : "";
+      var input = document.createElement("input");
+      input.type = "text";
+      input.className = "percent-field";
+      input.setAttribute("data-id", field.id);
+      input.dir = "ltr";
+      input.autocomplete = "off";
+      input.value = field.value != null ? String(field.value) : (prev[field.id] || "");
+      input.disabled = !!field.locked || !!state.locked;
+      row.appendChild(name);
+      row.appendChild(input);
+      percentFieldsEl.appendChild(row);
+    });
   }
 
   function renderFreqBoard() {
@@ -1034,9 +1086,10 @@
         freqRow.appendChild(td);
       });
       grid.appendChild(freqRow);
-      freqTableEl.appendChild(grid);
+      appendFreqGrid(grid);
     }
     freqTableEl.classList.remove("hidden");
+    requestAnimationFrame(fitFreqTable);
     if (building) {
       var openInput = freqTableEl.querySelector(".freq-build-value:not(:disabled), .freq-build-freq:not(:disabled)");
       if (openInput) openInput.focus();
@@ -1113,12 +1166,34 @@
       freqRow.appendChild(td);
     });
     grid.appendChild(freqRow);
-    freqTableEl.appendChild(grid);
+    appendFreqGrid(grid);
     var add = document.createElement("button");
     add.type = "button";
     add.className = "freq-add-col";
     add.textContent = "הוספת עמודה";
     freqTableEl.appendChild(add);
+  }
+
+  function appendFreqGrid(grid) {
+    var fit = document.createElement("div");
+    fit.className = "freq-fit";
+    fit.appendChild(grid);
+    freqTableEl.appendChild(fit);
+  }
+
+  function fitFreqTable() {
+    if (!freqTableEl) return;
+    var fit = freqTableEl.querySelector(".freq-fit");
+    var grid = fit && fit.querySelector(".freq-grid");
+    if (!fit || !grid) return;
+    grid.style.transform = "";
+    fit.style.height = "";
+    var available = freqTableEl.clientWidth;
+    var needed = grid.scrollWidth;
+    if (!available || needed <= available + 1) return;
+    var scale = available / needed;
+    grid.style.transform = "scale(" + scale + ")";
+    fit.style.height = Math.ceil(grid.offsetHeight * scale) + "px";
   }
 
   function readBuildColumns() {
@@ -1272,7 +1347,7 @@
   function syncFreqAnswerDir() {
     if (!freqAnswerEl) return;
     var text = freqAnswerEl.value || "";
-    var math = !/[א-ת]/.test(text) && /[=+·×*]/.test(text);
+    var math = !/[א-ת]/.test(text) && /[=+·×*.\/]/.test(text);
     freqAnswerEl.classList.toggle("is-math", math);
   }
 
@@ -1393,6 +1468,13 @@
     var failed = !remote || remote.ok === false;
     var keepBoard = !!(failed && remote && remote.view && remote.view.input === "build");
     if (failed && !keepBoard) {
+      if (isPercentMode() && remote && remote.view) {
+        renderPercentFields(remote.view.fields);
+        if (mathField && !mathField.serialize() && percentFieldsEl) {
+          var openField = percentFieldsEl.querySelector(".percent-field:not(:disabled)");
+          if (openField) openField.focus();
+        }
+      }
       var bad = remote && remote.message ? remote.message : "נסו שוב.";
       showFeedback(false, "<strong>עוד לא.</strong> " + escapeFreqHtml(bad));
       return;
@@ -1417,15 +1499,21 @@
       applyFreqLines(remote.part, remote.shows, remote.joinPrev);
     }
     if (remote.view) {
-      state.freqView = remote.view;
-      renderFreqBoard();
-      renderFreqPart(remote.view);
-      syncFreqYesNo(remote.view);
-      syncFreqEntry(remote.view);
+      if (isPercentMode()) {
+        state.percentView = remote.view;
+        renderPercentFields(remote.view.fields);
+      } else {
+        state.freqView = remote.view;
+        renderFreqBoard();
+        renderFreqPart(remote.view);
+        syncFreqYesNo(remote.view);
+        syncFreqEntry(remote.view);
+      }
     }
     renderSteps();
-    if (freqAnswerEl && ((remote.shows && remote.shows.length) || (remote.lines && remote.lines.length))) {
-      freqAnswerEl.value = "";
+    if ((remote.shows && remote.shows.length) || (remote.lines && remote.lines.length)) {
+      if (isPercentMode()) mathField.clear();
+      else if (freqAnswerEl) freqAnswerEl.value = "";
     }
     if (remote.status === "note") {
       showFeedback(true, escapeFreqHtml(remote.message || ""), "tip");
@@ -1433,7 +1521,8 @@
     }
     if (remote.status === "solved" || (remote.view && remote.view.solved)) {
       markSolved();
-      if (freqAnswerEl) freqAnswerEl.disabled = true;
+      if (isPercentMode()) mathField.setDisabled(true);
+      else if (freqAnswerEl) freqAnswerEl.disabled = true;
       checkBtn.disabled = true;
       nextAfterSolveBtn.classList.remove("hidden");
       showFeedback(true, "<strong>כל הכבוד.</strong> " + escapeFreqHtml(remote.message || ""));
@@ -1442,7 +1531,10 @@
     var prefix = remote.status === "step" || remote.status === "hint" ? "צעד נכון." : "נכון.";
     if (remote.status === "hint") prefix = "רמז.";
     showFeedback(remote.status !== "hint", "<strong>" + prefix + "</strong> " + escapeFreqHtml(remote.message || ""), remote.status === "hint" ? "tip" : "ok");
-    if (freqAnswerEl && remote.status !== "hint") freqAnswerEl.focus();
+    if (remote.status !== "hint") {
+      if (isPercentMode()) mathField.focus();
+      else if (freqAnswerEl) freqAnswerEl.focus();
+    }
   }
 
   function applyFreqTyped(typed) {
@@ -1466,6 +1558,79 @@
 
   function freqSolution() {
     if (!requestStatistics({ intent: "solution" }, applyFreqRemote)) showBasicEqServerUnavailable();
+  }
+
+  function requestPercent(payload, onResult) {
+    if (!isPercentMode()) return false;
+    if (equationsCheckBusy) return true;
+    equationsCheckBusy = true;
+    var body = {
+      topic: "percents",
+      intent: payload.intent,
+      levelId: (state.problem && state.problem.levelId) || state.levelId,
+      exerciseId: state.problem && state.problem.exerciseId,
+      n: state.problem && state.problem.n,
+      exerciseIndex: state.exerciseIndex,
+      progress: state.freq || { step: "", done: false },
+      answers: payload.answers || readPercentFields(),
+    };
+    if (payload.typed != null) body.typed = payload.typed;
+    fetch(PERCENTS_URL, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(function (res) {
+        return res.text().then(function (text) {
+          var data = null;
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch (err) {
+            data = null;
+          }
+          if (!res.ok || data == null) throw new Error("percents");
+          return data;
+        });
+      })
+      .then(function (remote) {
+        equationsCheckBusy = false;
+        try {
+          onResult(remote || {});
+        } catch (err) {
+          showServerProcessingError();
+        }
+      })
+      .catch(function () {
+        equationsCheckBusy = false;
+        showBasicEqServerUnavailable();
+      });
+    return true;
+  }
+
+  function applyPercentTyped(typed) {
+    if (state.locked) return;
+    var answers = readPercentFields();
+    var hasFields = percentFieldsEl && !percentFieldsEl.classList.contains("hidden");
+    if (!String(typed || "").trim() && !hasFields) {
+      showFeedback(false, "<strong>עוד לא.</strong> כתבו תשובה.");
+      return;
+    }
+    if (!requestPercent({ intent: "check", typed: typed, answers: answers }, applyFreqRemote)) {
+      showBasicEqServerUnavailable();
+    }
+  }
+
+  function percentHint() {
+    if (!requestPercent({ intent: "hint" }, applyFreqRemote)) showBasicEqServerUnavailable();
+  }
+
+  function percentOneStep() {
+    if (!requestPercent({ intent: "step" }, applyFreqRemote)) showBasicEqServerUnavailable();
+  }
+
+  function percentSolution() {
+    if (!requestPercent({ intent: "solution" }, applyFreqRemote)) showBasicEqServerUnavailable();
   }
 
   function isGeoLengthMode() {
@@ -3034,6 +3199,7 @@
       isHighPowerTopic() ||
       isAnalyticTopic() ||
       isStatisticsTopic() ||
+      isPercentTopic() ||
       state.topic === "equations"
     );
   }
@@ -3041,7 +3207,7 @@
   function topicLevels() {
     var all = (state.catalog && state.catalog.levels) || [];
     var sub =
-      state.topic === "equations" || state.topic === "analytic" || state.topic === "statistics"
+      state.topic === "equations" || state.topic === "analytic" || state.topic === "statistics" || state.topic === "percents"
         ? state.subtopic
         : null;
     if (!state.topic) return all;
@@ -3050,6 +3216,7 @@
       if (state.topic === "equations" && sub) return (item.subtopic || "basic") === sub;
       if (state.topic === "analytic" && sub) return (item.subtopic || "segments") === sub;
       if (state.topic === "statistics" && sub) return (item.subtopic || "freq-table") === sub;
+      if (state.topic === "percents" && sub) return (item.subtopic || "find-part") === sub;
       return true;
     });
   }
@@ -3158,7 +3325,7 @@
         state.topic = topic.id;
         state.source = "worksheet";
         state.exerciseIndex = 0;
-        if (topic.id === "equations" || topic.id === "analytic" || topic.id === "statistics") {
+        if (topic.id === "equations" || topic.id === "analytic" || topic.id === "statistics" || topic.id === "percents") {
           var subs = ((state.catalog && state.catalog.subtopics) || {})[topic.id] || [];
           state.subtopic = state.subtopic || (subs[0] && subs[0].id);
           if (!subs.some(function (s) { return s.id === state.subtopic; })) {
@@ -3253,7 +3420,7 @@
       return t.id === state.topic;
     })[0];
     var label = found ? found.label : "";
-    if (state.topic === "equations" || state.topic === "analytic" || state.topic === "statistics") {
+    if (state.topic === "equations" || state.topic === "analytic" || state.topic === "statistics" || state.topic === "percents") {
       var subList =
         ((state.catalog && state.catalog.subtopics) || {})[state.topic] || [];
       var sub = (subList.filter(function (s) {
@@ -3797,7 +3964,7 @@
 
   function renderSteps() {
     stepsEl.innerHTML = "";
-    if (state.problem && state.problem.mode === "freq-table") {
+    if (state.problem && (state.problem.mode === "freq-table" || state.problem.mode === "percent")) {
       renderFreqSteps();
       return;
     }
@@ -6753,6 +6920,16 @@
         showSolution: freqSolution,
       };
     }
+    if (isPercentMode()) {
+      return {
+        work: true,
+        buttons: true,
+        hintText: "אפשר לרשום את התשובה הסופית, או שלב ביניים נכון.",
+        hint: percentHint,
+        oneStep: percentOneStep,
+        showSolution: percentSolution,
+      };
+    }
     if (isSystemMode()) {
       return {
         work: true,
@@ -6804,7 +6981,6 @@
               },
               function (remote) {
                 showEqSolution("פתרון מלא — נוסחת שורשים", {
-                  plain: true,
                   always: true,
                   steps: (remote.steps || []).map(function (s) {
                     return s.eq;
@@ -6816,7 +6992,7 @@
           ) {
             return;
           }
-          showEqSolution("פתרון מלא — נוסחת שורשים", { plain: true, always: true });
+          showEqSolution("פתרון מלא — נוסחת שורשים", { always: true });
         },
       };
     }
@@ -7520,6 +7696,11 @@
           state.freqView = data.view || null;
           state.view = null;
           if (window.DoctematicaUI) window.DoctematicaUI.view = null;
+        } else if (data.problem && data.problem.mode === "percent") {
+          state.percentView = data.view || null;
+          state.freqView = null;
+          state.view = null;
+          if (window.DoctematicaUI) window.DoctematicaUI.view = null;
         } else if (data.view) applyGeoView(data.view);
         else {
           state.view = null;
@@ -7560,6 +7741,16 @@
       state.freqDrafts = {};
       state.freqFocus = null;
       clearGeoUi();
+    } else if (isPercentMode()) {
+      state.sys = null;
+      state.quad = null;
+      state.factor = emptyFactorState();
+      state.mixed = emptyMixedState();
+      state.lcdMarks = {};
+      state.domain = null;
+      state.history = [];
+      state.freq = { step: "", done: false, found: {} };
+      clearGeoUi();
     } else if (state.problem && state.problem.mode === "geo-length") {
       state.sys = null;
       state.quad = null;
@@ -7587,7 +7778,8 @@
         isQuadraticTopic() ||
         isHighPowerTopic() ||
         isAnalyticTopic() ||
-        isStatisticsTopic()
+        isStatisticsTopic() ||
+        isPercentTopic()
           ? currentTopicLabel() + " · "
           : "") +
         currentLevel().title +
@@ -7630,6 +7822,23 @@
       syncFreqEntry(state.freqView);
       renderSteps();
       if (freqAnswerEl) freqAnswerEl.focus();
+      return;
+    }
+    if (isPercentMode()) {
+      var percentStem = state.problem.stem || state.problem.prompt || "";
+      promptEl.innerHTML =
+        window.DoctematicaMath && DoctematicaMath.proseHTML
+          ? DoctematicaMath.proseHTML(percentStem)
+          : percentStem;
+      mathWrap.classList.remove("hidden");
+      mathKeysEl.classList.remove("hidden");
+      checkBtn.classList.remove("hidden");
+      answerLabelEl.classList.remove("hidden");
+      answerLabelEl.textContent = state.percentView && state.percentView.fields ? "חישוב" : "התשובה שלך";
+      if (freqAnswerEl) freqAnswerEl.classList.add("hidden");
+      renderPercentFields(state.percentView && state.percentView.fields);
+      renderSteps();
+      mathField.focus();
       return;
     }
     if (isSystemMode()) {
@@ -7738,6 +7947,10 @@
     });
   }
 
+  window.addEventListener("resize", function () {
+    if (isFreqTableMode()) fitFreqTable();
+  });
+
   if (freqTableEl) {
     freqTableEl.addEventListener("click", function (event) {
       var addCol = event.target && event.target.closest ? event.target.closest(".freq-add-col") : null;
@@ -7813,6 +8026,11 @@
         return;
       }
       applyFreqTyped(freqAnswerEl ? freqAnswerEl.value : "");
+      return;
+    }
+
+    if (isPercentMode()) {
+      applyPercentTyped(typedAnswer());
       return;
     }
 

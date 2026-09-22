@@ -1,6 +1,7 @@
 "use strict";
 
 var freqTable = require("./freq-table");
+var percent = require("./percent");
 
 var DROP_KEYS = {
   steps: true,
@@ -76,6 +77,15 @@ function slimProblem(problem) {
   };
   if (problem.geo) out.geo = dropSecrets(problem.geo, 0);
   if (problem.mode === "quad-mixed") out.offerFormula = !!problem.offerFormula;
+  if (problem.mode === "percent") {
+    out.stem = problem.stem || "";
+    out.prompt = problem.stem || problem.prompt || "";
+    if (problem.answers && problem.answers.length) {
+      out.answers = problem.answers.map(function (field) {
+        return { id: field.id, label: field.label || "" };
+      });
+    }
+  }
   if (problem.mode === "freq-table") {
     out.stem = problem.stem || "";
     out.prompt = problem.stem || problem.prompt || "";
@@ -217,6 +227,9 @@ function openProblem(engine, levelId, index) {
   }
   if (problem.mode === "freq-table") {
     view = freqTable.openingView(engine, problem.levelId, index, problem.exerciseId);
+  }
+  if (problem.mode === "percent") {
+    view = percent.openingView(engine, problem.levelId, index, problem.exerciseId);
   }
   var slim = slimProblem(problem);
   if (slim) slim.displayNumber = index + 1;
