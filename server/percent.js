@@ -1206,8 +1206,12 @@ function missingGroup(groups) {
 function needsComplementPath(ex) {
   if (!isMulti(ex) || !missingGroup(groupList(ex))) return false;
   var fields = answerFields(ex);
+  var missing = missingGroup(groupList(ex));
   if (fields.some(function (field) { return field.kind === "percent"; })) return true;
-  return groupList(ex).length > 2;
+  var asksMissing = fields.some(function (field) { return field.group === missing.id; });
+  var asksGiven = fields.some(function (field) { return field.kind === "amount" && field.group !== missing.id; });
+  if (groupList(ex).length > 2) return asksMissing || !asksGiven;
+  return asksMissing && !asksGiven;
 }
 
 function complementLine(groups, missing) {
@@ -1484,6 +1488,71 @@ function hintFor(ex, progress, history) {
   return "חשבו את ערכו של x.";
 }
 
+function hasParts(ex) {
+  return !!(ex && ex.parts && ex.parts.length);
+}
+
+function partIndexOf(ex, progress) {
+  var index = progress && isFinite(Number(progress.part)) ? Number(progress.part) : 0;
+  if (index < 0) index = 0;
+  if (hasParts(ex) && index > ex.parts.length - 1) index = ex.parts.length - 1;
+  return Math.floor(index);
+}
+
+function scopePart(ex, progress) {
+  if (!hasParts(ex)) return ex;
+  var part = ex.parts[partIndexOf(ex, progress)] || ex.parts[0];
+  var scoped = {};
+  var key;
+  for (key in ex) {
+    if (Object.prototype.hasOwnProperty.call(ex, key) && key !== "parts") scoped[key] = ex[key];
+  }
+  scoped.fields = part.fields || [];
+  return scoped;
+}
+
+function partLabelAt(ex, progress) {
+  if (!hasParts(ex)) return "";
+  var part = ex.parts[partIndexOf(ex, progress)];
+  return (part && part.label) || "";
+}
+
+function partSatisfied(ex, progress, history) {
+  var scoped = scopePart(ex, progress);
+  if (isRelated(scoped)) return relatedDone(scoped, history || []);
+  if (isMulti(scoped)) return allAskedKnown(scoped, deriveState(scoped, history || []));
+  return false;
+}
+
+function syncPartFromHistory(ex, progress, history) {
+  if (!hasParts(ex)) return;
+  var guard = 0;
+  while (guard < ex.parts.length && partSatisfied(ex, progress, history)) {
+    guard += 1;
+    var index = partIndexOf(ex, progress);
+    if (index >= ex.parts.length - 1) {
+      progress.done = true;
+      progress.step = "done";
+      progress.part = index;
+      return;
+    }
+    progress.part = index + 1;
+    progress.step = "";
+    progress.guide = 0;
+    progress.done = false;
+  }
+}
+
+function releasePart(ex, progress, history) {
+  if (!progress.done || !hasParts(ex)) return;
+  progress.done = false;
+  syncPartFromHistory(ex, progress, history);
+  if (partSatisfied(ex, progress, history) && partIndexOf(ex, progress) >= ex.parts.length - 1) {
+    progress.done = true;
+    progress.step = "done";
+  }
+}
+
 function findLevel(engine, levelId) {
   var levels = (engine.DoctematicaCurriculum && engine.DoctematicaCurriculum.levels) || [];
   var i;
@@ -1521,18 +1590,23 @@ function sanitizeProgress(raw, ex) {
   }
   var guide = Number(raw.guide);
   if (!isFinite(guide) || guide < 0) guide = 0;
-  return { step: step, done: false, found: found, guide: Math.floor(guide) };
+  return { step: step, done: false, found: found, guide: Math.floor(guide), part: partIndexOf(ex, raw) };
 }
 
 function viewOf(ex, progress, answers) {
+  var scoped = scopePart(ex, progress);
   var view = {
-    input: isMulti(ex) || isRelated(ex) ? "fields" : "text",
+    input: isMulti(scoped) || isRelated(scoped) ? "fields" : "text",
     solved: !!(progress && progress.done),
   };
-  if (!isMulti(ex) && !isRelated(ex)) return view;
-  var fields = answerFields(ex);
+  if (hasParts(ex)) {
+    var part = ex.parts[partIndexOf(ex, progress)];
+    view.part = { label: (part && part.label) || "", text: (part && part.text) || "" };
+  }
+  if (!isMulti(scoped) && !isRelated(scoped)) return view;
+  var fields = answerFields(scoped);
   var locks = {};
-  if (!(progress && progress.done)) locks = judgeFields(ex, answers).locks;
+  if (!(progress && progress.done)) locks = judgeFields(scoped, answers).locks;
   view.fields = fields.map(function (field) {
     var shown = { id: field.id, label: field.label, locked: !!(progress && progress.done) || !!locks[field.id] };
     if (field.unit) shown.unit = field.unit;
@@ -1551,6 +1625,7 @@ function respond(ex, progress, extra) {
     shows: extra.shows || [],
     joinPrev: !!extra.joinPrev,
     lines: extra.lines || null,
+    part: extra.part || "",
     progress: progress,
     view: viewOf(ex, progress, extra.answers),
   };
@@ -1563,19 +1638,23 @@ function handle(engine, body) {
   var ex = found.ex;
   var progress = sanitizeProgress(body.progress, ex);
   var history = Array.isArray(body.history) ? body.history.map(function (line) { return String(line || ""); }) : [];
+  syncPartFromHistory(ex, progress, history);
   var intent = String(body.intent || "check");
   if (intent === "hint") {
-    return respond(ex, progress, { status: "hint", message: hintFor(ex, progress, history), answers: body.answers });
+    return respond(ex, progress, { status: "hint", message: hintFor(scopePart(ex, progress), progress, history), answers: body.answers });
   }
   if (intent === "step") {
-    var stepped = nextSiteLine(ex, progress, history);
+    var stepLabel = partLabelAt(ex, progress);
+    var stepped = nextSiteLine(scopePart(ex, progress), progress, history);
     if (!stepped) return { ok: false, message: "אין צעד נוסף.", progress: progress, view: viewOf(ex, progress, body.answers) };
     advanceStep(progress, stepped);
+    releasePart(ex, progress, history.concat([stepped.line]));
     return respond(ex, progress, {
       status: progress.done ? "solved" : "step",
       message: progress.done ? "אפשר להמשיך." : "הצעד נוסף.",
       shows: [stepped.line],
       joinPrev: stepped.joinPrev,
+      part: stepLabel,
       answers: body.answers,
     });
   }
@@ -1583,62 +1662,96 @@ function handle(engine, body) {
     var lines = [];
     var guard = 0;
     var solutionHistory = history.slice();
-    while (progress.step !== "done" && guard < 20) {
+    syncPartFromHistory(ex, progress, solutionHistory);
+    while (!progress.done && guard < 40) {
       guard += 1;
-      var line = nextSiteLine(ex, progress, history.length || isRelated(ex) ? solutionHistory : null);
+      var solutionLabel = partLabelAt(ex, progress);
+      var solutionScope = scopePart(ex, progress);
+      var solutionPast = history.length || isRelated(solutionScope) || hasParts(ex) ? solutionHistory : null;
+      var line = nextSiteLine(solutionScope, progress, solutionPast);
       if (!line) break;
       var repeated = solutionHistory.some(function (prev) {
         return normalize(String(prev).replace(/%/g, "")) === normalize(String(line.line).replace(/%/g, ""));
       });
       if (repeated) break;
-      lines.push({ show: line.line, joinPrev: !!line.joinPrev });
+      lines.push({ show: line.line, joinPrev: !!line.joinPrev, part: solutionLabel });
       solutionHistory.push(line.line);
       advanceStep(progress, line);
+      releasePart(ex, progress, solutionHistory);
+      syncPartFromHistory(ex, progress, solutionHistory);
     }
-    if (isRelated(ex) && relatedDone(ex, solutionHistory)) {
+    if (!hasParts(ex) && isRelated(ex) && relatedDone(ex, solutionHistory)) {
       progress.done = true;
       progress.step = "done";
-    } else if (history.length && isMulti(ex) && allAskedKnown(ex, deriveState(ex, solutionHistory))) {
+    } else if (!hasParts(ex) && history.length && isMulti(ex) && allAskedKnown(ex, deriveState(ex, solutionHistory))) {
       progress.done = true;
       progress.step = "done";
     }
-    if (isMulti(ex)) groupList(ex).forEach(function (g) { progress.found[g.id] = true; });
+    if (progress.done && isMulti(ex)) groupList(ex).forEach(function (g) { progress.found[g.id] = true; });
     return respond(ex, progress, {
-      status: "solved",
+      status: progress.done ? "solved" : "step",
       message: "אפשר להמשיך.",
       lines: lines,
       shows: [],
       answers: body.answers,
     });
   }
-  if (isMulti(ex) || isRelated(ex)) {
+  var scoped = scopePart(ex, progress);
+  if (isMulti(scoped) || isRelated(scoped)) {
     var typed = String(body.typed || "").trim();
-    var judged = judgeFields(ex, body.answers);
+    var judged = judgeFields(scoped, body.answers);
+    var activeLabel = partLabelAt(ex, progress);
+    function carried(shows) {
+      var next = history.slice();
+      if (typed) next.push(typed);
+      return next.concat(shows || []);
+    }
     if (typed) {
-      var work = isRelated(ex) ? assessRelated(ex, typed) : assessGroups(ex, typed);
+      var work = isRelated(scoped) ? assessRelated(scoped, typed) : assessGroups(scoped, typed);
       if (!work.ok) {
         return { ok: false, message: work.message, progress: progress, view: viewOf(ex, progress, body.answers) };
       }
-      if (isMulti(ex) && work.found && work.group) progress.found[work.group.id] = true;
+      if (isMulti(scoped) && work.found && work.group) progress.found[work.group.id] = true;
+      var workShows = (work.result && work.result.shows) || [];
       if (judged.solved) {
         progress.done = true;
         progress.step = "done";
+        if (isMulti(scoped)) answerFields(scoped).forEach(function (field) {
+          if (field.kind === "amount" && field.group) progress.found[field.group] = true;
+        });
+        releasePart(ex, progress, carried(workShows));
       }
       return respond(ex, progress, {
         status: progress.done ? "solved" : "step",
         message: progress.done ? "" : "אפשר להמשיך.",
-        shows: (work.result && work.result.shows) || [],
+        shows: workShows,
         joinPrev: !!(work.result && work.result.joinPrev),
+        part: activeLabel,
         answers: body.answers,
       });
     }
     if (!judged.solved) {
       return { ok: false, message: judged.message, progress: progress, view: viewOf(ex, progress, body.answers) };
     }
+    var fieldShows = answerFields(scoped).map(function (field) {
+      var raw = String((body.answers && body.answers[field.id]) || "").trim();
+      return raw || (field.kind === "percent" ? formatValue(field.value) + "%" : formatValue(field.value));
+    });
     progress.done = true;
     progress.step = "done";
-    if (isMulti(ex)) groupList(ex).forEach(function (g) { progress.found[g.id] = true; });
-    return respond(ex, progress, { status: "solved", message: "", answers: body.answers });
+    if (isMulti(scoped)) {
+      answerFields(scoped).forEach(function (field) {
+        if (field.kind === "amount" && field.group) progress.found[field.group] = true;
+      });
+    }
+    releasePart(ex, progress, carried(fieldShows));
+    return respond(ex, progress, {
+      status: progress.done ? "solved" : "step",
+      message: progress.done ? "" : "אפשר להמשיך.",
+      shows: fieldShows,
+      part: activeLabel,
+      answers: body.answers,
+    });
   }
   var result = assessTyped(ex, body.typed);
   if (!result.ok) {

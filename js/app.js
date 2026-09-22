@@ -1476,6 +1476,7 @@
     if (failed && !keepBoard) {
       if (isPercentMode() && remote && remote.view) {
         renderPercentFields(remote.view.fields);
+        renderFreqPart(remote.view);
         if (mathField && !mathField.serialize() && percentFieldsEl) {
           var openField = percentFieldsEl.querySelector(".percent-field:not(:disabled)");
           if (openField) openField.focus();
@@ -1508,6 +1509,7 @@
       if (isPercentMode()) {
         state.percentView = remote.view;
         renderPercentFields(remote.view.fields);
+        renderFreqPart(remote.view);
       } else {
         state.freqView = remote.view;
         renderFreqBoard();
@@ -7857,6 +7859,7 @@
       answerLabelEl.textContent = state.percentView && state.percentView.fields ? "חישוב" : "התשובה שלך";
       if (freqAnswerEl) freqAnswerEl.classList.add("hidden");
       renderPercentFields(state.percentView && state.percentView.fields);
+      renderFreqPart(state.percentView);
       renderSteps();
       mathField.focus();
       return;

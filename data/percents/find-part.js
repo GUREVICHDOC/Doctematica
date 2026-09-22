@@ -52,123 +52,96 @@
         {
           id: "pct-part-1-ex-a012",
           n: 12,
-          stem: "50 איש יצאו לצעדה. 20% מהצועדים הם ילדים, והשאר מבוגרים. מהו אחוז הצועדים המבוגרים?",
+          stem: "50 איש יצאו לצעדה. 20% מהצועדים הם ילדים, והשאר מבוגרים.",
           all: 50,
           groups: [
             { id: "g1", label: "ילדים", percent: 20 },
             { id: "g2", label: "מבוגרים" },
           ],
-          fields: [
-            { id: "f-percent", group: "g2", kind: "percent", label: "אחוז המבוגרים", unit: "%" },
+          parts: [
+            {
+              label: "א",
+              text: "מהו אחוז הצועדים המבוגרים?",
+              fields: [{ id: "f-percent", group: "g2", kind: "percent", label: "אחוז המבוגרים", unit: "%" }],
+            },
+            {
+              label: "ב",
+              text: "כמה מבוגרים השתתפו בצעדה?",
+              fields: [{ id: "f-amount", group: "g2", kind: "amount", label: "מבוגרים" }],
+            },
           ],
         },
         {
           id: "pct-part-1-ex-a013",
           n: 13,
-          stem: "50 איש יצאו לצעדה. 20% מהצועדים הם ילדים, והשאר מבוגרים. כמה מבוגרים השתתפו בצעדה?",
-          all: 50,
+          stem: "אב הוריש לשני בניו 20000 שקלים. הבכור קיבל 60% מהסכום, ואת השאר קיבל הבן הצעיר.",
+          all: 20000,
           groups: [
-            { id: "g1", label: "ילדים", percent: 20 },
-            { id: "g2", label: "מבוגרים" },
+            { id: "g1", label: "הבן הבכור", percent: 60 },
+            { id: "g2", label: "הבן הצעיר" },
           ],
-          fields: [
-            { id: "f-amount", group: "g2", kind: "amount", label: "מבוגרים" },
+          parts: [
+            {
+              label: "א",
+              text: "איזה אחוז מהירושה קיבל הבן הצעיר?",
+              fields: [{ id: "f-percent", group: "g2", kind: "percent", label: "אחוז הבן הצעיר", unit: "%" }],
+            },
+            {
+              label: "ב",
+              text: "מהו סכום הכסף שקיבל הבן הצעיר בירושה?",
+              fields: [{ id: "f-amount", group: "g2", kind: "amount", label: "סכום", unit: "₪" }],
+            },
           ],
         },
         {
           id: "pct-part-1-ex-a014",
           n: 14,
-          stem: "אב הוריש לשני בניו 20000 שקלים. הבכור קיבל 60% מהסכום, ואת השאר קיבל הבן הצעיר. איזה אחוז מהירושה קיבל הבן הצעיר?",
-          all: 20000,
+          stem: "לאלעד היו 500 שקלים. 35% מכספו הוציא אלעד על קניית טלפון, 18% מכספו הוציא על בילויים ואת שאר הכסף חסך.",
+          all: 500,
           groups: [
-            { id: "g1", label: "הבן הבכור", percent: 60 },
-            { id: "g2", label: "הבן הצעיר" },
+            { id: "g1", label: "טלפון", percent: 35 },
+            { id: "g2", label: "בילויים", percent: 18 },
+            { id: "g3", label: "חיסכון" },
           ],
-          fields: [
-            { id: "f-percent", group: "g2", kind: "percent", label: "אחוז הבן הצעיר", unit: "%" },
+          parts: [
+            {
+              label: "א",
+              text: "איזה אחוז מכספו חסך?",
+              fields: [{ id: "f-percent", group: "g3", kind: "percent", label: "אחוז החיסכון", unit: "%" }],
+            },
+            {
+              label: "ב",
+              text: "כמה כסף חסך?",
+              fields: [{ id: "f-amount", group: "g3", kind: "amount", label: "סכום החיסכון", unit: "₪" }],
+            },
           ],
         },
         {
           id: "pct-part-1-ex-a015",
           n: 15,
-          stem: "אב הוריש לשני בניו 20000 שקלים. הבכור קיבל 60% מהסכום, ואת השאר קיבל הבן הצעיר. מהו סכום הכסף שקיבל הבן הצעיר בירושה?",
-          all: 20000,
-          groups: [
-            { id: "g1", label: "הבן הבכור", percent: 60 },
-            { id: "g2", label: "הבן הצעיר" },
-          ],
-          fields: [
-            { id: "f-amount", group: "g2", kind: "amount", label: "סכום", unit: "₪" },
-          ],
-        },
-        {
-          id: "pct-part-1-ex-a016",
-          n: 16,
-          stem: "לאלעד היו 500 שקלים. 35% מכספו הוציא אלעד על קניית טלפון, 18% מכספו הוציא על בילויים ואת שאר הכסף חסך. איזה אחוז מכספו חסך?",
-          all: 500,
-          groups: [
-            { id: "g1", label: "טלפון", percent: 35 },
-            { id: "g2", label: "בילויים", percent: 18 },
-            { id: "g3", label: "חיסכון" },
-          ],
-          fields: [
-            { id: "f-percent", group: "g3", kind: "percent", label: "אחוז החיסכון", unit: "%" },
-          ],
-        },
-        {
-          id: "pct-part-1-ex-a017",
-          n: 17,
-          stem: "לאלעד היו 500 שקלים. 35% מכספו הוציא אלעד על קניית טלפון, 18% מכספו הוציא על בילויים ואת שאר הכסף חסך. כמה כסף חסך?",
-          all: 500,
-          groups: [
-            { id: "g1", label: "טלפון", percent: 35 },
-            { id: "g2", label: "בילויים", percent: 18 },
-            { id: "g3", label: "חיסכון" },
-          ],
-          fields: [
-            { id: "f-amount", group: "g3", kind: "amount", label: "סכום החיסכון", unit: "₪" },
-          ],
-        },
-        {
-          id: "pct-part-1-ex-a018",
-          n: 18,
-          stem: "סכום של 9000 שקלים חולק בין 3 שותפים. האחד קיבל 60% מהסכום, השני קיבל 15% מהסכום והשלישי קיבל את הסכום הנותר. מהו סכום הכסף שקיבל השותף הראשון?",
+          stem: "סכום של 9000 שקלים חולק בין 3 שותפים. האחד קיבל 60% מהסכום, השני קיבל 15% מהסכום והשלישי קיבל את הסכום הנותר.",
           all: 9000,
           groups: [
             { id: "g1", label: "השותף הראשון", percent: 60 },
             { id: "g2", label: "השותף השני", percent: 15 },
             { id: "g3", label: "השותף השלישי" },
           ],
-          fields: [
-            { id: "f-first", group: "g1", kind: "amount", label: "השותף הראשון", unit: "₪" },
-          ],
-        },
-        {
-          id: "pct-part-1-ex-a019",
-          n: 19,
-          stem: "סכום של 9000 שקלים חולק בין 3 שותפים. האחד קיבל 60% מהסכום, השני קיבל 15% מהסכום והשלישי קיבל את הסכום הנותר. איזה אחוז מהסכום קיבל השותף השלישי?",
-          all: 9000,
-          groups: [
-            { id: "g1", label: "השותף הראשון", percent: 60 },
-            { id: "g2", label: "השותף השני", percent: 15 },
-            { id: "g3", label: "השותף השלישי" },
-          ],
-          fields: [
-            { id: "f-percent", group: "g3", kind: "percent", label: "אחוז השותף השלישי", unit: "%" },
-          ],
-        },
-        {
-          id: "pct-part-1-ex-a020",
-          n: 20,
-          stem: "סכום של 9000 שקלים חולק בין 3 שותפים. האחד קיבל 60% מהסכום, השני קיבל 15% מהסכום והשלישי קיבל את הסכום הנותר. מהו סכום הכסף שקיבל השותף השלישי?",
-          all: 9000,
-          groups: [
-            { id: "g1", label: "השותף הראשון", percent: 60 },
-            { id: "g2", label: "השותף השני", percent: 15 },
-            { id: "g3", label: "השותף השלישי" },
-          ],
-          fields: [
-            { id: "f-third", group: "g3", kind: "amount", label: "השותף השלישי", unit: "₪" },
+          parts: [
+            {
+              label: "א",
+              text: "מהו סכום הכסף שקיבל השותף הראשון?",
+              fields: [{ id: "f-first", group: "g1", kind: "amount", label: "השותף הראשון", unit: "₪" }],
+            },
+            {
+              label: "ב",
+              text: "איזה אחוז מהסכום קיבל השותף השלישי?",
+              fields: [{ id: "f-percent", group: "g3", kind: "percent", label: "אחוז השותף השלישי", unit: "%" }],
+            },
+            {
+              label: "ג",
+              text: "מהו סכום הכסף שקיבל השותף השלישי?",
+              fields: [{ id: "f-third", group: "g3", kind: "amount", label: "השותף השלישי", unit: "₪" }],
+            },
           ],
         },
       ],
@@ -228,18 +201,7 @@
         {
           id: "pct-part-2-ex-a005",
           n: 5,
-          stem: "מספר הבנים בכיתה הוא 15. מספר הבנות בכיתה גדול ב-20% ממספר הבנים. כמה בנות יש בכיתה?",
-          quantities: [
-            { id: "boys", label: "בנים", value: 15 },
-            { id: "girls", label: "בנות" },
-          ],
-          relations: [{ op: "increase", from: "boys", to: "girls", percent: 20 }],
-          fields: [{ id: "f", quantity: "girls", label: "בנות" }],
-        },
-        {
-          id: "pct-part-2-ex-a006",
-          n: 6,
-          stem: "מספר הבנים בכיתה הוא 15. מספר הבנות בכיתה גדול ב-20% ממספר הבנים. כמה תלמידים יש בכיתה?",
+          stem: "מספר הבנים בכיתה הוא 15. מספר הבנות בכיתה גדול ב-20% ממספר הבנים.",
           quantities: [
             { id: "boys", label: "בנים", value: 15 },
             { id: "girls", label: "בנות" },
@@ -249,11 +211,22 @@
             { op: "increase", from: "boys", to: "girls", percent: 20 },
             { op: "sum", of: ["boys", "girls"], to: "total" },
           ],
-          fields: [{ id: "f", quantity: "total", label: "תלמידים" }],
+          parts: [
+            {
+              label: "א",
+              text: "כמה בנות יש בכיתה?",
+              fields: [{ id: "f-girls", quantity: "girls", label: "בנות" }],
+            },
+            {
+              label: "ב",
+              text: "כמה תלמידים יש בכיתה?",
+              fields: [{ id: "f-total", quantity: "total", label: "תלמידים" }],
+            },
+          ],
         },
         {
-          id: "pct-part-2-ex-a007",
-          n: 7,
+          id: "pct-part-2-ex-a006",
+          n: 6,
           stem: "הקטינו את המספר 35 ב-20%. מהו המספר החדש?",
           quantities: [
             { id: "base", label: "המספר", value: 35 },
@@ -263,8 +236,8 @@
           fields: [{ id: "f", quantity: "next", label: "המספר החדש" }],
         },
         {
-          id: "pct-part-2-ex-a008",
-          n: 8,
+          id: "pct-part-2-ex-a007",
+          n: 7,
           stem: "הקטינו את המספר 86 ב-35%. מהו המספר החדש?",
           quantities: [
             { id: "base", label: "המספר", value: 86 },
@@ -274,8 +247,8 @@
           fields: [{ id: "f", quantity: "next", label: "המספר החדש" }],
         },
         {
-          id: "pct-part-2-ex-a009",
-          n: 9,
+          id: "pct-part-2-ex-a008",
+          n: 8,
           stem: "בחנות ציפורים היו 40 תוכים. 15% מהם נמכרו. כמה תוכים נשארו בחנות לאחר המכירה?",
           quantities: [
             { id: "base", label: "התוכים", value: 40 },
@@ -285,8 +258,8 @@
           fields: [{ id: "f", quantity: "next", label: "תוכים" }],
         },
         {
-          id: "pct-part-2-ex-a010",
-          n: 10,
+          id: "pct-part-2-ex-a009",
+          n: 9,
           stem: "מחירו של מוצר הוא 800 שקלים. במכירת סוף העונה הוזל מחירו של המוצר ב-22%. מה היה מחירו של המוצר לאחר ההוזלה?",
           quantities: [
             { id: "base", label: "המחיר", value: 800 },
@@ -296,20 +269,9 @@
           fields: [{ id: "f", quantity: "next", label: "מחיר", unit: "₪" }],
         },
         {
-          id: "pct-part-2-ex-a011",
-          n: 11,
-          stem: "בבית מלון הוזמנו ביום א׳ 120 חדרים. מספר החדרים שהוזמנו ביום ב׳ היה קטן ב-30% ממספר החדרים שהוזמנו ביום א׳. כמה חדרים הוזמנו ביום ב׳?",
-          quantities: [
-            { id: "dayA", label: "יום א׳", value: 120 },
-            { id: "dayB", label: "יום ב׳" },
-          ],
-          relations: [{ op: "decrease", from: "dayA", to: "dayB", percent: 30 }],
-          fields: [{ id: "f", quantity: "dayB", label: "חדרים" }],
-        },
-        {
-          id: "pct-part-2-ex-a012",
-          n: 12,
-          stem: "בבית מלון הוזמנו ביום א׳ 120 חדרים. מספר החדרים שהוזמנו ביום ב׳ היה קטן ב-30% ממספר החדרים שהוזמנו ביום א׳. כמה חדרים הוזמנו סך הכול במשך היומיים?",
+          id: "pct-part-2-ex-a010",
+          n: 10,
+          stem: "בבית מלון הוזמנו ביום א׳ 120 חדרים. מספר החדרים שהוזמנו ביום ב׳ היה קטן ב-30% ממספר החדרים שהוזמנו ביום א׳.",
           quantities: [
             { id: "dayA", label: "יום א׳", value: 120 },
             { id: "dayB", label: "יום ב׳" },
@@ -319,11 +281,22 @@
             { op: "decrease", from: "dayA", to: "dayB", percent: 30 },
             { op: "sum", of: ["dayA", "dayB"], to: "total" },
           ],
-          fields: [{ id: "f", quantity: "total", label: "חדרים" }],
+          parts: [
+            {
+              label: "א",
+              text: "כמה חדרים הוזמנו ביום ב׳?",
+              fields: [{ id: "f-day", quantity: "dayB", label: "חדרים" }],
+            },
+            {
+              label: "ב",
+              text: "כמה חדרים הוזמנו סך הכול במשך היומיים?",
+              fields: [{ id: "f-total", quantity: "total", label: "חדרים" }],
+            },
+          ],
         },
         {
-          id: "pct-part-2-ex-a013",
-          n: 13,
+          id: "pct-part-2-ex-a011",
+          n: 11,
           stem: "במשרד נסיעות התקבלו ביום א׳ 200 הזמנות. מספר ההזמנות שהתקבלו ביום ב׳ היה נמוך ב-24% ממספר ההזמנות שהתקבלו ביום א׳. מספר ההזמנות שהתקבלו ביום ג׳ היה גבוה ב-25% ממספר ההזמנות שהתקבלו ביום ב׳. כמה הזמנות התקבלו סך הכול במשך שלושת הימים?",
           quantities: [
             { id: "dayA", label: "יום א׳", value: 200 },

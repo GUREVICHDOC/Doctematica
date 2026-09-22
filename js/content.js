@@ -126,13 +126,18 @@
         stem: ex.stem || "",
         explain: "",
       };
+      if (ex.parts && ex.parts.length) {
+        percentProblem.parts = ex.parts.map(function (part) {
+          return { label: part.label || "", text: part.text || "" };
+        });
+      }
       if (ex.fields && ex.fields.length) {
         percentProblem.answers = ex.fields.map(function (field) {
           var item = { id: field.id, label: field.label || "" };
           if (field.unit) item.unit = field.unit;
           return item;
         });
-      } else if (ex.groups && ex.groups.length > 1) {
+      } else if (ex.groups && ex.groups.length > 1 && !(ex.parts && ex.parts.length)) {
         percentProblem.answers = ex.groups.map(function (group) {
           return { id: group.id, label: group.label || "" };
         });

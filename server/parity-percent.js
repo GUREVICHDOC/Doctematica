@@ -38,7 +38,17 @@ function main() {
     ["pct-part-1-ex-a005", 78, 350, 273],
     ["pct-part-1-ex-a006", 3, 400, 12],
   ];
-  add(page && page.exercises.length === 20 ? { ok: true, id: "twenty-exercises" } : fail("twenty-exercises", String(page && page.exercises.length)));
+  add(page && page.exercises.length === 15 ? { ok: true, id: "fifteen-exercises" } : fail("fifteen-exercises", String(page && page.exercises.length)));
+  var tripEx = page.exercises[11];
+  var heirEx = page.exercises[12];
+  var savedEx = page.exercises[13];
+  var partnersEx = page.exercises[14];
+  add(tripEx && tripEx.parts && tripEx.parts.map(function (part) { return part.label; }).join(",") === "א,ב"
+    && heirEx.parts.map(function (part) { return part.label; }).join(",") === "א,ב"
+    && savedEx.parts.map(function (part) { return part.label; }).join(",") === "א,ב"
+    && partnersEx.parts.map(function (part) { return part.label; }).join(",") === "א,ב,ג"
+    ? { ok: true, id: "related-parts-one-exercise" }
+    : fail("related-parts-one-exercise", ""));
   expect.forEach(function (row, index) {
     var ex = page && page.exercises[index];
     var target = ex ? percent.targetOf(ex) : null;
@@ -363,15 +373,15 @@ function main() {
   add(tripPct.ok && !tripPct.view.solved ? { ok: true, id: "trip-percent-signs" } : fail("trip-percent-signs", JSON.stringify(tripPct)));
   var tripBare = ask(11, "80%");
   add(tripBare.ok && !tripBare.view.solved ? { ok: true, id: "trip-bare-percent" } : fail("trip-bare-percent", JSON.stringify(tripBare)));
-  var tripAmount = ask(12, "0.8*50=40");
+  var tripAmount = ask(11, "0.8*50=40");
   add(tripAmount.ok && !tripAmount.view.solved ? { ok: true, id: "trip-amount-direct" } : fail("trip-amount-direct", JSON.stringify(tripAmount)));
   var tripBad = ask(11, "20+20=40");
   add(!tripBad.ok ? { ok: true, id: "trip-rejects-unrelated" } : fail("trip-rejects-unrelated", JSON.stringify(tripBad)));
   var tripFields = ask(11, "", { "f-percent": "80%" });
-  add(tripFields.ok && tripFields.view.solved && tripFields.view.fields.length === 1 && tripFields.view.fields[0].value === "80"
+  add(tripFields.ok && !tripFields.view.solved && tripFields.view.part && tripFields.view.part.label === "ב" && tripFields.view.fields.length === 1 && tripFields.view.fields[0].id === "f-amount"
     ? { ok: true, id: "trip-fields" }
     : fail("trip-fields", JSON.stringify(tripFields)));
-  var tripAmountField = ask(12, "", { "f-amount": "40" });
+  var tripAmountField = ask(11, "", { "f-amount": "40" }, { part: 1 });
   add(tripAmountField.ok && tripAmountField.view.solved && tripAmountField.view.fields.length === 1 && tripAmountField.view.fields[0].value === "40"
     ? { ok: true, id: "trip-amount-field" }
     : fail("trip-amount-field", JSON.stringify(tripAmountField)));
@@ -389,85 +399,85 @@ function main() {
     ? { ok: true, id: "trip-hint" }
     : fail("trip-hint", tripHint.message));
   var tripStep = percent.handle(engine, { intent: "step", levelId: "pct-part-1", exerciseIndex: 11, progress: {} });
-  add(tripStep.ok && tripStep.shows[0] === "100% - 20% = 80%" && tripStep.view.solved && tripStep.view.fields[0].value === "80"
+  add(tripStep.ok && tripStep.shows[0] === "100% - 20% = 80%" && !tripStep.view.solved && tripStep.view.part && tripStep.view.part.label === "ב"
     ? { ok: true, id: "trip-one-step" }
     : fail("trip-one-step", JSON.stringify(tripStep)));
-  var heir = ask(14, "0.4*20000");
+  var heir = ask(12, "0.4*20000");
   add(heir.ok && !heir.view.solved ? { ok: true, id: "heir-direct" } : fail("heir-direct", JSON.stringify(heir)));
-  var heirMinus = ask(14, "20000-12000=8000");
+  var heirMinus = ask(12, "20000-12000=8000");
   add(heirMinus.ok && !heirMinus.view.solved ? { ok: true, id: "heir-subtract" } : fail("heir-subtract", JSON.stringify(heirMinus)));
-  var savedSum = ask(15, "35+18=53");
+  var savedSum = ask(13, "35+18=53");
   add(savedSum.ok && !savedSum.view.solved ? { ok: true, id: "saved-sum" } : fail("saved-sum", JSON.stringify(savedSum)));
-  var savedOrder = ask(15, "18+35=53");
+  var savedOrder = ask(13, "18+35=53");
   add(savedOrder.ok ? { ok: true, id: "saved-sum-order" } : fail("saved-sum-order", JSON.stringify(savedOrder)));
-  var savedFromSum = ask(15, "100-53=47");
+  var savedFromSum = ask(13, "100-53=47");
   add(savedFromSum.ok ? { ok: true, id: "saved-from-sum" } : fail("saved-from-sum", JSON.stringify(savedFromSum)));
-  var savedChain = ask(15, "100-35-18=47");
+  var savedChain = ask(13, "100-35-18=47");
   add(savedChain.ok ? { ok: true, id: "saved-chain" } : fail("saved-chain", JSON.stringify(savedChain)));
-  var savedBare = ask(15, "47%");
+  var savedBare = ask(13, "47%");
   add(savedBare.ok && !savedBare.view.solved ? { ok: true, id: "saved-bare" } : fail("saved-bare", JSON.stringify(savedBare)));
-  var savedAmount = ask(16, "0.47*500=235");
+  var savedAmount = ask(13, "0.47*500=235");
   add(savedAmount.ok && !savedAmount.view.solved ? { ok: true, id: "saved-amount" } : fail("saved-amount", JSON.stringify(savedAmount)));
-  var savedSubtract = ask(16, "500-175-90=235");
+  var savedSubtract = ask(13, "500-175-90=235");
   add(savedSubtract.ok ? { ok: true, id: "saved-subtract" } : fail("saved-subtract", JSON.stringify(savedSubtract)));
-  var savedSubtractOrder = ask(16, "500-90-175");
+  var savedSubtractOrder = ask(13, "500-90-175");
   add(savedSubtractOrder.ok ? { ok: true, id: "saved-subtract-order" } : fail("saved-subtract-order", JSON.stringify(savedSubtractOrder)));
-  var partChain = ask(18, "100-60-15=25");
+  var partChain = ask(14, "100-60-15=25");
   add(partChain.ok && !partChain.view.solved ? { ok: true, id: "partners-chain" } : fail("partners-chain", JSON.stringify(partChain)));
-  var partSum = ask(18, "60+15=75");
+  var partSum = ask(14, "60+15=75");
   add(partSum.ok ? { ok: true, id: "partners-sum" } : fail("partners-sum", JSON.stringify(partSum)));
-  var partFromSum = ask(18, "100-75=25");
+  var partFromSum = ask(14, "100-75=25");
   add(partFromSum.ok ? { ok: true, id: "partners-from-sum" } : fail("partners-from-sum", JSON.stringify(partFromSum)));
-  var partDirect = ask(18, "25%");
+  var partDirect = ask(14, "25%");
   add(partDirect.ok ? { ok: true, id: "partners-bare-percent" } : fail("partners-bare-percent", JSON.stringify(partDirect)));
-  var partAmount = ask(19, "0.25*9000=2250");
+  var partAmount = ask(14, "0.25*9000=2250");
   add(partAmount.ok && !partAmount.view.solved ? { ok: true, id: "partners-by-percent" } : fail("partners-by-percent", JSON.stringify(partAmount)));
-  var partSecondFirst = ask(19, "0.15*9000");
+  var partSecondFirst = ask(14, "0.15*9000");
   add(partSecondFirst.ok && partSecondFirst.progress.found.g2 ? { ok: true, id: "partners-second-first" } : fail("partners-second-first", JSON.stringify(partSecondFirst)));
-  var partFirst = ask(17, "0.6*9000=5400");
+  var partFirst = ask(14, "0.6*9000=5400");
   add(partFirst.ok && partFirst.progress.found.g1 ? { ok: true, id: "partners-first" } : fail("partners-first", JSON.stringify(partFirst)));
-  var partRest = ask(19, "9000-5400-1350=2250");
+  var partRest = ask(14, "9000-5400-1350=2250");
   add(partRest.ok && partRest.progress.found.g3 ? { ok: true, id: "partners-subtract" } : fail("partners-subtract", JSON.stringify(partRest)));
-  var partRestOrder = ask(19, "9000-1350-5400");
+  var partRestOrder = ask(14, "9000-1350-5400");
   add(partRestOrder.ok && partRestOrder.progress.found.g3 ? { ok: true, id: "partners-subtract-order" } : fail("partners-subtract-order", JSON.stringify(partRestOrder)));
-  var partBundle = ask(19, "5400+1350=6750");
+  var partBundle = ask(14, "5400+1350=6750");
   add(partBundle.ok && !partBundle.view.solved ? { ok: true, id: "partners-bundle" } : fail("partners-bundle", JSON.stringify(partBundle)));
-  var partFromBundle = ask(19, "9000-6750=2250");
+  var partFromBundle = ask(14, "9000-6750=2250");
   add(partFromBundle.ok && partFromBundle.progress.found.g3 ? { ok: true, id: "partners-from-bundle" } : fail("partners-from-bundle", JSON.stringify(partFromBundle)));
-  var partScaled = ask(19, "(60+15)/100*9000");
+  var partScaled = ask(14, "(60+15)/100*9000");
   add(partScaled.ok && !partScaled.view.solved ? { ok: true, id: "partners-scaled-sum" } : fail("partners-scaled-sum", JSON.stringify(partScaled)));
-  var partJunk = ask(18, "20+5=25");
+  var partJunk = ask(14, "20+5=25");
   add(!partJunk.ok ? { ok: true, id: "partners-rejects-unrelated" } : fail("partners-rejects-unrelated", JSON.stringify(partJunk)));
-  var partFields = ask(17, "", { "f-first": "5400" });
-  add(partFields.ok && partFields.view.solved && partFields.view.fields.length === 1 ? { ok: true, id: "partners-fields-order" } : fail("partners-fields-order", JSON.stringify(partFields)));
-  var partPercentField = ask(18, "", { "f-percent": "25%" });
-  add(partPercentField.ok && partPercentField.view.solved ? { ok: true, id: "partners-percent-field" } : fail("partners-percent-field", JSON.stringify(partPercentField)));
-  var partThirdField = ask(19, "", { "f-third": "2250" });
+  var partFields = ask(14, "", { "f-first": "5400" });
+  add(partFields.ok && !partFields.view.solved && partFields.view.part && partFields.view.part.label === "ב" && partFields.view.fields.length === 1
+    ? { ok: true, id: "partners-fields-order" }
+    : fail("partners-fields-order", JSON.stringify(partFields)));
+  var partPercentField = ask(14, "", { "f-percent": "25%" }, { part: 1 });
+  add(partPercentField.ok && !partPercentField.view.solved && partPercentField.view.part && partPercentField.view.part.label === "ג"
+    ? { ok: true, id: "partners-percent-field" }
+    : fail("partners-percent-field", JSON.stringify(partPercentField)));
+  var partThirdField = ask(14, "", { "f-third": "2250" }, { part: 2 });
   add(partThirdField.ok && partThirdField.view.solved ? { ok: true, id: "partners-third-field" } : fail("partners-third-field", JSON.stringify(partThirdField)));
-  var partOne = ask(18, "", { "f-percent": "20" });
+  var partOne = ask(14, "", { "f-percent": "20" }, { part: 1 });
   add(!partOne.ok && !partOne.view.fields[0].locked && partOne.message.indexOf("השותף השלישי") >= 0 && partOne.message.indexOf("2250") < 0 && partOne.message.indexOf("25") < 0
     ? { ok: true, id: "partners-one-field" }
     : fail("partners-one-field", JSON.stringify(partOne)));
-  var partOpen = studentDto.openProblem(engine, "pct-part-1", 18);
+  var partOpen = studentDto.openProblem(engine, "pct-part-1", 14);
   var partRaw = JSON.stringify(partOpen);
   add(!standaloneNum(partRaw, "5400") && !standaloneNum(partRaw, "2250") && !standaloneNum(partRaw, "25") && !standaloneNum(partRaw, "1350")
-    && partOpen.view.fields.length === 1 && partOpen.view.fields[0].unit === "%"
+    && partOpen.view.part && partOpen.view.part.label === "א" && partOpen.view.fields.length === 1 && partOpen.view.fields[0].unit === "₪"
+    && partOpen.problem.parts.length === 3
     ? { ok: true, id: "partners-open" }
     : fail("partners-open", partRaw));
-  var partHint = percent.handle(engine, { intent: "hint", levelId: "pct-part-1", exerciseIndex: 18, progress: {} });
+  var partHint = percent.handle(engine, { intent: "hint", levelId: "pct-part-1", exerciseIndex: 14, progress: {} });
   add(partHint.ok && partHint.message.indexOf("25") < 0 && partHint.message.indexOf("5400") < 0 && partHint.message.indexOf("2250") < 0
     ? { ok: true, id: "partners-hint" }
     : fail("partners-hint", partHint.message));
-  var partSol = percent.handle(engine, { intent: "solution", levelId: "pct-part-1", exerciseIndex: 19, progress: {} });
+  var partSol = percent.handle(engine, { intent: "solution", levelId: "pct-part-1", exerciseIndex: 14, progress: {} });
   var partLines = (partSol.lines || []).map(function (line) { return line.show; });
-  add(partSol.view.solved && partLines[0] === "100% - 60% - 15% = 25%" && partLines.indexOf("x = 2250") >= 0
+  add(partSol.view.solved && partLines.indexOf("x = 5400") >= 0 && partLines.indexOf("100% - 60% - 15% = 25%") >= 0 && partLines.indexOf("x = 2250") >= 0
     ? { ok: true, id: "partners-solution" }
     : fail("partners-solution", partLines.join(" | ")));
-  var partFirstSol = percent.handle(engine, { intent: "solution", levelId: "pct-part-1", exerciseIndex: 17, progress: {} });
-  var partFirstLines = (partFirstSol.lines || []).map(function (line) { return line.show; });
-  add(partFirstSol.view.solved && partFirstLines.indexOf("x = 5400") >= 0
-    ? { ok: true, id: "partners-first-solution" }
-    : fail("partners-first-solution", partFirstLines.join(" | ")));
 
   function follow(index, intent, history) {
     return percent.handle(engine, {
@@ -478,15 +488,15 @@ function main() {
       progress: {},
     });
   }
-  var afterPercent = follow(16, "step", ["100% - 35% - 18% = 47%"]);
+  var afterPercent = follow(13, "step", ["100% - 35% - 18% = 47%"]);
   add(afterPercent.ok && afterPercent.shows[0] === "47/100 = x/500" && afterPercent.shows[0].indexOf("100% - 35%") < 0
     ? { ok: true, id: "step-after-complement" }
     : fail("step-after-complement", JSON.stringify(afterPercent)));
-  var afterProp = follow(14, "step", ["40", "40/100 = x/20000", "100% - 60% = 40%", "40/100 = x/20000"]);
+  var afterProp = follow(12, "step", ["40", "40/100 = x/20000", "100% - 60% = 40%", "40/100 = x/20000"]);
   add(afterProp.ok && afterProp.shows[0] === "x = (20000·40)/100" && !afterProp.view.solved
     ? { ok: true, id: "step-after-proportion" }
     : fail("step-after-proportion", JSON.stringify(afterProp)));
-  var afterDecimal = follow(14, "step", ["0.4·20000"]);
+  var afterDecimal = follow(12, "step", ["0.4·20000"]);
   add(afterDecimal.ok && afterDecimal.joinPrev && afterDecimal.shows[0] === "8000" && afterDecimal.shows[0].indexOf("40/100") < 0
     ? { ok: true, id: "step-after-decimal" }
     : fail("step-after-decimal", JSON.stringify(afterDecimal)));
@@ -494,23 +504,23 @@ function main() {
   add(afterAdults.ok && afterAdults.shows[0] === "2500 - 2000" && afterAdults.shows[0].indexOf("80/100") < 0
     ? { ok: true, id: "step-after-one-amount" }
     : fail("step-after-one-amount", JSON.stringify(afterAdults)));
-  var afterTwo = follow(19, "step", ["0.15·9000 = 1350", "0.6·9000 = 5400"]);
+  var afterTwo = follow(14, "step", ["0.15·9000 = 1350", "0.6·9000 = 5400"]);
   add(afterTwo.ok && afterTwo.shows[0] === "100% - 60% - 15% = 25%" && afterTwo.shows[0].indexOf("60/100") < 0 && afterTwo.shows[0].indexOf("15/100") < 0
     ? { ok: true, id: "step-after-two-of-three" }
     : fail("step-after-two-of-three", JSON.stringify(afterTwo)));
-  var noRepeat = follow(16, "step", ["100% - 35% - 18% = 47%"]);
+  var noRepeat = follow(13, "step", ["100% - 35% - 18% = 47%"]);
   add(noRepeat.shows[0] !== "100% - 60% = 40%"
     ? { ok: true, id: "step-skips-done" }
     : fail("step-skips-done", JSON.stringify(noRepeat)));
-  var hintPercent = follow(16, "hint", ["100% - 35% - 18% = 47%"]);
+  var hintPercent = follow(13, "hint", ["100% - 35% - 18% = 47%"]);
   add(hintPercent.ok && hintPercent.message.indexOf("פחות האחוזים") < 0 && hintPercent.message.indexOf("פרופורציה") >= 0 && hintPercent.message.indexOf("8000") < 0
     ? { ok: true, id: "hint-after-complement" }
     : fail("hint-after-complement", hintPercent.message));
-  var hintNow = follow(14, "hint", ["100% - 60% = 40%", "40/100 = x/20000"]);
+  var hintNow = follow(12, "hint", ["100% - 60% = 40%", "40/100 = x/20000"]);
   add(hintNow.ok && hintNow.message.indexOf("פחות האחוזים") < 0 && hintNow.message.indexOf("בודדו") >= 0 && hintNow.message.indexOf("8000") < 0
     ? { ok: true, id: "hint-follows-state" }
     : fail("hint-follows-state", hintNow.message));
-  var solNow = follow(14, "solution", ["100% - 60% = 40%", "40/100 = x/20000"]);
+  var solNow = follow(12, "solution", ["100% - 60% = 40%", "40/100 = x/20000"]);
   var solLines = (solNow.lines || []).map(function (line) { return line.show; });
   add(solNow.view.solved && solLines.indexOf("100% - 60% = 40%") < 0 && solLines.indexOf("40/100 = x/20000") < 0 && solLines[0] === "x = (20000·40)/100" && solLines.indexOf("x = 8000") >= 0
     ? { ok: true, id: "solution-skips-done" }
@@ -536,7 +546,10 @@ function main() {
     });
   }
   var level2 = (engine.DoctematicaCurriculum.levels || []).filter(function (level) { return level.id === "pct-part-2"; })[0];
-  add(level2 && level2.exercises.length === 13 && level2.title === "רמה 2" ? { ok: true, id: "level-2-count" } : fail("level-2-count", String(level2 && level2.exercises.length)));
+  add(level2 && level2.exercises.length === 11 && level2.title === "רמה 2" ? { ok: true, id: "level-2-count" } : fail("level-2-count", String(level2 && level2.exercises.length)));
+  add(level2.exercises[0].parts == null && level2.exercises[1].parts == null && level2.exercises[4].parts.length === 2 && level2.exercises[9].parts.length === 2
+    ? { ok: true, id: "level-2-related-parts" }
+    : fail("level-2-related-parts", ""));
   add(ask2(0, "100+20=120").ok ? { ok: true, id: "grow-new-percent" } : fail("grow-new-percent", ""));
   add(ask2(0, "120/100=x/60").ok ? { ok: true, id: "grow-proportion" } : fail("grow-proportion", ""));
   add(ask2(0, "x=(60*120)/100").ok ? { ok: true, id: "grow-isolate" } : fail("grow-isolate", ""));
@@ -548,18 +561,21 @@ function main() {
   var growField = ask2(0, "", { f: "72" });
   add(growField.ok && growField.view.solved ? { ok: true, id: "grow-field" } : fail("grow-field", JSON.stringify(growField)));
   add(ask2(1, "180*1.15=207").ok ? { ok: true, id: "grow-180" } : fail("grow-180", ""));
-  add(ask2(6, "100%-20%=80%").ok ? { ok: true, id: "shrink-remain" } : fail("shrink-remain", ""));
-  add(ask2(6, "0.8*35=28").ok ? { ok: true, id: "shrink-factor" } : fail("shrink-factor", ""));
-  add(ask2(6, "80/100=x/35").ok ? { ok: true, id: "shrink-proportion" } : fail("shrink-proportion", ""));
-  add(ask2(6, "0.2*35=7").ok ? { ok: true, id: "shrink-change" } : fail("shrink-change", ""));
-  add(ask2(6, "35-7=28").ok ? { ok: true, id: "shrink-subtract" } : fail("shrink-subtract", ""));
-  var decimal = ask2(7, "86*0.65=55.9", { f: "55.9" });
+  add(ask2(5, "100%-20%=80%").ok ? { ok: true, id: "shrink-remain" } : fail("shrink-remain", ""));
+  add(ask2(5, "0.8*35=28").ok ? { ok: true, id: "shrink-factor" } : fail("shrink-factor", ""));
+  add(ask2(5, "80/100=x/35").ok ? { ok: true, id: "shrink-proportion" } : fail("shrink-proportion", ""));
+  add(ask2(5, "0.2*35=7").ok ? { ok: true, id: "shrink-change" } : fail("shrink-change", ""));
+  add(ask2(5, "35-7=28").ok ? { ok: true, id: "shrink-subtract" } : fail("shrink-subtract", ""));
+  var decimal = ask2(6, "86*0.65=55.9", { f: "55.9" });
   add(decimal.ok && decimal.view.solved && decimal.view.fields[0].value === "55.9" ? { ok: true, id: "shrink-decimal" } : fail("shrink-decimal", JSON.stringify(decimal)));
   add(ask2(4, "1.2*15=18").ok ? { ok: true, id: "girls-factor" } : fail("girls-factor", ""));
-  add(ask2(5, "15+18=33").ok && ask2(5, "", { f: "33" }).view.solved ? { ok: true, id: "class-sum" } : fail("class-sum", ""));
-  add(ask2(10, "120*0.7=84").ok ? { ok: true, id: "rooms-day" } : fail("rooms-day", ""));
-  add(ask2(11, "120+84=204").ok ? { ok: true, id: "rooms-total" } : fail("rooms-total", ""));
-  add(ask2(12, "200*0.76=152").ok && ask2(12, "152*1.25=190").ok && ask2(12, "200+152+190=542").ok ? { ok: true, id: "invites-chain" } : fail("invites-chain", ""));
+  var classSum = percent.handle(engine, { intent: "check", levelId: "pct-part-2", exerciseIndex: 4, typed: "15+18=33", answers: {}, progress: { part: 1 } });
+  var classField = percent.handle(engine, { intent: "check", levelId: "pct-part-2", exerciseIndex: 4, typed: "", answers: { "f-total": "33" }, progress: { part: 1 } });
+  add(classSum.ok && classField.view.solved ? { ok: true, id: "class-sum" } : fail("class-sum", JSON.stringify(classField)));
+  add(ask2(9, "120*0.7=84").ok ? { ok: true, id: "rooms-day" } : fail("rooms-day", ""));
+  var roomsTotal = percent.handle(engine, { intent: "check", levelId: "pct-part-2", exerciseIndex: 9, typed: "120+84=204", answers: {}, progress: { part: 1 } });
+  add(roomsTotal.ok ? { ok: true, id: "rooms-total" } : fail("rooms-total", JSON.stringify(roomsTotal)));
+  add(ask2(10, "200*0.76=152").ok && ask2(10, "152*1.25=190").ok && ask2(10, "200+152+190=542").ok ? { ok: true, id: "invites-chain" } : fail("invites-chain", ""));
   var growStep = follow2(0, "step", ["100% + 20% = 120%"]);
   add(growStep.ok && growStep.shows[0] === "120/100 = x/60" && growStep.shows[0].indexOf("100% + 20%") < 0
     ? { ok: true, id: "grow-step-after-percent" }
@@ -597,13 +613,13 @@ function main() {
   add(!badDecimal.ok && badDecimal.message.indexOf("0.2") >= 0 && badDecimal.message.indexOf("0.02") >= 0
     ? { ok: true, id: "grow-decimal" }
     : fail("grow-decimal", badDecimal.message));
-  var badShrink = ask2(6, "35+7=42");
+  var badShrink = ask2(5, "35+7=42");
   add(!badShrink.ok && badShrink.message.indexOf("מחסרים") >= 0 ? { ok: true, id: "shrink-added" } : fail("shrink-added", badShrink.message));
-  var badBase = ask2(12, "200*1.25");
+  var badBase = ask2(10, "200*1.25");
   add(!badBase.ok && badBase.message.indexOf("יום ג׳") >= 0 && badBase.message.indexOf("יום ב׳") >= 0 && badBase.message.indexOf("190") < 0
     ? { ok: true, id: "chain-wrong-base" }
     : fail("chain-wrong-base", badBase.message));
-  var chainStep = follow2(12, "step", ["200*0.76 = 152", "152*0.25 = 38"]);
+  var chainStep = follow2(10, "step", ["200*0.76 = 152", "152*0.25 = 38"]);
   add(chainStep.ok && chainStep.shows[0] === "152 + 38 = 190" && chainStep.shows[0].indexOf("125") < 0
     ? { ok: true, id: "chain-step-follows-student" }
     : fail("chain-step-follows-student", JSON.stringify(chainStep)));

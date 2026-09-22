@@ -87,6 +87,11 @@ function slimProblem(problem) {
         return item;
       });
     }
+    if (problem.parts && problem.parts.length) {
+      out.parts = problem.parts.map(function (part) {
+        return { label: part.label || "", text: part.text || "" };
+      });
+    }
   }
   if (problem.mode === "freq-table") {
     out.stem = problem.stem || "";
