@@ -750,6 +750,7 @@
         capability: payload.capability || geoServerCapability(payload.kind),
         intent: payload.intent,
         levelId: (state.problem && state.problem.levelId) || state.levelId,
+        exerciseId: state.problem && state.problem.exerciseId,
         n: state.problem && state.problem.n,
         exerciseIndex: state.exerciseIndex,
         history: payload.history != null ? payload.history : (state.geo && state.geo.lengthLog) || [],
@@ -2586,7 +2587,7 @@
     level.exercises.forEach(function (ex, index) {
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.textContent = String(ex.n);
+      btn.textContent = String(index + 1);
       btn.className = index === state.exerciseIndex ? "active" : "";
       btn.addEventListener("click", function () {
         state.exerciseIndex = index;
@@ -7007,7 +7008,7 @@
           : "") +
         currentLevel().title +
         " · תרגיל " +
-        state.problem.n
+        (state.exerciseIndex + 1)
       : currentTopicLabel();
     setModeUi();
     var guide = currentGuide();

@@ -1,5 +1,5 @@
 (function (global) {
-  function toProblem(ex, level) {
+  function buildProblem(ex, level) {
     if (ex.eq1 && ex.eq2) {
       return {
         mode: "system-sub",
@@ -163,6 +163,12 @@
         ? "קודם תחום הצבה, אחר כך בודדו את x בצעדים שקולים."
         : "בודדו את x בצעדים שקולים עד שמתקבלת משוואה מהצורה x = מספר.",
     };
+  }
+
+  function toProblem(ex, level) {
+    var problem = buildProblem(ex, level);
+    if (problem) problem.exerciseId = ex.id || null;
+    return problem;
   }
 
   global.DoctematicaContent = {

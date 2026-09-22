@@ -1,4 +1,4 @@
 {
-  "comment": "לא עורכים את הקובץ הזה. המקור: data/curriculum.js (משוואות) ו־data/curriculum-geo.js (גיאומטריה).",
+  "comment": "לא עורכים את הקובץ הזה. המקור: data/curriculum.js ו־data/geometry/*.js (נטען דרך data/curriculum-geo.js). הקבצים geo-line-match-1.json ו־geo-line-summary-1.json הם עותקים ישנים ואינם מקור האמת.",
   "levels": []
 }

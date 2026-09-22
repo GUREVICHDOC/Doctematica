@@ -284,8 +284,31 @@ function findLevel(engine, levelId) {
   return null;
 }
 
-function findExercise(engine, levelId, n, index) {
+function exerciseById(level, exerciseId) {
+  var i;
+  for (i = 0; i < level.exercises.length; i++) {
+    if (level.exercises[i].id === exerciseId) {
+      return { level: level, ex: level.exercises[i], index: i };
+    }
+  }
+  return null;
+}
+
+function findExercise(engine, levelId, n, index, exerciseId) {
   var level = findLevel(engine, levelId);
+  var id = exerciseId ? String(exerciseId) : "";
+  if (id) {
+    if (level) {
+      var scoped = exerciseById(level, id);
+      if (scoped) return scoped;
+    }
+    var levels = (engine.DoctematicaCurriculum && engine.DoctematicaCurriculum.levels) || [];
+    var li;
+    for (li = 0; li < levels.length; li++) {
+      var globalHit = exerciseById(levels[li], id);
+      if (globalHit) return globalHit;
+    }
+  }
   if (!level || !level.exercises) return null;
   if (typeof index === "number" && level.exercises[index]) {
     return { level: level, ex: level.exercises[index], index: index };
@@ -300,11 +323,12 @@ function findExercise(engine, levelId, n, index) {
   return null;
 }
 
-function packFor(engine, levelId, n, index) {
-  var found = findExercise(engine, levelId, n, index);
+function packFor(engine, levelId, n, index, exerciseId) {
+  var found = findExercise(engine, levelId, n, index, exerciseId);
   if (!found) return null;
   var pack = engine.DoctematicaGeometry.analyzeStart(found.ex);
   pack._levelId = found.level.id;
+  pack._exerciseId = found.ex.id || null;
   pack._n = found.ex.n;
   return pack;
 }
@@ -1001,7 +1025,7 @@ function progressForView(engine, pack, body, result) {
 }
 
 function handleLengths(engine, body) {
-  var pack = packFor(engine, body.levelId, body.n, body.exerciseIndex);
+  var pack = packFor(engine, body.levelId, body.n, body.exerciseIndex, body.exerciseId);
   if (!pack) {
     return { error: "unknown exercise", message: "unknown exercise" };
   }

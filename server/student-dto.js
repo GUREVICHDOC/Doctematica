@@ -43,8 +43,8 @@ function catalog(engine) {
       mode: level.mode || null,
       title: level.title,
       instruction: level.instruction || "",
-      exercises: (level.exercises || []).map(function (ex) {
-        return { n: ex.n };
+      exercises: (level.exercises || []).map(function (ex, index) {
+        return { n: ex.n, exerciseId: ex.id || null, displayNumber: index + 1 };
       }),
     };
   });
@@ -61,6 +61,8 @@ function slimProblem(problem) {
     mode: problem.mode,
     source: problem.source,
     levelId: problem.levelId,
+    exerciseId: problem.exerciseId || null,
+    displayNumber: problem.displayNumber,
     n: problem.n,
     total: problem.total,
     instruction: problem.instruction,
@@ -203,6 +205,7 @@ function openProblem(engine, levelId, index) {
     view = buildClientView(engine, problem.geo, { done: {}, partial: {}, lastExpr: {}, coords: {}, lineMatch: {} });
   }
   var slim = slimProblem(problem);
+  if (slim) slim.displayNumber = index + 1;
   if (problem.mode === "quad-mixed") {
     var Q = engine.DoctematicaQuadratic;
     var start = problem.startEquation || "";
