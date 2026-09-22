@@ -126,7 +126,13 @@
         stem: ex.stem || "",
         explain: "",
       };
-      if (ex.groups && ex.groups.length > 1) {
+      if (ex.fields && ex.fields.length) {
+        percentProblem.answers = ex.fields.map(function (field) {
+          var item = { id: field.id, label: field.label || "" };
+          if (field.unit) item.unit = field.unit;
+          return item;
+        });
+      } else if (ex.groups && ex.groups.length > 1) {
         percentProblem.answers = ex.groups.map(function (group) {
           return { id: group.id, label: group.label || "" };
         });

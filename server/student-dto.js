@@ -82,7 +82,9 @@ function slimProblem(problem) {
     out.prompt = problem.stem || problem.prompt || "";
     if (problem.answers && problem.answers.length) {
       out.answers = problem.answers.map(function (field) {
-        return { id: field.id, label: field.label || "" };
+        var item = { id: field.id, label: field.label || "" };
+        if (field.unit) item.unit = field.unit;
+        return item;
       });
     }
   }

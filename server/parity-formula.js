@@ -723,6 +723,26 @@ async function run(engine) {
     "x₁,₂=(6±0)/2",
     "x=6/2=3",
   ]);
+  function expectMath(id, start) {
+    var math = engine.DoctematicaMath;
+    var html = Q.analyzeStart(start).steps.map(function (s) {
+      return math.toHTML(s);
+    }).join("");
+    count += 1;
+    if (html.indexOf("m-frac") < 0 || html.indexOf("m-sqrt") < 0 || html.indexOf("*") >= 0 || html.indexOf("^2") >= 0) {
+      mismatches.push({
+        id: id,
+        local: html,
+        server: "stacked fraction and radical, no raw * or ^2",
+      });
+    }
+  }
+  expectMath("sol-math-two", "2x^2+9x+9=0");
+  expectMath("sol-math-one", "x^2-6x+9=0");
+  expectMath("sol-math-none", "x^2+1=0");
+  expectMath("sol-math-half", "2x^2-3x+1=0");
+  expectMath("sol-math-neg-den", "-x^2+3x-2=0");
+
   expectSteps("sol-continuous-none", "x^2+1=0", [
     "a=1, b=0, c=1",
     "x₁,₂=(-0±√(0^2-4*1*1))/(2*1)",

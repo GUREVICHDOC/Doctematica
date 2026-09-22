@@ -646,6 +646,29 @@
   font-size: 1.12em;
 }
 
+.model ol.sol-lines {
+  direction: ltr;
+  text-align: left;
+  padding-left: 1.6rem;
+  padding-right: 0;
+  margin-top: 10px;
+}
+
+.model ol.sol-lines > li {
+  margin: 0.85rem 0;
+  line-height: 1.15;
+}
+
+.model ol.sol-lines .m-expr {
+  font-size: 1.32rem;
+  vertical-align: middle;
+}
+
+.model ol.sol-lines .why {
+  direction: rtl;
+  text-align: right;
+}
+
 .solve-wrap.is-system {
   display: flex;
   gap: 16px;

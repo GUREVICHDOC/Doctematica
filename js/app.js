@@ -1012,6 +1012,12 @@
       input.disabled = !!field.locked || !!state.locked;
       row.appendChild(name);
       row.appendChild(input);
+      if (field.unit) {
+        var unit = document.createElement("span");
+        unit.className = "percent-unit";
+        unit.textContent = field.unit;
+        row.appendChild(unit);
+      }
       percentFieldsEl.appendChild(row);
     });
   }
@@ -1573,6 +1579,7 @@
       exerciseIndex: state.exerciseIndex,
       progress: state.freq || { step: "", done: false },
       answers: payload.answers || readPercentFields(),
+      history: state.history || [],
     };
     if (payload.typed != null) body.typed = payload.typed;
     fetch(PERCENTS_URL, {
@@ -6545,18 +6552,19 @@
       lines +=
         "<li class=\"domain-row\"><span class=\"domain-body\">" +
         domHtml +
-        '</span><div class="why">תחום הצבה' +
+        '</span><div class="why" dir="rtl">תחום הצבה' +
         (domainInfo.count > 1 ? " (" + domainInfo.count + " ערכים אסורים)" : "") +
         ".</div></li>";
     }
     var i;
     for (i = 0; i < steps.length; i++) {
       var step = steps[i];
+      var src = step && typeof step === "object" && step.eq != null ? step.eq : step;
       var body = opts.plain
-        ? String(step).replace(/-/g, "−")
-        : DoctematicaMath.toHTML(step);
-      var why = notes[i] ? "<div class=\"why\">" + notes[i] + "</div>" : "";
-      lines += "<li" + (opts.plain ? " dir=\"ltr\"" : "") + ">" + body + why + "</li>";
+        ? String(src).replace(/-/g, "−")
+        : DoctematicaMath.toHTML(src);
+      var why = notes[i] ? "<div class=\"why\" dir=\"rtl\">" + notes[i] + "</div>" : "";
+      lines += "<li>" + body + why + "</li>";
       if (
         !opts.plain &&
         i === 0 &&
@@ -6570,7 +6578,7 @@
         lines +=
           "<li><div class=\"sol-lcd\">" +
           hats.outerHTML +
-          '</div><div class="why">מכנה משותף ' +
+          '</div><div class="why" dir="rtl">מכנה משותף ' +
           lcdInfo.lcd +
           " — מכפילים מעל כל איבר.</div></li>";
       }
@@ -6582,9 +6590,21 @@
       opts.footer != null
         ? opts.footer
         : String(state.problem.answer).replace(/-/g, "−");
+    var footerHtml =
+      !opts.plain && DoctematicaMath && typeof DoctematicaMath.proseHTML === "function"
+        ? DoctematicaMath.proseHTML(String(footer))
+        : String(footer);
     modelEl.classList.remove("hidden");
     modelEl.innerHTML =
-      "<strong>" + title + "</strong>" + extra + "<ol>" + lines + "</ol><p>" + footer + "</p>";
+      "<strong>" +
+      title +
+      "</strong>" +
+      extra +
+      "<ol class=\"sol-lines\" dir=\"ltr\">" +
+      lines +
+      "</ol><p dir=\"rtl\">" +
+      footerHtml +
+      "</p>";
     return true;
   }
 

@@ -1039,6 +1039,10 @@ code {
   background: rgba(47, 107, 69, 0.1);
 }
 
+.percent-unit {
+  font-weight: 800;
+}
+
 .freq-answer {
   flex: 1;
   min-width: 0;

@@ -506,7 +506,7 @@ function otherGroup(groups, primary) {
 }
 
 function fieldValue(text) {
-  var norm = normalize(text);
+  var norm = normalize(String(text || "").replace(/%/g, ""));
   if (!norm) return null;
   var parts = splitEq(norm);
   if (parts.length === 1) {
@@ -527,68 +527,899 @@ function fieldValue(text) {
   return null;
 }
 
-function judgeFields(ex, answers) {
+function isRelated(ex) {
+  return !!(ex && ex.relations && ex.relations.length);
+}
+
+function relationWorld(ex) {
+  var byId = {};
+  (ex.quantities || []).forEach(function (q) {
+    byId[q.id] = {
+      id: q.id,
+      label: q.label || q.id,
+      value: q.value != null && q.value !== "" ? Number(q.value) : null,
+      given: q.value != null && q.value !== "",
+    };
+  });
+  var scales = [];
+  var links = [];
+  var pending = (ex.relations || []).slice();
+  var guard = 0;
+  while (pending.length && guard < 20) {
+    guard += 1;
+    var next = [];
+    pending.forEach(function (rel) {
+      if (rel.op === "increase" || rel.op === "decrease" || rel.op === "part") {
+        var src = byId[rel.from];
+        var dst = byId[rel.to];
+        if (!src || src.value == null) {
+          next.push(rel);
+          return;
+        }
+        var p = Number(rel.percent);
+        var factor = rel.op === "increase" ? (100 + p) / 100 : rel.op === "decrease" ? (100 - p) / 100 : p / 100;
+        var change = src.value * p / 100;
+        var value = rel.op === "part" ? change : src.value * factor;
+        if (dst && dst.value == null) dst.value = value;
+        scales.push({
+          index: scales.length,
+          op: rel.op,
+          from: src,
+          to: dst,
+          percent: p,
+          factor: factor,
+          newPercent: rel.op === "increase" ? 100 + p : rel.op === "decrease" ? 100 - p : p,
+          change: change,
+          result: dst && dst.value != null ? dst.value : value,
+        });
+        return;
+      }
+      if (rel.op === "sum" || rel.op === "difference") {
+        var parts = rel.op === "sum" ? (rel.of || []).map(function (id) { return byId[id]; }) : [byId[rel.from], byId[rel.minus]];
+        if (parts.some(function (q) { return !q || q.value == null; })) {
+          next.push(rel);
+          return;
+        }
+        var sum = rel.op === "sum" ? 0 : parts[0].value;
+        if (rel.op === "sum") parts.forEach(function (q) { sum += q.value; });
+        else sum = parts[0].value - parts[1].value;
+        var target = byId[rel.to];
+        if (target && target.value == null) target.value = sum;
+        links.push({ op: rel.op, parts: parts, to: target, value: target && target.value != null ? target.value : sum });
+      }
+    });
+    if (next.length === pending.length) break;
+    pending = next;
+  }
+  var quantityValues = [];
+  Object.keys(byId).forEach(function (id) {
+    if (byId[id].value != null) quantityValues.push(byId[id].value);
+  });
+  var amountFacts = subsetSums(quantityValues);
+  var percentFacts = [100];
+  scales.forEach(function (scale) {
+    if (!inFacts(scale.change, amountFacts)) amountFacts.push(scale.change);
+    if (!inFacts(scale.result, amountFacts)) amountFacts.push(scale.result);
+    [scale.percent, scale.newPercent].forEach(function (n) {
+      if (!inFacts(n, percentFacts)) percentFacts.push(n);
+    });
+  });
+  return { byId: byId, scales: scales, links: links, amountFacts: amountFacts, percentFacts: percentFacts };
+}
+
+function relationSpec(scale, role) {
+  return {
+    unknown: "part",
+    percent: role === "change" ? scale.percent : scale.newPercent,
+    all: scale.from.value,
+  };
+}
+
+function literalAllowed(n, world) {
+  if (inFacts(n, world.amountFacts) || inFacts(n, world.percentFacts)) return true;
+  var i;
+  for (i = 0; i < world.percentFacts.length; i++) {
+    if (sameNum(n, world.percentFacts[i] / 100)) return true;
+  }
+  return false;
+}
+
+function relationGrounded(world, typed, step) {
+  var plain = normalize(String(typed || "").replace(/%/g, ""));
+  if (step === "proportion" || step === "isolate" || bareNumber(plain) || plain.indexOf("x") >= 0) return true;
+  var literals = numberLiterals(workSide(typed));
+  return !!literals.length && literals.every(function (n) { return literalAllowed(n, world); });
+}
+
+function matchQuantity(world, value) {
+  var found = null;
+  Object.keys(world.byId).forEach(function (id) {
+    var q = world.byId[id];
+    if (q.value != null && sameNum(q.value, value)) found = q;
+  });
+  return found;
+}
+
+function assessRelated(ex, typed) {
+  var text = String(typed || "").trim();
+  if (!text) return { ok: false, message: "כתבו תשובה." };
+  var world = relationWorld(ex);
+  var i;
+  for (i = 0; i < world.scales.length; i++) {
+    var scale = world.scales[i];
+    var roles = scale.op === "part" ? ["result"] : ["result", "change"];
+    var r;
+    for (r = 0; r < roles.length; r++) {
+      var role = roles[r];
+      var spec = relationSpec(scale, role);
+      var result = assessTyped(spec, text);
+      if (result.ok && relationGrounded(world, text, result.step)) {
+        var quantity = role === "result" ? scale.to : null;
+        return {
+          ok: true,
+          group: quantity,
+          found: !!(quantity && (result.done || result.step === "expr") && shownResult(text)),
+          role: role,
+          scale: scale,
+          quantityId: quantity ? quantity.id : null,
+          value: role === "change" ? scale.change : scale.result,
+          result: { shows: [displayTyped(text)], joinPrev: false, step: result.step, done: false },
+        };
+      }
+    }
+  }
+  var value = fieldValue(text);
+  var cleaned = normalize(text.replace(/%/g, ""));
+  var literals = numberLiterals(workSide(text));
+  if (value != null && literals.length && !/[*/x]/.test(cleaned)) {
+    var percentOk = inFacts(value, world.percentFacts) && literals.every(function (n) { return inFacts(n, world.percentFacts); });
+    var amountOk = inFacts(value, world.amountFacts) && literals.every(function (n) { return inFacts(n, world.amountFacts); });
+    if (percentOk && !amountOk) {
+      var percentScale = null;
+      world.scales.forEach(function (scale) {
+        if (sameNum(scale.newPercent, value)) percentScale = scale;
+      });
+      return {
+        ok: true,
+        found: false,
+        role: "percent",
+        scale: percentScale,
+        value: value,
+        result: { shows: [displayTyped(text)], joinPrev: false, step: "expr", done: false },
+      };
+    }
+    if (amountOk) {
+      var quantity = matchQuantity(world, value);
+      var changeScale = null;
+      if (!quantity) {
+        world.scales.forEach(function (scale) {
+          if (sameNum(scale.change, value)) changeScale = scale;
+        });
+      }
+      return {
+        ok: true,
+        group: quantity,
+        found: !!quantity && shownResult(text),
+        role: changeScale ? "change" : "result",
+        scale: changeScale,
+        quantityId: quantity ? quantity.id : null,
+        value: value,
+        result: { shows: [displayTyped(text)], joinPrev: false, step: "expr", done: false },
+      };
+    }
+  }
+  if (value != null && literals.length && literals.every(function (n) { return literalAllowed(n, world); }) && inFacts(value, world.amountFacts)) {
+    var scaledQuantity = matchQuantity(world, value);
+    var scaledChange = null;
+    if (!scaledQuantity) {
+      world.scales.forEach(function (scale) {
+        if (sameNum(scale.change, value)) scaledChange = scale;
+      });
+    }
+    var scaledResult = null;
+    world.scales.forEach(function (scale) {
+      if (sameNum(scale.result, value)) scaledResult = scale;
+    });
+    return {
+      ok: true,
+      group: scaledQuantity,
+      found: !!scaledQuantity && shownResult(text),
+      role: scaledChange ? "change" : "result",
+      scale: scaledChange || scaledResult,
+      quantityId: scaledQuantity ? scaledQuantity.id : null,
+      value: value,
+      result: { shows: [displayTyped(text)], joinPrev: false, step: "expr", done: false },
+    };
+  }
+  return { ok: false, message: diagnoseRelation(world, text) || "זה לא שקול לחישוב המבוקש." };
+}
+
+function diagnoseRelation(world, typed) {
+  var value = fieldValue(typed);
+  if (value == null) return "";
+  var notes = [];
+  function add(note) {
+    if (notes.indexOf(note) < 0) notes.push(note);
+  }
+  world.scales.forEach(function (scale) {
+    var source = scale.from.value;
+    var p = scale.percent;
+    if (sameNum(value, source * p)) {
+      add("האחוז הוכפל כמספר רגיל. " + formatValue(p) + "% הם " + formatValue(p / 100) + ", לא " + formatValue(p) + ".");
+    }
+    [10, 100].forEach(function (place) {
+      var bad = p / (100 * place);
+      var grown = scale.op === "decrease" ? source * (1 - bad) : source * (1 + bad);
+      if (sameNum(value, source * bad) || (scale.op !== "part" && sameNum(value, grown))) {
+        add("ההמרה לעשרוני אינה במקום הנכון. " + formatValue(p) + "% הם " + formatValue(p / 100) + ", לא " + formatValue(bad) + ".");
+      }
+    });
+    if (scale.op === "increase" && /[-]/.test(normalize(typed)) && sameNum(value, source - scale.change)) {
+      add("בהגדלה מחברים את התוספת אל הערך המקורי.");
+    }
+    if (scale.op === "decrease" && /[+]/.test(normalize(typed)) && sameNum(value, source + scale.change)) {
+      add("בהקטנה מחסרים את ההפחתה מהערך המקורי.");
+    }
+    Object.keys(world.byId).forEach(function (id) {
+      var other = world.byId[id];
+      if (!other || other.id === scale.from.id || other.value == null) return;
+      if (sameNum(value, other.value * scale.factor) || sameNum(value, other.value * p / 100)) {
+        add("השינוי של " + (scale.to ? scale.to.label : "") + " מחושב מתוך " + scale.from.label + ".");
+      }
+    });
+  });
+  if (notes.length === 1) return notes[0];
+  return "";
+}
+
+function relationFieldError(ex, field, value) {
+  if (!isRelated(ex) || value == null) return "";
+  var world = relationWorld(ex);
+  var quantity = world.byId[field.group];
+  if (!quantity) return "";
+  var notes = [];
+  function add(note) {
+    if (notes.indexOf(note) < 0) notes.push(note);
+  }
+  world.scales.forEach(function (scale) {
+    if (!scale.to || scale.to.id !== quantity.id) return;
+    if (sameNum(value, scale.change)) add("חישבתם את גודל השינוי. השאלה מבקשת את הערך שאחרי השינוי.");
+    if (sameNum(value, scale.percent)) {
+      add(scale.op === "decrease"
+        ? "בהקטנה הערך החדש הוא 100% פחות אחוז ההקטנה."
+        : "בהגדלה הערך החדש הוא 100% ועוד אחוז ההגדלה.");
+    }
+    if (scale.op === "increase" && sameNum(value, scale.from.value - scale.change)) add("בהגדלה מחברים את התוספת אל הערך המקורי.");
+    if (scale.op === "decrease" && sameNum(value, scale.from.value + scale.change)) add("בהקטנה מחסרים את ההפחתה מהערך המקורי.");
+    Object.keys(world.byId).forEach(function (id) {
+      var other = world.byId[id];
+      if (!other || other.id === scale.from.id || other.value == null) return;
+      if (sameNum(value, other.value * scale.factor) || sameNum(value, other.value * scale.percent / 100)) {
+        add("השינוי של " + scale.to.label + " מחושב מתוך " + scale.from.label + ".");
+      }
+    });
+    [10, 100].forEach(function (place) {
+      var bad = scale.percent / (100 * place);
+      var grown = scale.op === "decrease" ? scale.from.value * (1 - bad) : scale.from.value * (1 + bad);
+      if (sameNum(value, grown) || sameNum(value, scale.from.value * bad)) {
+        add("ההמרה לעשרוני אינה במקום הנכון. " + formatValue(scale.percent) + "% הם " + formatValue(scale.percent / 100) + ", לא " + formatValue(bad) + ".");
+      }
+    });
+  });
+  world.links.forEach(function (link) {
+    if (!link.to || link.to.id !== quantity.id || link.op !== "sum") return;
+    var hits = link.parts.filter(function (part) { return part && sameNum(part.value, value); });
+    if (hits.length === 1) add("זהו אחד מהגדלים בסכום. השאלה מבקשת את הסכום כולו.");
+  });
+  if (notes.length === 1) return notes[0];
+  return "";
+}
+
+function percentCombineLine(scale) {
+  var sign = scale.op === "increase" ? "+" : "-";
+  return "100% " + sign + " " + formatValue(scale.percent) + "% = " + formatValue(scale.newPercent) + "%";
+}
+
+function changeCombineLine(scale) {
+  var sign = scale.op === "decrease" ? " - " : " + ";
+  return formatValue(scale.from.value) + sign + formatValue(scale.change) + " = " + formatValue(scale.result);
+}
+
+function sumLine(link) {
+  return link.parts.map(function (part) { return formatValue(part.value); }).join(" + ") + " = " + formatValue(link.value);
+}
+
+function deriveRelated(ex, history) {
+  var world = relationWorld(ex);
+  var known = {};
+  Object.keys(world.byId).forEach(function (id) {
+    if (world.byId[id].given) known[id] = true;
+  });
+  var percentKnown = {};
+  var path = null;
+  var open = null;
+  (history || []).forEach(function (line) {
+    var info = assessRelated(ex, line);
+    if (!info.ok) return;
+    var settled = info.result.step === "done" || shownResult(line);
+    if (info.quantityId && settled) known[info.quantityId] = true;
+    if (info.role === "percent" && info.scale && settled) {
+      percentKnown[info.scale.index] = true;
+      path = { kind: "percent", scale: info.scale };
+    }
+    if (info.role === "change" && info.scale && settled) path = { kind: "change", scale: info.scale };
+    if (info.role === "result" && info.scale && settled && info.scale.to) {
+      known[info.scale.to.id] = true;
+      path = null;
+    }
+    if (info.role === "result" && info.scale && (info.result.step === "proportion" || info.result.step === "isolate")) {
+      percentKnown[info.scale.index] = true;
+    }
+    if (!settled && (info.result.step === "proportion" || info.result.step === "isolate" || info.result.step === "expr")) {
+      open = info;
+    } else open = null;
+  });
+  return { world: world, known: known, percentKnown: percentKnown, path: path, open: open };
+}
+
+function relatedDone(ex, history) {
+  var state = deriveRelated(ex, history);
+  return (ex.fields || []).every(function (field) { return !!state.known[field.quantity]; });
+}
+
+function guidedRelated(ex, state) {
+  var steps = [];
+  var seen = {};
+  function want(id) {
+    if (!id || seen[id] || state.known[id]) return;
+    seen[id] = true;
+    var scale = null;
+    state.world.scales.forEach(function (item) { if (item.to && item.to.id === id) scale = item; });
+    if (scale) {
+      want(scale.from.id);
+      steps.push({ type: "scale", scale: scale });
+      return;
+    }
+    var link = null;
+    state.world.links.forEach(function (item) { if (item.to && item.to.id === id) link = item; });
+    if (link) {
+      link.parts.forEach(function (part) { if (part) want(part.id); });
+      steps.push({ type: "sum", link: link });
+    }
+  }
+  (ex.fields || []).forEach(function (field) { want(field.quantity); });
+  if (!steps.length) return null;
+  var first = steps[0];
+  if (first.type === "sum") {
+    return {
+      line: sumLine(first.link),
+      step: "value",
+      done: false,
+      joinPrev: false,
+      hint: "חברו את הגדלים שמצאתם.",
+    };
+  }
+  var scale = first.scale;
+  if (scale.op !== "part" && !state.percentKnown[scale.index]) {
+    return {
+      line: percentCombineLine(scale),
+      step: "expr",
+      done: false,
+      joinPrev: false,
+      hint: scale.op === "decrease" ? "מצאו את האחוז שנשאר: 100% פחות אחוז ההקטנה." : "מצאו את האחוז החדש: 100% ועוד אחוז ההגדלה.",
+    };
+  }
+  return {
+    line: proportionLine(relationSpec(scale, "result")),
+    step: "proportion",
+    done: false,
+    joinPrev: false,
+    hint: "רשמו את הפרופורציה: האחוז חלקי 100 שווה לחלק חלקי השלם. במקום הגודל החסר רשמו x.",
+  };
+}
+
+function nextRelated(ex, history) {
+  var state = deriveRelated(ex, history);
+  var step = null;
+  if (state.open && state.open.result.step === "proportion" && state.open.scale) {
+    var role = state.open.role === "change" ? "change" : "result";
+    step = {
+      line: isolateLine(relationSpec(state.open.scale, role)),
+      step: "isolate",
+      done: false,
+      joinPrev: false,
+      hint: "בודדו את x. אצלנו x = (השלם כפול האחוז) חלקי 100.",
+    };
+  } else if (state.open && state.open.result.step === "isolate" && state.open.scale) {
+    var isolateRole = state.open.role === "change" ? "change" : "result";
+    step = {
+      line: valueLine(relationSpec(state.open.scale, isolateRole)),
+      step: "value",
+      done: false,
+      joinPrev: false,
+      hint: "חשבו את ערכו של x.",
+    };
+  } else if (state.open && state.open.result.step === "expr" && state.open.value != null) {
+    step = {
+      line: formatValue(state.open.value),
+      step: "value",
+      done: false,
+      joinPrev: true,
+      hint: "חשבו את הביטוי שרשמתם.",
+    };
+  } else if (state.path && state.path.kind === "change" && state.path.scale.to && !state.known[state.path.scale.to.id]) {
+    step = {
+      line: changeCombineLine(state.path.scale),
+      step: "value",
+      done: false,
+      joinPrev: false,
+      hint: state.path.scale.op === "decrease" ? "החסירו את ההפחתה מהערך המקורי." : "חברו את התוספת אל הערך המקורי.",
+    };
+  } else if (state.path && state.path.kind === "percent" && state.path.scale.to && !state.known[state.path.scale.to.id]) {
+    step = {
+      line: proportionLine(relationSpec(state.path.scale, "result")),
+      step: "proportion",
+      done: false,
+      joinPrev: false,
+      hint: "רשמו את הפרופורציה: האחוז חלקי 100 שווה לחלק חלקי השלם. במקום הגודל החסר רשמו x.",
+    };
+  } else {
+    step = guidedRelated(ex, state);
+  }
+  if (!step) return null;
+  var after = deriveRelated(ex, (history || []).concat([step.line]));
+  step.done = (ex.fields || []).every(function (field) { return !!after.known[field.quantity]; });
+  return step;
+}
+
+function answerFields(ex) {
+  if (isRelated(ex)) {
+    var world = relationWorld(ex);
+    return (ex.fields || []).map(function (field) {
+      var quantity = world.byId[field.quantity];
+      return {
+        id: field.id,
+        label: field.label || (quantity && quantity.label) || "",
+        unit: field.unit || "",
+        kind: "amount",
+        group: field.quantity,
+        given: false,
+        name: field.label || (quantity && quantity.label) || "",
+        value: quantity ? quantity.value : null,
+      };
+    });
+  }
   var groups = groupList(ex);
+  if (ex.fields && ex.fields.length) {
+    return ex.fields.map(function (field) {
+      var group = null;
+      var i;
+      for (i = 0; i < groups.length; i++) if (groups[i].id === field.group) group = groups[i];
+      var kind = field.kind === "percent" ? "percent" : "amount";
+      return {
+        id: field.id,
+        label: field.label || (group && group.label) || "",
+        unit: field.unit || "",
+        kind: kind,
+        group: field.group,
+        given: !!(group && group.given),
+        name: (group && group.label) || field.label || "",
+        value: group ? (kind === "percent" ? group.percent : group.amount) : null,
+      };
+    });
+  }
+  return groups.map(function (g) {
+    return { id: g.id, label: g.label, unit: "", kind: "amount", group: g.id, given: g.given, name: g.label, value: g.amount };
+  });
+}
+
+function judgeFields(ex, answers) {
+  var fields = answerFields(ex);
   var locks = {};
   var wrong = [];
   var missing = [];
   var values = {};
-  groups.forEach(function (g) {
-    var raw = answers && answers[g.id];
+  var amountsOnly = fields.every(function (field) { return field.kind === "amount"; });
+  fields.forEach(function (field) {
+    var raw = answers && answers[field.id];
     if (!String(raw || "").trim()) {
-      missing.push(g);
+      missing.push(field);
       return;
     }
     var value = fieldValue(raw);
-    values[g.id] = value;
-    if (value != null && sameNum(value, g.amount)) locks[g.id] = true;
-    else wrong.push(g);
+    values[field.id] = value;
+    if (value != null && sameNum(value, field.value)) locks[field.id] = true;
+    else wrong.push(field);
   });
   var swapped = false;
-  if (groups.length === 2 && wrong.length === 2 && !missing.length) {
-    if (values[groups[0].id] != null && values[groups[1].id] != null && sameNum(values[groups[0].id], groups[1].amount) && sameNum(values[groups[1].id], groups[0].amount)) swapped = true;
+  if (fields.length === 2 && wrong.length === 2 && !missing.length) {
+    if (values[fields[0].id] != null && values[fields[1].id] != null && sameNum(values[fields[0].id], fields[1].value) && sameNum(values[fields[1].id], fields[0].value)) swapped = true;
+  }
+  function wrongText(field) {
+    var specific = relationFieldError(ex, field, values[field.id]);
+    if (specific) return specific;
+    return (field.kind === "percent" ? "האחוז של " : "הכמות של ") + field.name + (field.kind === "percent" ? " אינו נכון." : " אינה נכונה.");
+  }
+  function missingText(field) {
+    return (field.kind === "percent" ? "חסר האחוז של " : "חסרה הכמות של ") + field.name + ".";
   }
   var message = "";
-  if (swapped) message = "הכמויות נכונות, אבל נראה שהחלפת בין " + groups[0].label + " לבין " + groups[1].label + ".";
-  else if (wrong.length) message = wrong.map(function (g) { return "הכמות של " + g.label + " אינה נכונה."; }).join(" ");
-  else if (missing.length && Object.keys(locks).length) message = missing.map(function (g) { return "חסרה הכמות של " + g.label + "."; }).join(" ");
-  else if (missing.length) message = "כתבו את הכמויות בשדות.";
+  if (swapped) {
+    message = (amountsOnly ? "הכמויות נכונות, אבל נראה שהחלפת בין " : "הערכים נכונים, אבל נראה שהחלפת בין ") + fields[0].label + " לבין " + fields[1].label + ".";
+  } else if (wrong.length) message = wrong.map(wrongText).join(" ");
+  else if (missing.length && Object.keys(locks).length) message = missing.map(missingText).join(" ");
+  else if (missing.length) message = amountsOnly ? "כתבו את הכמויות בשדות." : "כתבו את התשובות בשדות.";
   return { locks: locks, message: message, solved: !wrong.length && !missing.length, swapped: swapped };
+}
+
+function subsetSums(values) {
+  var out = [];
+  function walk(index, sum, count) {
+    if (index === values.length) {
+      if (count > 0) out.push(sum);
+      return;
+    }
+    walk(index + 1, sum, count);
+    walk(index + 1, sum + values[index], count + 1);
+  }
+  walk(0, 0, 0);
+  return out;
+}
+
+function familyFacts(ex) {
+  var groups = groupList(ex);
+  var percents = [];
+  var amounts = [];
+  groups.forEach(function (g) {
+    if (isFinite(g.percent)) percents.push(Number(g.percent));
+    if (isFinite(g.amount)) amounts.push(Number(g.amount));
+  });
+  var percentFacts = subsetSums(percents);
+  if (!percentFacts.some(function (n) { return sameNum(n, 100); })) percentFacts.push(100);
+  var amountFacts = subsetSums(amounts);
+  var whole = Number(ex.all);
+  if (isFinite(whole) && !amountFacts.some(function (n) { return sameNum(n, whole); })) amountFacts.push(whole);
+  return { percentFacts: percentFacts, amountFacts: amountFacts, groups: groups };
+}
+
+function workSide(text) {
+  var cleaned = normalize(String(text || "").replace(/%/g, ""));
+  var parts = splitEq(cleaned);
+  if (parts.length === 2 && parts[0]) return parts[0];
+  if (parts.length === 2 && !parts[0]) return parts[1];
+  return cleaned;
+}
+
+function numberLiterals(text) {
+  var found = [];
+  var re = /\d+(?:\.\d+)?/g;
+  var match;
+  while ((match = re.exec(text))) found.push(Number(match[0]));
+  return found;
+}
+
+function inFacts(n, facts) {
+  var i;
+  for (i = 0; i < facts.length; i++) if (sameNum(facts[i], n)) return true;
+  return false;
+}
+
+function factStep(ex, typed) {
+  var cleaned = normalize(String(typed || "").replace(/%/g, ""));
+  if (!cleaned || /[*/x]/.test(cleaned)) return null;
+  var value = fieldValue(typed);
+  if (value == null) return null;
+  var facts = familyFacts(ex);
+  var literals = numberLiterals(workSide(typed));
+  if (!literals.length) return null;
+  var percentOk = inFacts(value, facts.percentFacts) && literals.every(function (n) { return inFacts(n, facts.percentFacts); });
+  var amountOk = inFacts(value, facts.amountFacts) && literals.every(function (n) { return inFacts(n, facts.amountFacts); });
+  if (!percentOk && !amountOk) return null;
+  var group = null;
+  if (amountOk) {
+    facts.groups.forEach(function (g) {
+      if (sameNum(g.amount, value)) group = g;
+    });
+  }
+  return {
+    ok: true,
+    group: group,
+    found: !!(group && amountOk),
+    result: { shows: [displayTyped(typed)], joinPrev: false, step: "expr", done: false },
+  };
+}
+
+function scaledWhole(ex, typed) {
+  var cleaned = normalize(String(typed || "").replace(/%/g, ""));
+  if (!cleaned || (cleaned.indexOf("*") < 0 && cleaned.indexOf("/") < 0) || cleaned.indexOf("x") >= 0) return null;
+  var value = fieldValue(typed);
+  if (value == null) return null;
+  var facts = familyFacts(ex);
+  if (!inFacts(value, facts.amountFacts)) return null;
+  var whole = Number(ex.all);
+  var literals = numberLiterals(workSide(typed));
+  function allowed(n) {
+    if (inFacts(n, facts.percentFacts) || sameNum(n, whole)) return true;
+    var i;
+    for (i = 0; i < facts.percentFacts.length; i++) {
+      if (sameNum(n, facts.percentFacts[i] / 100)) return true;
+    }
+    return false;
+  }
+  if (!literals.length || !literals.every(allowed)) return null;
+  var group = null;
+  facts.groups.forEach(function (g) {
+    if (sameNum(g.amount, value)) group = g;
+  });
+  return {
+    ok: true,
+    group: group,
+    found: !!group,
+    result: { shows: [displayTyped(typed)], joinPrev: false, step: "expr", done: false },
+  };
 }
 
 function assessGroups(ex, typed) {
   var groups = groupList(ex);
   var placement = "";
   var noted = "";
+  var unequal = "";
   var i;
   for (i = 0; i < groups.length; i++) {
     var result = assessTyped({ unknown: "part", percent: groups[i].percent, all: ex.all }, typed);
-    if (result.ok) return { ok: true, group: groups[i], result: result, found: !!(result.done || result.step === "expr") };
+    if (result.ok) {
+      var plain = normalize(String(typed || "").replace(/%/g, ""));
+      var grounded = result.step === "proportion" || result.step === "isolate" || bareNumber(plain) || plain.indexOf("x") >= 0 || factStep(ex, typed) || scaledWhole(ex, typed);
+      if (grounded) return { ok: true, group: groups[i], result: result, found: !!(result.done || result.step === "expr") };
+    }
     if (!placement && result.code === "placement") placement = result.message;
+    if (!unequal && result.message && result.message.indexOf("לא שווה") >= 0) unequal = result.message;
     if (!noted && result.message && (result.message.indexOf("מספר רגיל") >= 0 || result.message.indexOf("אינה במקום הנכון") >= 0 || result.message.indexOf("חסר הכפל") >= 0)) noted = result.message;
   }
-  var value = fieldValue(typed);
-  var complement = 100 - Number(primaryGroup(groups).percent);
-  if (value != null && sameNum(value, complement) && !groups.some(function (g) { return sameNum(g.amount, value); })) {
-    return { ok: true, group: null, found: false, result: { shows: [displayTyped(typed)], joinPrev: false, step: "expr", done: false } };
-  }
+  var summed = factStep(ex, typed);
+  if (summed) return summed;
+  var scaled = scaledWhole(ex, typed);
+  if (scaled) return scaled;
   if (placement) return { ok: false, message: placement };
   if (noted) return { ok: false, message: noted };
+  if (unequal) return { ok: false, message: unequal };
   return { ok: false, message: "זה לא שקול לחישוב המבוקש." };
 }
 
 function advanceStep(progress, result) {
-  var order = { "": 0, proportion: 1, isolate: 2, expr: 2, value: 3, subtract: 4, done: 5 };
+  var order = { "": 0, proportion: 1, isolate: 2, expr: 2, value: 3, subtract: 4, complement: 1, done: 5 };
   var current = progress.step || "";
   var next = result.step || current;
   if ((order[next] || 0) >= (order[current] || 0)) progress.step = next;
+  if (result.guide != null) progress.guide = result.guide;
   if (result.done) {
     progress.step = "done";
     progress.done = true;
   }
 }
 
-function nextMultiLine(ex, progress) {
+function missingGroup(groups) {
+  var missing = groups.filter(function (g) { return !g.given; });
+  return missing.length === 1 ? missing[0] : null;
+}
+
+function needsComplementPath(ex) {
+  if (!isMulti(ex) || !missingGroup(groupList(ex))) return false;
+  var fields = answerFields(ex);
+  if (fields.some(function (field) { return field.kind === "percent"; })) return true;
+  return groupList(ex).length > 2;
+}
+
+function complementLine(groups, missing) {
+  var given = groups.filter(function (g) { return g.given; });
+  var left = ["100%"].concat(given.map(function (g) { return formatValue(g.percent) + "%"; }));
+  return left.join(" - ") + " = " + formatValue(missing.percent) + "%";
+}
+
+function guideScript(ex) {
+  var groups = groupList(ex);
+  var missing = missingGroup(groups);
+  var fields = answerFields(ex);
+  var lines = [];
+  function addAmount(group, intro) {
+    var spec = { unknown: "part", percent: group.percent, all: ex.all };
+    lines.push({
+      line: proportionLine(spec),
+      step: "proportion",
+      hint: intro + " רשמו את הפרופורציה: האחוז חלקי 100 שווה לחלק חלקי השלם. במקום הגודל החסר רשמו x.",
+    });
+    lines.push({
+      line: isolateLine(spec),
+      step: "isolate",
+      hint: "בודדו את x. אצלנו x = (השלם כפול האחוז) חלקי 100.",
+    });
+    lines.push({ line: valueLine(spec), step: "value", hint: "חשבו את ערכו של x." });
+  }
+  lines.push({
+    line: complementLine(groups, missing),
+    step: "complement",
+    hint: "מצאו את האחוז של " + missing.label + ": 100% פחות האחוזים הנתונים.",
+  });
+  if (fields.some(function (field) { return field.group === missing.id && field.kind === "amount"; })) {
+    addAmount(missing, "עכשיו חשבו את הכמות של " + missing.label + " לפי האחוז שמצאתם.");
+  }
+  fields.forEach(function (field) {
+    if (field.kind !== "amount" || !field.given) return;
+    var group = null;
+    groups.forEach(function (g) { if (g.id === field.group) group = g; });
+    if (group) addAmount(group, "מצאו את הכמות של " + group.label + ".");
+  });
+  return lines;
+}
+
+function shownResult(text) {
+  var cleaned = normalize(String(text || "").replace(/%/g, ""));
+  if (bareNumber(cleaned)) return true;
+  var parts = splitEq(cleaned);
+  if (parts.length === 2 && parts[1] && bareNumber(parts[1])) return true;
+  return false;
+}
+
+function interpretLine(ex, line) {
+  var text = String(line || "").trim();
+  if (!text) return null;
+  if (!isMulti(ex)) return null;
+  var work = assessGroups(ex, text);
+  if (!work.ok) return null;
+  return {
+    step: (work.result && work.result.step) || "",
+    group: work.group || null,
+    value: fieldValue(text),
+  };
+}
+
+function deriveState(ex, history) {
+  var groups = groupList(ex);
+  var knownPercent = {};
+  var knownAmount = {};
+  var open = null;
+  groups.forEach(function (g) {
+    if (g.given) knownPercent[g.id] = true;
+  });
+  (history || []).forEach(function (line) {
+    var info = interpretLine(ex, line);
+    if (!info) return;
+    var settled = info.step === "done" || shownResult(line);
+    if (info.group && (info.step === "proportion" || info.step === "isolate" || info.step === "expr" || info.step === "done")) {
+      knownPercent[info.group.id] = true;
+    }
+    groups.forEach(function (g) {
+      if (info.value != null && settled && sameNum(info.value, g.percent)) knownPercent[g.id] = true;
+      if (info.value != null && settled && sameNum(info.value, g.amount)) knownAmount[g.id] = true;
+    });
+    if (info.group && settled && (info.step === "value" || info.step === "done")) knownAmount[info.group.id] = true;
+    if (!settled && (info.step === "proportion" || info.step === "isolate" || info.step === "expr")) {
+      open = { kind: info.step, group: info.group, value: info.value };
+    } else {
+      open = null;
+    }
+  });
+  return { groups: groups, knownPercent: knownPercent, knownAmount: knownAmount, open: open };
+}
+
+function allAskedKnown(ex, state) {
+  return answerFields(ex).every(function (field) {
+    if (field.kind === "percent") return !!state.knownPercent[field.group];
+    return !!state.knownAmount[field.group];
+  });
+}
+
+function pendingAmounts(ex, state) {
+  var fields = answerFields(ex);
+  var list = [];
+  function push(group) {
+    if (!group || state.knownAmount[group.id]) return;
+    if (list.some(function (item) { return item.id === group.id; })) return;
+    var asked = fields.some(function (field) { return field.group === group.id && field.kind === "amount"; });
+    if (asked) list.push(group);
+  }
+  push(missingGroup(state.groups));
+  fields.forEach(function (field) {
+    if (field.kind !== "amount") return;
+    var group = null;
+    state.groups.forEach(function (item) { if (item.id === field.group) group = item; });
+    push(group);
+  });
+  return list;
+}
+
+function amountStep(group, ex, intro) {
+  var spec = { unknown: "part", percent: group.percent, all: ex.all };
+  return {
+    line: proportionLine(spec),
+    step: "proportion",
+    done: false,
+    joinPrev: false,
+    hint: intro + " רשמו את הפרופורציה: האחוז חלקי 100 שווה לחלק חלקי השלם. במקום הגודל החסר רשמו x.",
+  };
+}
+
+function nextGuided(ex, state) {
+  if (needsComplementPath(ex)) {
+    var missing = missingGroup(state.groups);
+    if (missing && !state.knownPercent[missing.id]) {
+      return {
+        line: complementLine(state.groups, missing),
+        step: "complement",
+        done: false,
+        joinPrev: false,
+        hint: "מצאו את האחוז של " + missing.label + ": 100% פחות האחוזים הנתונים.",
+      };
+    }
+    var pending = pendingAmounts(ex, state);
+    if (pending.length) return amountStep(pending[0], ex, "חשבו את הכמות של " + pending[0].label + ".");
+    return null;
+  }
+  var primary = primaryGroup(state.groups);
+  var other = otherGroup(state.groups, primary);
+  if (!state.knownAmount[primary.id]) {
+    return amountStep(primary, ex, "מצאו את " + primary.label + ".");
+  }
+  if (!state.knownAmount[other.id]) {
+    return {
+      line: formatValue(ex.all) + " - " + formatValue(primary.amount),
+      step: "subtract",
+      done: false,
+      joinPrev: false,
+      hint: "מצאו את " + other.label + ": השלם פחות הקבוצה שכבר מצאתם.",
+    };
+  }
+  return null;
+}
+
+function nextFromHistory(ex, history) {
+  var state = deriveState(ex, history);
+  var step = null;
+  if (state.open && state.open.kind === "proportion" && state.open.group) {
+    var spec = { unknown: "part", percent: state.open.group.percent, all: ex.all };
+    step = {
+      line: isolateLine(spec),
+      step: "isolate",
+      done: false,
+      joinPrev: false,
+      hint: "בודדו את x. אצלנו x = (השלם כפול האחוז) חלקי 100.",
+    };
+  } else if (state.open && state.open.kind === "isolate" && state.open.group) {
+    step = {
+      line: valueLine({ unknown: "part", percent: state.open.group.percent, all: ex.all }),
+      step: "value",
+      done: false,
+      joinPrev: false,
+      hint: "חשבו את ערכו של x.",
+    };
+  } else if (state.open && state.open.kind === "expr" && state.open.value != null) {
+    step = {
+      line: formatValue(state.open.value),
+      step: "value",
+      done: false,
+      joinPrev: true,
+      hint: "חשבו את הביטוי שרשמתם.",
+    };
+  } else {
+    step = nextGuided(ex, state);
+  }
+  if (!step) return null;
+  var after = deriveState(ex, (history || []).concat([step.line]));
+  step.done = allAskedKnown(ex, after);
+  return step;
+}
+
+function nextComplementLine(ex, progress) {
+  var script = guideScript(ex);
+  var guide = progress.guide || 0;
+  if (guide >= script.length) return null;
+  var item = script[guide];
+  return { line: item.line, step: item.step, done: guide + 1 >= script.length, joinPrev: false, guide: guide + 1 };
+}
+
+function nextMultiLine(ex, progress, history) {
+  if (history && history.length) return nextFromHistory(ex, history);
+  if (needsComplementPath(ex)) return nextComplementLine(ex, progress);
   var groups = groupList(ex);
   var primary = primaryGroup(groups);
   var other = otherGroup(groups, primary);
@@ -602,8 +1433,9 @@ function nextMultiLine(ex, progress) {
   return { line: formatValue(other.amount), step: "done", done: true, joinPrev: step === "subtract" };
 }
 
-function nextSiteLine(ex, progress) {
-  if (isMulti(ex)) return nextMultiLine(ex, progress);
+function nextSiteLine(ex, progress, history) {
+  if (isRelated(ex)) return nextRelated(ex, history || []);
+  if (isMulti(ex)) return nextMultiLine(ex, progress, history);
   var step = progress.step || "";
   if (step === "done") return null;
   if (!step) return { line: proportionLine(ex), step: "proportion", done: false, joinPrev: false };
@@ -612,8 +1444,24 @@ function nextSiteLine(ex, progress) {
   return { line: valueLine(ex), step: "done", done: true, joinPrev: false };
 }
 
-function hintFor(ex, progress) {
+function hintFor(ex, progress, history) {
   var step = progress.step || "";
+  if (isRelated(ex)) {
+    var related = nextRelated(ex, history || []);
+    if (!related) return "רשמו את התשובה בשדה.";
+    return related.hint;
+  }
+  if (isMulti(ex) && history && history.length) {
+    var adaptive = nextFromHistory(ex, history);
+    if (!adaptive) return "רשמו את התשובות בשדות.";
+    return adaptive.hint;
+  }
+  if (isMulti(ex) && needsComplementPath(ex)) {
+    var script = guideScript(ex);
+    var guide = (progress && progress.guide) || 0;
+    if (guide >= script.length) return "רשמו את התשובות בשדות.";
+    return script[guide].hint;
+  }
   if (isMulti(ex)) {
     var groups = groupList(ex);
     var primary = primaryGroup(groups);
@@ -664,29 +1512,32 @@ function findExercise(engine, body) {
 function sanitizeProgress(raw, ex) {
   raw = raw || {};
   var step = raw.step;
-  if (step !== "proportion" && step !== "isolate" && step !== "expr" && step !== "value" && step !== "subtract") step = "";
+  if (step !== "proportion" && step !== "isolate" && step !== "expr" && step !== "value" && step !== "subtract" && step !== "complement") step = "";
   var found = {};
   if (isMulti(ex) && raw.found) {
     groupList(ex).forEach(function (g) {
       if (raw.found[g.id]) found[g.id] = true;
     });
   }
-  return { step: step, done: false, found: found };
+  var guide = Number(raw.guide);
+  if (!isFinite(guide) || guide < 0) guide = 0;
+  return { step: step, done: false, found: found, guide: Math.floor(guide) };
 }
 
 function viewOf(ex, progress, answers) {
   var view = {
-    input: isMulti(ex) ? "fields" : "text",
+    input: isMulti(ex) || isRelated(ex) ? "fields" : "text",
     solved: !!(progress && progress.done),
   };
-  if (!isMulti(ex)) return view;
-  var groups = groupList(ex);
+  if (!isMulti(ex) && !isRelated(ex)) return view;
+  var fields = answerFields(ex);
   var locks = {};
   if (!(progress && progress.done)) locks = judgeFields(ex, answers).locks;
-  view.fields = groups.map(function (g) {
-    var field = { id: g.id, label: g.label, locked: !!(progress && progress.done) || !!locks[g.id] };
-    if (progress && progress.done) field.value = formatValue(g.amount);
-    return field;
+  view.fields = fields.map(function (field) {
+    var shown = { id: field.id, label: field.label, locked: !!(progress && progress.done) || !!locks[field.id] };
+    if (field.unit) shown.unit = field.unit;
+    if (progress && progress.done) shown.value = formatValue(field.value);
+    return shown;
   });
   return view;
 }
@@ -711,12 +1562,13 @@ function handle(engine, body) {
   if (!found) return { error: "unknown exercise", message: "unknown exercise" };
   var ex = found.ex;
   var progress = sanitizeProgress(body.progress, ex);
+  var history = Array.isArray(body.history) ? body.history.map(function (line) { return String(line || ""); }) : [];
   var intent = String(body.intent || "check");
   if (intent === "hint") {
-    return respond(ex, progress, { status: "hint", message: hintFor(ex, progress), answers: body.answers });
+    return respond(ex, progress, { status: "hint", message: hintFor(ex, progress, history), answers: body.answers });
   }
   if (intent === "step") {
-    var stepped = nextSiteLine(ex, progress);
+    var stepped = nextSiteLine(ex, progress, history);
     if (!stepped) return { ok: false, message: "אין צעד נוסף.", progress: progress, view: viewOf(ex, progress, body.answers) };
     advanceStep(progress, stepped);
     return respond(ex, progress, {
@@ -730,12 +1582,25 @@ function handle(engine, body) {
   if (intent === "solution") {
     var lines = [];
     var guard = 0;
-    while (progress.step !== "done" && guard < 8) {
+    var solutionHistory = history.slice();
+    while (progress.step !== "done" && guard < 20) {
       guard += 1;
-      var line = nextSiteLine(ex, progress);
+      var line = nextSiteLine(ex, progress, history.length || isRelated(ex) ? solutionHistory : null);
       if (!line) break;
+      var repeated = solutionHistory.some(function (prev) {
+        return normalize(String(prev).replace(/%/g, "")) === normalize(String(line.line).replace(/%/g, ""));
+      });
+      if (repeated) break;
       lines.push({ show: line.line, joinPrev: !!line.joinPrev });
+      solutionHistory.push(line.line);
       advanceStep(progress, line);
+    }
+    if (isRelated(ex) && relatedDone(ex, solutionHistory)) {
+      progress.done = true;
+      progress.step = "done";
+    } else if (history.length && isMulti(ex) && allAskedKnown(ex, deriveState(ex, solutionHistory))) {
+      progress.done = true;
+      progress.step = "done";
     }
     if (isMulti(ex)) groupList(ex).forEach(function (g) { progress.found[g.id] = true; });
     return respond(ex, progress, {
@@ -746,15 +1611,15 @@ function handle(engine, body) {
       answers: body.answers,
     });
   }
-  if (isMulti(ex)) {
+  if (isMulti(ex) || isRelated(ex)) {
     var typed = String(body.typed || "").trim();
     var judged = judgeFields(ex, body.answers);
     if (typed) {
-      var work = assessGroups(ex, typed);
+      var work = isRelated(ex) ? assessRelated(ex, typed) : assessGroups(ex, typed);
       if (!work.ok) {
         return { ok: false, message: work.message, progress: progress, view: viewOf(ex, progress, body.answers) };
       }
-      if (work.found && work.group) progress.found[work.group.id] = true;
+      if (isMulti(ex) && work.found && work.group) progress.found[work.group.id] = true;
       if (judged.solved) {
         progress.done = true;
         progress.step = "done";
@@ -772,7 +1637,7 @@ function handle(engine, body) {
     }
     progress.done = true;
     progress.step = "done";
-    groupList(ex).forEach(function (g) { progress.found[g.id] = true; });
+    if (isMulti(ex)) groupList(ex).forEach(function (g) { progress.found[g.id] = true; });
     return respond(ex, progress, { status: "solved", message: "", answers: body.answers });
   }
   var result = assessTyped(ex, body.typed);
