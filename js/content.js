@@ -114,6 +114,32 @@
         explain: "זהו a, b, c, הציבו בנוסחה, חשבו את הדיסקרימיננטה, ואז את הפתרונות הממשיים.",
       };
     }
+    if (level.mode === "freq-table") {
+      var table = ex.table || {};
+      var variable = table.variable || {};
+      var frequency = table.frequency || {};
+      return {
+        mode: "freq-table",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction || "",
+        prompt: ex.stem || "",
+        stem: ex.stem || "",
+        table: {
+          variableLabel: variable.label || "",
+          frequencyLabel: frequency.label || "",
+          rows: (table.rows || []).map(function (row) {
+            return { value: row.value, freq: row.freq };
+          }),
+        },
+        parts: (ex.parts || []).map(function (part) {
+          return { label: part.label || "", text: part.text || "" };
+        }),
+        explain: "",
+      };
+    }
     if ((level.subtopic || "basic") === "basic") {
       return {
         mode: "steps",
@@ -182,6 +208,9 @@
         }
         if (topicId === "analytic" && subtopicId) {
           return (item.subtopic || "segments") === subtopicId;
+        }
+        if (topicId === "statistics" && subtopicId) {
+          return (item.subtopic || "freq-table") === subtopicId;
         }
         return true;
       });

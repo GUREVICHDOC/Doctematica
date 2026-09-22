@@ -9,6 +9,7 @@ var createQuadraticHandler = require("./quadratic").createQuadraticHandler;
 var createHighPowerHandler = require("./high-power").createHighPowerHandler;
 var createSystemsHandler = require("./systems").createSystemsHandler;
 var createGeometryHandler = require("./geometry").createGeometryHandler;
+var createStatisticsHandler = require("./statistics").createStatisticsHandler;
 var db = require("./db");
 var auth = require("./auth");
 var studentDto = require("./student-dto");
@@ -39,6 +40,7 @@ var quadratic = createQuadraticHandler(engine);
 var highPower = createHighPowerHandler(engine);
 var systems = createSystemsHandler(engine);
 var geometry = createGeometryHandler(engine);
+var statistics = createStatisticsHandler(engine);
 
 function sendJson(res, status, body, cookie) {
   var raw;
@@ -340,6 +342,12 @@ function handleRequest(req, res) {
   if (req.method === "POST" && pathname === "/api/systems") {
     handleMathPost(req, res, function (body) {
       return systems.handle(body);
+    });
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/statistics") {
+    handleMathPost(req, res, function (body) {
+      return statistics.handle(body);
     });
     return;
   }

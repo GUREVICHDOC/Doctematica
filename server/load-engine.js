@@ -41,6 +41,7 @@ var ENGINE_SCRIPTS = [
   "data/geometry/midpoint.js",
   "data/geometry/distance.js",
   "data/curriculum-geo.js",
+  "data/statistics/freq-table.js",
   "data/checks.js",
   "js/content.js",
   "js/problems.js",

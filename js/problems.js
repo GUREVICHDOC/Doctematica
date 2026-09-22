@@ -26,6 +26,7 @@
     { id: "quadratic", label: "משוואות ריבועיות" },
     { id: "high-power", label: "משוואות בחזקה גבוהה" },
     { id: "analytic", label: "גאומטריה אנליטית" },
+    { id: "statistics", label: "סטטיסטיקה" },
     { id: "systems-sub", label: "מערכת משוואות" },
   ];
 
@@ -38,6 +39,9 @@
       { id: "segments", label: "אורכי קטעים" },
       { id: "areas", label: "שטחים והיקפים" },
       { id: "line", label: "הישר" },
+    ],
+    statistics: [
+      { id: "freq-table", label: "טבלת שכיחויות" },
     ],
   };
 

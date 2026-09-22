@@ -52,6 +52,8 @@
   var solveWrap = document.getElementById("solve-wrap");
   var geoBoardEl = document.getElementById("geo-board");
   var geoPartEl = document.getElementById("geo-part");
+  var freqTableEl = document.getElementById("freq-table");
+  var freqAnswerEl = document.getElementById("freq-answer");
   var lineMatchPanelEl = document.getElementById("line-match-panel");
   var coordBoard = geoBoardEl ? new DoctematicaCoordBoard(geoBoardEl) : null;
   var quadGuideEl = document.getElementById("quad-guide");
@@ -81,6 +83,8 @@
     lcdMarks: {},
     domain: null,
     geo: { done: {} },
+    freq: { done: {}, phase: {}, found: {} },
+    freqView: null,
     stats: loadStats(),
   };
 
@@ -174,6 +178,7 @@
   var HIGH_POWER_URL = API_ROOT + "/api/high-power";
   var SYSTEMS_URL = API_ROOT + "/api/systems";
   var GEOMETRY_URL = API_ROOT + "/api/geometry";
+  var STATISTICS_URL = API_ROOT + "/api/statistics";
   var equationsCheckBusy = false;
 
   function isBasicEqServerMode() {
@@ -920,6 +925,266 @@
 
   function isAnalyticTopic() {
     return state.topic === "analytic";
+  }
+
+  function isStatisticsTopic() {
+    return state.topic === "statistics";
+  }
+
+  function isFreqTableMode() {
+    return !!(state.problem && state.problem.mode === "freq-table");
+  }
+
+  function emptyFreqProgress() {
+    return { done: {}, phase: {}, found: {} };
+  }
+
+  function escapeFreqHtml(text) {
+    return String(text || "").replace(/[&<>"]/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch];
+    });
+  }
+
+  function clearFreqUi() {
+    if (freqTableEl) {
+      freqTableEl.classList.add("hidden");
+      freqTableEl.innerHTML = "";
+    }
+    if (freqAnswerEl) {
+      freqAnswerEl.classList.add("hidden");
+      freqAnswerEl.value = "";
+      freqAnswerEl.disabled = false;
+    }
+    if (yesnoAskEl && !isGeoLengthMode()) yesnoAskEl.classList.add("hidden");
+  }
+
+  function renderFreqTable(table) {
+    if (!freqTableEl) return;
+    freqTableEl.innerHTML = "";
+    if (!table) return;
+    var grid = document.createElement("table");
+    grid.className = "freq-grid";
+    function addRow(label, cells, isHead) {
+      var tr = document.createElement("tr");
+      var th = document.createElement("th");
+      th.textContent = label || "";
+      tr.appendChild(th);
+      cells.forEach(function (cell) {
+        var td = document.createElement(isHead ? "th" : "td");
+        td.textContent = cell == null ? "" : String(cell);
+        tr.appendChild(td);
+      });
+      grid.appendChild(tr);
+    }
+    var rows = table.rows || [];
+    addRow(table.variableLabel, rows.map(function (row) { return row.value; }), true);
+    addRow(table.frequencyLabel, rows.map(function (row) { return row.freq; }), false);
+    freqTableEl.appendChild(grid);
+    freqTableEl.classList.remove("hidden");
+  }
+
+  function freqPartByLabel(label) {
+    var parts = (state.problem && state.problem.parts) || [];
+    var i;
+    for (i = 0; i < parts.length; i++) {
+      if (String(parts[i].label || "") === String(label || "")) return parts[i];
+    }
+    return null;
+  }
+
+  function renderFreqPart(view) {
+    if (!geoPartEl) return;
+    var part = view && view.part;
+    if (!part) {
+      geoPartEl.classList.add("hidden");
+      geoPartEl.innerHTML = "";
+      return;
+    }
+    geoPartEl.classList.remove("hidden");
+    geoPartEl.innerHTML = "";
+    if (part.label) {
+      var strong = document.createElement("strong");
+      strong.textContent = "סעיף " + part.label;
+      geoPartEl.appendChild(strong);
+    }
+    String(part.text || "").split("\n").forEach(function (line) {
+      var div = document.createElement("div");
+      if (window.DoctematicaMath && DoctematicaMath.proseHTML) div.innerHTML = DoctematicaMath.proseHTML(line);
+      else div.textContent = line;
+      geoPartEl.appendChild(div);
+    });
+  }
+
+  function syncFreqYesNo(view) {
+    var show = !!(view && view.input === "yesno" && !state.locked);
+    if (yesnoAskEl) yesnoAskEl.classList.toggle("hidden", !show);
+    if (yesnoQEl) yesnoQEl.textContent = show ? "אפשר גם לענות כן או לא מיד:" : "";
+  }
+
+  function ensureFreqPartHeader(label) {
+    if (!label) return;
+    var marker = "סעיף:" + label;
+    var i;
+    for (i = state.history.length - 1; i >= 0; i--) {
+      if (isGeoPartHeader(state.history[i])) {
+        if (state.history[i] === marker) return;
+        break;
+      }
+    }
+    state.history.push(marker);
+  }
+
+  function renderFreqSteps() {
+    stepsEl.innerHTML = "";
+    if (!state.history.length) {
+      stepsEl.classList.add("hidden");
+      return;
+    }
+    stepsEl.classList.remove("hidden");
+    var stepNum = 0;
+    state.history.forEach(function (line, index) {
+      var li = document.createElement("li");
+      var n = document.createElement("span");
+      n.className = "n";
+      var body = document.createElement("span");
+      if (isGeoPartHeader(line)) {
+        var plab = geoPartHeaderLabel(line);
+        n.textContent = plab || "·";
+        var part = freqPartByLabel(plab);
+        var text = part && part.text ? part.text : (plab ? "סעיף " + plab : "סעיף");
+        if (window.DoctematicaMath && DoctematicaMath.proseHTML) {
+          body.innerHTML = DoctematicaMath.proseHTML(String(text).replace(/\n/g, " "));
+        } else body.textContent = text;
+        li.classList.add("geo-section-row", "geo-part-row");
+      } else {
+        stepNum += 1;
+        n.textContent = String(stepNum);
+        if (window.DoctematicaMath && DoctematicaMath.proseHTML) body.innerHTML = DoctematicaMath.proseHTML(line);
+        else body.textContent = line;
+      }
+      if (state.locked && index === state.history.length - 1 && !isGeoPartHeader(line)) {
+        li.classList.add("solved-row");
+      }
+      li.appendChild(n);
+      li.appendChild(body);
+      stepsEl.appendChild(li);
+    });
+  }
+
+  function requestStatistics(payload, onResult) {
+    if (!isFreqTableMode()) return false;
+    if (equationsCheckBusy) return true;
+    equationsCheckBusy = true;
+    var body = {
+      topic: "statistics",
+      capability: "freq-table",
+      intent: payload.intent,
+      levelId: (state.problem && state.problem.levelId) || state.levelId,
+      exerciseId: state.problem && state.problem.exerciseId,
+      n: state.problem && state.problem.n,
+      exerciseIndex: state.exerciseIndex,
+      progress: state.freq || emptyFreqProgress(),
+    };
+    if (payload.typed != null) body.typed = payload.typed;
+    fetch(STATISTICS_URL, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(function (res) {
+        return res.text().then(function (text) {
+          var data = null;
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch (err) {
+            data = null;
+          }
+          if (!res.ok || data == null) throw new Error("statistics");
+          return data;
+        });
+      })
+      .then(function (remote) {
+        equationsCheckBusy = false;
+        try {
+          onResult(remote || {});
+        } catch (err) {
+          showServerProcessingError();
+        }
+      })
+      .catch(function () {
+        equationsCheckBusy = false;
+        showBasicEqServerUnavailable();
+      });
+    return true;
+  }
+
+  function applyFreqLines(part, lines) {
+    (lines || []).forEach(function (line) {
+      if (!line) return;
+      if (part) ensureFreqPartHeader(part);
+      state.history.push(line);
+    });
+  }
+
+  function applyFreqRemote(remote) {
+    if (!remote || remote.ok === false) {
+      var bad = remote && remote.message ? remote.message : "נסו שוב.";
+      showFeedback(false, "<strong>עוד לא.</strong> " + escapeFreqHtml(bad));
+      return;
+    }
+    if (remote.progress) state.freq = remote.progress;
+    if (remote.lines && remote.lines.length) {
+      remote.lines.forEach(function (line) {
+        applyFreqLines(line.part, [line.show]);
+      });
+    } else {
+      applyFreqLines(remote.part, remote.shows);
+    }
+    if (remote.view) {
+      state.freqView = remote.view;
+      renderFreqPart(remote.view);
+      syncFreqYesNo(remote.view);
+    }
+    renderSteps();
+    if (freqAnswerEl && ((remote.shows && remote.shows.length) || (remote.lines && remote.lines.length))) {
+      freqAnswerEl.value = "";
+    }
+    if (remote.status === "solved" || (remote.view && remote.view.solved)) {
+      markSolved();
+      if (freqAnswerEl) freqAnswerEl.disabled = true;
+      checkBtn.disabled = true;
+      nextAfterSolveBtn.classList.remove("hidden");
+      showFeedback(true, "<strong>כל הכבוד.</strong> " + escapeFreqHtml(remote.message || ""));
+      return;
+    }
+    var prefix = remote.status === "step" || remote.status === "hint" ? "צעד נכון." : "נכון.";
+    if (remote.status === "hint") prefix = "רמז.";
+    showFeedback(remote.status !== "hint", "<strong>" + prefix + "</strong> " + escapeFreqHtml(remote.message || ""), remote.status === "hint" ? "tip" : "ok");
+    if (freqAnswerEl && remote.status !== "hint") freqAnswerEl.focus();
+  }
+
+  function applyFreqTyped(typed) {
+    if (state.locked) return;
+    if (!String(typed || "").trim()) {
+      showFeedback(false, "<strong>עוד לא.</strong> כתבו תשובה.");
+      return;
+    }
+    if (!requestStatistics({ intent: "check", typed: typed }, applyFreqRemote)) {
+      showBasicEqServerUnavailable();
+    }
+  }
+
+  function freqHint() {
+    if (!requestStatistics({ intent: "hint" }, applyFreqRemote)) showBasicEqServerUnavailable();
+  }
+
+  function freqOneStep() {
+    if (!requestStatistics({ intent: "step" }, applyFreqRemote)) showBasicEqServerUnavailable();
+  }
+
+  function freqSolution() {
+    if (!requestStatistics({ intent: "solution" }, applyFreqRemote)) showBasicEqServerUnavailable();
   }
 
   function isGeoLengthMode() {
@@ -2487,6 +2752,7 @@
       isQuadraticTopic() ||
       isHighPowerTopic() ||
       isAnalyticTopic() ||
+      isStatisticsTopic() ||
       state.topic === "equations"
     );
   }
@@ -2494,12 +2760,15 @@
   function topicLevels() {
     var all = (state.catalog && state.catalog.levels) || [];
     var sub =
-      state.topic === "equations" || state.topic === "analytic" ? state.subtopic : null;
+      state.topic === "equations" || state.topic === "analytic" || state.topic === "statistics"
+        ? state.subtopic
+        : null;
     if (!state.topic) return all;
     return all.filter(function (item) {
       if ((item.topic || "equations") !== state.topic) return false;
       if (state.topic === "equations" && sub) return (item.subtopic || "basic") === sub;
       if (state.topic === "analytic" && sub) return (item.subtopic || "segments") === sub;
+      if (state.topic === "statistics" && sub) return (item.subtopic || "freq-table") === sub;
       return true;
     });
   }
@@ -2566,7 +2835,7 @@
     worksheetNav.classList.remove("hidden");
     randomWrap.classList.add("hidden");
     var level = currentLevel();
-    if (level.mode === "geo-length") {
+    if (level.mode === "geo-length" || level.mode === "freq-table" || !level.instruction) {
       instructionEl.innerHTML = "";
       instructionEl.classList.add("hidden");
     } else {
@@ -2608,7 +2877,7 @@
         state.topic = topic.id;
         state.source = "worksheet";
         state.exerciseIndex = 0;
-        if (topic.id === "equations" || topic.id === "analytic") {
+        if (topic.id === "equations" || topic.id === "analytic" || topic.id === "statistics") {
           var subs = ((state.catalog && state.catalog.subtopics) || {})[topic.id] || [];
           state.subtopic = state.subtopic || (subs[0] && subs[0].id);
           if (!subs.some(function (s) { return s.id === state.subtopic; })) {
@@ -2703,7 +2972,7 @@
       return t.id === state.topic;
     })[0];
     var label = found ? found.label : "";
-    if (state.topic === "equations" || state.topic === "analytic") {
+    if (state.topic === "equations" || state.topic === "analytic" || state.topic === "statistics") {
       var subList =
         ((state.catalog && state.catalog.subtopics) || {})[state.topic] || [];
       var sub = (subList.filter(function (s) {
@@ -3247,6 +3516,10 @@
 
   function renderSteps() {
     stepsEl.innerHTML = "";
+    if (state.problem && state.problem.mode === "freq-table") {
+      renderFreqSteps();
+      return;
+    }
     if (state.problem && state.problem.mode === "geo-length" && state.history.length) {
       stepsEl.classList.remove("hidden");
       var stepNum = 0;
@@ -4402,6 +4675,7 @@
   }
 
   function clearGeoUi() {
+    clearFreqUi();
     if (solveWrap) solveWrap.classList.remove("has-geo");
     if (coordBoard) coordBoard.clear();
     if (geoPartEl) {
@@ -6188,6 +6462,16 @@
   }
 
   function currentGuide() {
+    if (isFreqTableMode()) {
+      return {
+        work: true,
+        buttons: true,
+        hintText: "אפשר לרשום את התשובה הסופית, או שלב ביניים נכון.",
+        hint: freqHint,
+        oneStep: freqOneStep,
+        showSolution: freqSolution,
+      };
+    }
     if (isSystemMode()) {
       return {
         work: true,
@@ -6951,9 +7235,14 @@
         }
         state.problem = data.problem;
         state.offerFormula = !!(data.problem && data.problem.offerFormula);
-        if (data.view) applyGeoView(data.view);
+        if (data.problem && data.problem.mode === "freq-table") {
+          state.freqView = data.view || null;
+          state.view = null;
+          if (window.DoctematicaUI) window.DoctematicaUI.view = null;
+        } else if (data.view) applyGeoView(data.view);
         else {
           state.view = null;
+          state.freqView = null;
           if (window.DoctematicaUI) window.DoctematicaUI.view = null;
         }
         presentLoadedProblem();
@@ -6976,6 +7265,16 @@
       state.lcdMarks = {};
       state.domain = null;
       startQuadSession();
+      clearGeoUi();
+    } else if (state.problem && state.problem.mode === "freq-table") {
+      state.sys = null;
+      state.quad = null;
+      state.factor = emptyFactorState();
+      state.mixed = emptyMixedState();
+      state.lcdMarks = {};
+      state.domain = null;
+      state.history = [];
+      state.freq = emptyFreqProgress();
       clearGeoUi();
     } else if (state.problem && state.problem.mode === "geo-length") {
       state.sys = null;
@@ -7003,7 +7302,8 @@
       ? (state.topic === "equations" ||
         isQuadraticTopic() ||
         isHighPowerTopic() ||
-        isAnalyticTopic()
+        isAnalyticTopic() ||
+        isStatisticsTopic()
           ? currentTopicLabel() + " · "
           : "") +
         currentLevel().title +
@@ -7027,6 +7327,26 @@
     promptEl.classList.remove("hidden");
     modelEl.classList.add("hidden");
     modelEl.innerHTML = "";
+    clearFreqUi();
+    if (isFreqTableMode()) {
+      promptEl.textContent = state.problem.stem || state.problem.prompt || "";
+      mathWrap.classList.add("hidden");
+      mathKeysEl.classList.add("hidden");
+      checkBtn.classList.remove("hidden");
+      answerLabelEl.classList.remove("hidden");
+      answerLabelEl.textContent = "התשובה שלך";
+      if (freqAnswerEl) {
+        freqAnswerEl.classList.remove("hidden");
+        freqAnswerEl.disabled = false;
+        freqAnswerEl.value = "";
+      }
+      renderFreqTable(state.problem.table);
+      renderFreqPart(state.freqView);
+      syncFreqYesNo(state.freqView);
+      renderSteps();
+      if (freqAnswerEl) freqAnswerEl.focus();
+      return;
+    }
     if (isSystemMode()) {
       clearGeoUi();
       promptEl.innerHTML = DoctematicaMath.systemHTML(state.problem.eq1, state.problem.eq2);
@@ -7136,6 +7456,11 @@
   formEl.addEventListener("submit", function (event) {
     event.preventDefault();
     if (state.locked || !state.problem) return;
+
+    if (isFreqTableMode()) {
+      applyFreqTyped(freqAnswerEl ? freqAnswerEl.value : "");
+      return;
+    }
 
     if (reasonBoxEl && !reasonBoxEl.classList.contains("hidden")) {
       applyRequiredReason(reasonInput ? reasonInput.value : "");
@@ -7294,11 +7619,19 @@
 
   if (yesBtn) {
     yesBtn.addEventListener("click", function () {
+      if (isFreqTableMode()) {
+        applyFreqTyped("כן");
+        return;
+      }
       applyGeoTyped("כן");
     });
   }
   if (noBtn) {
     noBtn.addEventListener("click", function () {
+      if (isFreqTableMode()) {
+        applyFreqTyped("לא");
+        return;
+      }
       applyGeoTyped("לא");
     });
   }

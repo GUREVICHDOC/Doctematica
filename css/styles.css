@@ -848,3 +848,43 @@ code {
   font-weight: 800;
   color: var(--muted);
 }
+
+.freq-table {
+  margin: 0 0 14px;
+  overflow-x: auto;
+}
+
+.freq-grid {
+  border-collapse: collapse;
+  background: #fff;
+  min-width: 280px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.freq-grid th,
+.freq-grid td {
+  border: 1px solid rgba(20, 36, 26, 0.12);
+  padding: 8px 14px;
+  text-align: center;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.freq-grid th {
+  background: rgba(47, 107, 69, 0.14);
+  color: var(--accent-dark);
+  font-weight: 800;
+}
+
+.freq-answer {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(20, 36, 26, 0.16);
+  border-radius: 12px;
+  padding: 0.7rem 0.9rem;
+  font: inherit;
+  font-weight: 700;
+  background: #fff;
+  color: var(--ink);
+}

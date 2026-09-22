@@ -1,5 +1,7 @@
 "use strict";
 
+var freqTable = require("./freq-table");
+
 var DROP_KEYS = {
   steps: true,
   solutionSteps: true,
@@ -74,6 +76,14 @@ function slimProblem(problem) {
   };
   if (problem.geo) out.geo = dropSecrets(problem.geo, 0);
   if (problem.mode === "quad-mixed") out.offerFormula = !!problem.offerFormula;
+  if (problem.mode === "freq-table") {
+    out.stem = problem.stem || "";
+    out.prompt = problem.stem || problem.prompt || "";
+    out.table = problem.table || null;
+    out.parts = (problem.parts || []).map(function (part) {
+      return { label: part.label || "", text: part.text || "" };
+    });
+  }
   return out;
 }
 
@@ -203,6 +213,9 @@ function openProblem(engine, levelId, index) {
   var view = null;
   if (problem.geo && engine.DoctematicaGeometry) {
     view = buildClientView(engine, problem.geo, { done: {}, partial: {}, lastExpr: {}, coords: {}, lineMatch: {} });
+  }
+  if (problem.mode === "freq-table") {
+    view = freqTable.openingView(engine, problem.levelId, index, problem.exerciseId);
   }
   var slim = slimProblem(problem);
   if (slim) slim.displayNumber = index + 1;
