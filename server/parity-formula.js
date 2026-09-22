@@ -701,6 +701,49 @@ async function run(engine) {
   await checkRootTemplate("reg-one", "x^2-6x+9=0");
   await checkRootTemplate("reg-none", "x^2+1=0");
 
+  function expectSteps(id, start, expect) {
+    var got = Q.analyzeStart(start).steps;
+    count += 1;
+    if (JSON.stringify(got) !== JSON.stringify(expect)) {
+      mismatches.push({ id: id, local: got, server: expect });
+    }
+  }
+  expectSteps("sol-continuous-two", "x^2-5x+4=0", [
+    "a=1, b=-5, c=4",
+    "x₁,₂=(-(-5)±√((-5)^2-4*1*4))/(2*1)",
+    "x₁,₂=(5±√(9))/2",
+    "x₁,₂=(5±3)/2",
+    "x₁=(5+3)/2=8/2=4",
+    "x₂=(5-3)/2=2/2=1",
+  ]);
+  expectSteps("sol-continuous-one", "x^2-6x+9=0", [
+    "a=1, b=-6, c=9",
+    "x₁,₂=(-(-6)±√((-6)^2-4*1*9))/(2*1)",
+    "x₁,₂=(6±√(0))/2",
+    "x₁,₂=(6±0)/2",
+    "x=6/2=3",
+  ]);
+  expectSteps("sol-continuous-none", "x^2+1=0", [
+    "a=1, b=0, c=1",
+    "x₁,₂=(-0±√(0^2-4*1*1))/(2*1)",
+    "x₁,₂=(0±√(-4))/2",
+    "אין פתרון ממשי",
+  ]);
+  var negDen = Q.analyzeStart("-x^2+3x-2=0");
+  count += 1;
+  if (
+    !negDen.steps ||
+    negDen.steps.some(function (s) {
+      return /=\s*-?\d+$/.test(s) && s.indexOf("x₁=") !== 0 && s.indexOf("x₂=") !== 0 && s.indexOf("x₁,₂") !== 0 && s.indexOf("a=") !== 0;
+    }) ||
+    negDen.steps.join("\n").indexOf("√(") < 0 ||
+    negDen.steps.filter(function (s) {
+      return s.indexOf("x₁=") === 0 || s.indexOf("x₂=") === 0;
+    }).length !== 2
+  ) {
+    mismatches.push({ id: "sol-continuous-neg-den", local: negDen.steps, server: "x12 formula then two root chains" });
+  }
+
   return { count: count, mismatches: mismatches };
 }
 

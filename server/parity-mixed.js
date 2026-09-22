@@ -225,6 +225,77 @@ async function run(engine) {
     });
   }
 
+  function normStep(s) {
+    return String(s || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/²/g, "^2")
+      .replace(/\s+/g, "");
+  }
+  function expectStep(id, act, eq) {
+    count += 1;
+    var got = act && normStep(act.eq);
+    if (got !== normStep(eq)) {
+      mismatches.push({ id: id, local: act, server: { expect: eq } });
+    }
+  }
+  var screenStart = "4(x+2)(x+3)-6x=12";
+  var screenPack = Q.analyzeMixedStart(screenStart);
+  var scattered = "4x^2+12x+8x+24-6x=12";
+  var combined = "4x^2+14x+24=12";
+  var screenAct = Q.nextMixedStep(scattered, screenPack);
+  expectStep("combine-before-move", screenAct, combined);
+  count += 1;
+  if (!screenAct || !/אספו איברים דומים/.test(String(screenAct.hint || "")) || /העבירו את כל האיברים/.test(String(screenAct.hint || ""))) {
+    mismatches.push({ id: "combine-before-move-hint", local: screenAct && screenAct.hint, server: { expect: "collect like terms" } });
+  }
+  expectStep("combine-unicode-minus", Q.nextMixedStep("4x²+12x+8x+24−6x=12", screenPack), combined);
+  expectStep("combine-both-sides", Q.nextMixedStep("4x^2+12x+8x+20+4-6x=8+4", screenPack), combined);
+  expectStep("combine-right-only", Q.nextMixedStep("4x^2+14x+24=8+4", screenPack), combined);
+  expectStep("move-after-combine", Q.nextMixedStep(combined, screenPack), "4x^2+14x+24-12=0");
+  expectStep("combine-after-move", Q.nextMixedStep("4x^2+12x+8x-6x+24-12=0", screenPack), screenPack.standard);
+  var screenSteps = (screenPack.steps || []).map(normStep);
+  var combinedAt = screenSteps.indexOf(normStep(combined));
+  var movedAt = screenSteps.indexOf("4x^2+14x+24-12=0");
+  count += 1;
+  if (combinedAt < 0 || movedAt < 0 || combinedAt > movedAt) {
+    mismatches.push({
+      id: "solution-combines-before-move",
+      local: screenPack.steps,
+      server: { expect: combined + " before 4x^2+14x+24-12=0" },
+    });
+  }
+  var skipMove = Q.checkMixedTyped(scattered, "4x^2+12x+8x-6x+24-12=0", screenPack);
+  count += 1;
+  if (!skipMove.ok) {
+    mismatches.push({ id: "skip-move-still-legal", local: skipMove, server: { expect: "ok" } });
+  }
+  await add("combine-before-move-one-step", {
+    intent: "one-step",
+    start: screenStart,
+    history: [screenStart, scattered],
+  });
+  var one = handleMixed(engine, {
+    intent: "one-step",
+    start: screenStart,
+    history: [screenStart, scattered],
+  });
+  count += 1;
+  if (!one.ok || normStep(one.step) !== normStep(combined)) {
+    mismatches.push({ id: "combine-before-move-one-step-eq", local: one, server: { expect: combined } });
+  }
+
+  var bothStart = "6x^2-4x-26+10x=5x^2-26";
+  var bothPack = Q.analyzeMixedStart(bothStart);
+  expectStep("combine-one-side-of-two", Q.nextMixedStep(bothStart, bothPack), "6x^2+6x-26=5x^2-26");
+
+  var negScattered = "-15x^2+35x-60x+140=-10x-40";
+  var negPack = Q.analyzeMixedStart("-5(x+4)(3x-7)=-(x+4)10");
+  expectStep("combine-keeps-negative-a", Q.nextMixedStep(negScattered, negPack), "-15x^2-25x+140=-10x-40");
+
+  var sqrtStart = "5x^2+20=4x^2+84";
+  var sqrtAct = Q.nextMixedStep(sqrtStart, Q.analyzeMixedStart(sqrtStart));
+  expectStep("sqrt-still-moves-before-combine", sqrtAct, "5x^2-4x^2=84-20");
+
   return { count: count, mismatches: mismatches };
 }
 

@@ -2062,6 +2062,172 @@
     };
   }
 
+  function skipWs(s, i) {
+    while (i < s.length && /\s/.test(s.charAt(i))) i += 1;
+    return i;
+  }
+
+  function isExplicitMul(ch) {
+    return ch === "·" || ch === "*" || ch === "×";
+  }
+
+  function isChainOp(ch) {
+    return isExplicitMul(ch) || ch === "/";
+  }
+
+  function readNumericAtom(s, i) {
+    var j = i;
+    var paren = false;
+    if (s.charAt(j) === "(") {
+      paren = true;
+      j += 1;
+    }
+    var sign = 1;
+    var ch = s.charAt(j);
+    if (ch === "+" || ch === "-" || ch === "−") {
+      if (ch !== "+") sign = -1;
+      j += 1;
+    }
+    var m = s.slice(j).match(/^\d+(?:\.\d+)?/);
+    if (!m) return null;
+    var value = parseFloat(m[0]);
+    j += m[0].length;
+    if (paren && s.charAt(j) === "/") {
+      var den = s.slice(j + 1).match(/^\d+(?:\.\d+)?/);
+      if (!den || parseFloat(den[0]) === 0) return null;
+      value = value / parseFloat(den[0]);
+      j += 1 + den[0].length;
+    }
+    if (paren) {
+      if (s.charAt(j) !== ")") return null;
+      j += 1;
+    }
+    if (s.charAt(skipWs(s, j)) === "^") return null;
+    if (!isFinite(value)) return null;
+    return { end: j, value: sign * value, src: s.slice(i, j) };
+  }
+
+  function findNumericMulChains(src) {
+    var chains = [];
+    var i = 0;
+    while (i < src.length) {
+      if (i > 0 && /[0-9.^\w]/.test(src.charAt(i - 1))) {
+        i += 1;
+        continue;
+      }
+      var atom = readNumericAtom(src, i);
+      if (!atom) {
+        i += 1;
+        continue;
+      }
+      var atoms = [atom];
+      var ops = [];
+      var j = atom.end;
+      while (true) {
+        var k = skipWs(src, j);
+        var op = src.charAt(k);
+        if (!isChainOp(op)) break;
+        var next = readNumericAtom(src, skipWs(src, k + 1));
+        if (!next) break;
+        ops.push(op);
+        atoms.push(next);
+        j = next.end;
+      }
+      var sawMul = ops.some(isExplicitMul);
+      if (sawMul) {
+        chains.push({ start: i, end: j, atoms: atoms, ops: ops });
+        i = j;
+      } else {
+        i = atom.end > i ? atom.end : i + 1;
+      }
+    }
+    return chains;
+  }
+
+  function evalNumericChain(chain) {
+    var v = chain.atoms[0].value;
+    var t;
+    for (t = 0; t < chain.ops.length; t++) {
+      var r = chain.atoms[t + 1].value;
+      if (chain.ops[t] === "/") {
+        if (Math.abs(r) < EPS) return null;
+        v = v / r;
+      } else {
+        v = v * r;
+      }
+    }
+    return v;
+  }
+
+  function showSigned(src) {
+    return String(src || "").replace(/[−–—-]/g, "−");
+  }
+
+  function chainDisplay(chain) {
+    var s = showSigned(chain.atoms[0].src);
+    var t;
+    for (t = 0; t < chain.ops.length; t++) {
+      s += (chain.ops[t] === "/" ? "/" : "·") + showSigned(chain.atoms[t + 1].src);
+    }
+    return s;
+  }
+
+  function formatProduct(n) {
+    if (!isFinite(n)) return null;
+    var rounded = Math.round(n * 1e9) / 1e9;
+    if (Math.abs(rounded - Math.round(rounded)) < 1e-8) return String(Math.round(rounded));
+    var shown = global.DoctematicaAlgebra.formatNumber(rounded);
+    return String(shown).split(" או ")[0].replace(/-/g, "−");
+  }
+
+  function tidyComputedEq(s) {
+    var t = String(s || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\+\s*-/g, " − ")
+      .replace(/-\s*-/g, " + ")
+      .replace(/([^ \n])\+/g, "$1 +")
+      .replace(/\+([^ \n])/g, "+ $1")
+      .replace(/\s*=\s*/g, " = ")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/-/g, "−")
+      .trim();
+    return normalizeEqDisplay(t);
+  }
+
+  function numericMulStep(eqText) {
+    var src = String(eqText || "");
+    var chains = findNumericMulChains(src.replace(/[−–—]/g, "-"));
+    if (!chains.length) return null;
+    var values = [];
+    var t;
+    for (t = 0; t < chains.length; t++) {
+      var v = evalNumericChain(chains[t]);
+      var shown = v == null ? null : formatProduct(v);
+      if (shown == null) return null;
+      values.push(shown);
+    }
+    var next = src.replace(/[−–—]/g, "-");
+    for (t = chains.length - 1; t >= 0; t--) {
+      next = next.slice(0, chains[t].start) + values[t] + next.slice(chains[t].end);
+    }
+    next = tidyComputedEq(next);
+    if (key(next) === key(eqText)) return null;
+    var phrases = chains.map(function (chain) {
+      var disp = chainDisplay(chain);
+      var onlyMul = chain.ops.every(isExplicitMul);
+      return onlyMul ? "הכפל " + disp : disp;
+    });
+    var hint =
+      phrases.length === 1
+        ? "חשבו את " + phrases[0] + "."
+        : "חשבו את " + phrases.join(" ואת ") + ".";
+    return {
+      eq: next,
+      hint: hint,
+      explain: "מחשבים את " + chains.map(chainDisplay).join(" ואת ") + " לפני שממשיכים במשוואה.",
+    };
+  }
+
   function nextAction(eqText, opts) {
     opts = opts || {};
     unknownKind = opts.unknown === "x2" ? "x2" : "x";
@@ -2070,6 +2236,9 @@
     var A = global.DoctematicaAlgebra;
     var sides = splitEq(eqText);
     if (!sides) return { done: true, hint: "כתבו משוואה עם סימן שוויון." };
+
+    var mulNow = numericMulStep(eqText);
+    if (mulNow) return mulNow;
 
     if (eqHasVarDenom(eqText)) {
       var lcdAlg = lcdStep(eqText, decimals);

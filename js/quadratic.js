@@ -138,21 +138,73 @@
     };
   }
 
+  function parenNeg(n) {
+    return n < 0 ? "(" + n + ")" : String(n);
+  }
+
+  function fracShow(num, den) {
+    var n = String(num);
+    var bare = n.replace(/^-/, "");
+    var wrapN = /[+\-±]/.test(bare) || n.charAt(0) === "-";
+    var numPart = wrapN ? "(" + n + ")" : n;
+    var denPart = den < 0 ? "(" + den + ")" : String(den);
+    return numPart + "/" + denPart;
+  }
+
+  function numExprNeedsWork(num) {
+    var s = String(num || "").replace(/^-/, "");
+    return /[+\-]/.test(s);
+  }
+
+  function plugLine(a, b, c) {
+    return (
+      "x₁,₂=(-" +
+      parenNeg(b) +
+      "±√(" +
+      parenNeg(b) +
+      "^2-4*" +
+      parenNeg(a) +
+      "*" +
+      parenNeg(c) +
+      "))/(2*" +
+      parenNeg(a) +
+      ")"
+    );
+  }
+
+  function filledLine(a, b, inner) {
+    return "x₁,₂=" + fracShow(String(-b) + "±√(" + inner + ")", 2 * a);
+  }
+
+  function rootedLine(a, b, s) {
+    return "x₁,₂=" + fracShow(String(-b) + "±" + s, 2 * a);
+  }
+
+  function rootChain(label, a, b, s, sign, reduced) {
+    var fake = { a: a, b: b, s: s, kind: label === "x" ? "one" : "two" };
+    var expr = rootNumExpr(fake, sign);
+    var den = 2 * a;
+    var parts = [fracShow(expr, den)];
+    if (numExprNeedsWork(expr)) {
+      var summed = fracShow(String(-b + sign * s), den);
+      if (summed !== parts[parts.length - 1]) parts.push(summed);
+    }
+    var fin = fmt(reduced);
+    if (fin && fin !== parts[parts.length - 1]) parts.push(fin);
+    return label + "=" + parts.join("=");
+  }
+
   function solutionSteps(a, b, c, D, s, kind, roots) {
-    var steps = [
-      "a=" + a + ", b=" + b + ", c=" + c,
-      "x=(-(" + b + ")±√((" + b + ")^2-4*" + a + "*" + c + "))/(2*" + a + ")",
-      "(" + b + ")^2-4*" + a + "*" + c + "=" + D,
-    ];
-    if (kind === "none") {
-      steps.push("אין פתרון ממשי");
+    var steps = ["a=" + a + ", b=" + b + ", c=" + c, plugLine(a, b, c), filledLine(a, b, D)];
+    if (kind === "none" || s == null) {
+      if (kind === "none") steps.push("אין פתרון ממשי");
       return steps;
     }
-    steps.push("√(" + D + ")=" + s);
-    if (kind === "one") steps.push("x=" + fmt(roots[0]));
+    steps.push(rootedLine(a, b, s));
+    if (kind === "one") steps.push(rootChain("x", a, b, s, 1, roots[0]));
     else {
-      steps.push("x=(" + (-b) + "+" + s + ")/(" + 2 * a + ")=" + fmt(roots[0]));
-      steps.push("x=(" + (-b) + "-" + s + ")/(" + 2 * a + ")=" + fmt(roots[1]));
+      steps.push(rootChain("x₁", a, b, s, 1, roots[0]));
+      steps.push(rootChain("x₂", a, b, s, -1, roots[1]));
     }
     return steps;
   }
@@ -3787,14 +3839,14 @@
     return formatTermList(groupTermsByKind(left)) + "=" + formatTermList(groupTermsByKind(right));
   }
 
-  function combineBothSides(text) {
+  function combineBothSides(text, opts) {
     var s = normFactorText(text);
     var parts = s.split("=");
     if (parts.length !== 2) return text;
     var L = polySide(parts[0]);
     var R = polySide(parts[1]);
     if (!L || !R) return text;
-    if (L.a < 0) {
+    if (L.a < 0 && !(opts && opts.keepSign)) {
       L = { a: -L.a, b: -L.b, c: -L.c };
       R = { a: -R.a, b: -R.b, c: -R.c };
     }
@@ -3968,12 +4020,21 @@
       }
       sqrtSeed = combinedSides || gathered || body;
     } else {
-      moved = bothSidesLive(body) ? moveAllToLeft(body) : body;
-      if (normFactorText(moved) !== normFactorText(body)) steps.push(moved);
+      var combinedBody = body;
+      if (bothSidesLive(body) && hasUncombined(body)) {
+        var combinedLive = combineBothSides(body, { keepSign: true });
+        if (combinedLive && normFactorText(combinedLive) !== normFactorText(body)) {
+          steps.push(combinedLive);
+          combinedBody = combinedLive;
+        }
+      }
+      moved = bothSidesLive(combinedBody) ? moveAllToLeft(combinedBody) : combinedBody;
+      if (normFactorText(moved) !== normFactorText(combinedBody)) steps.push(moved);
       if (
         normFactorText(standard) !== normFactorText(moved) &&
         normFactorText(standard) !== normFactorText(start) &&
         normFactorText(standard) !== normFactorText(body) &&
+        normFactorText(standard) !== normFactorText(combinedBody) &&
         normFactorText(standard) !== normFactorText(seed)
       ) {
         steps.push(standard);
@@ -4234,6 +4295,16 @@
         hint: (linAct && linAct.hint) || mixedHintFor(pack, eqText),
         doneKind: "linear",
       };
+    }
+    if (bothSidesLive(eqText) && hasUncombined(eqText)) {
+      var combinedSidesNow = combineBothSides(eqText, { keepSign: true });
+      if (combinedSidesNow && normFactorText(combinedSidesNow) !== normFactorText(eqText)) {
+        return {
+          eq: combinedSidesNow,
+          hint: mixedHintFor(pack, eqText),
+          explain: "אוספים איברים דומים בכל אגף לפני שמעבירים אגפים.",
+        };
+      }
     }
     if (bothSidesLive(eqText)) {
       return {

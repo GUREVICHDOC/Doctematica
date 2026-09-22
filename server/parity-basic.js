@@ -567,13 +567,163 @@ async function runTutor(engine) {
   return mismatches;
 }
 
-function printReport(list, checkMismatches, tutorMismatches) {
+function eqKey(s) {
+  return String(s || "")
+    .replace(/[−–—]/g, "-")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+function sameLinear(Algebra, a, b) {
+  if (eqKey(a) === eqKey(b)) return true;
+  try {
+    return Algebra.equivalent(Algebra.parseEquation(a), Algebra.parseEquation(b));
+  } catch (err) {
+    return false;
+  }
+}
+
+async function numericMulContract(engine) {
+  var Teach = engine.DoctematicaTeach;
+  var Algebra = engine.DoctematicaAlgebra;
+  var mismatches = [];
+
+  function fail(id, detail) {
+    mismatches.push({ id: id, detail: detail });
+  }
+
+  async function check(id, eq, pred) {
+    var local = Teach.nextAction(eq) || {};
+    var remote = await postBasic({ intent: "hint", start: eq, history: [eq] });
+    var one = await postBasic({ intent: "one-step", start: eq, history: [eq] });
+    var err = pred(local, remote || {}, one || {});
+    if (err) fail(id, err + " local=" + JSON.stringify({ hint: local.hint, eq: local.eq }));
+    if (remote && String(remote.hint || "") !== String(local.hint || "")) {
+      fail(id + "-hint-parity", JSON.stringify({ local: local.hint, remote: remote.hint }));
+    }
+    if (one && local.eq && String(one.step || "") !== String(local.eq)) {
+      fail(id + "-step-parity", JSON.stringify({ local: local.eq, remote: one.step, hint: one.hint }));
+    }
+  }
+
+  function isMulHint(hint) {
+    return /כפל/.test(String(hint || "")) && /·/.test(String(hint || "")) && !/[×xX*]/.test(String(hint || "").replace(/הכפל/g, ""));
+  }
+
+  await check("prod-dot", "2x + 2·6 = 20", function (local) {
+    if (!isMulHint(local.hint) || local.hint.indexOf("2·6") < 0) return "hint should ask to compute 2·6";
+    if (/העבירו/.test(local.hint)) return "must not move 12 before the product is computed";
+    if (!sameLinear(Algebra, local.eq, "2x + 12 = 20")) return "step should be 2x+12=20, got " + local.eq;
+    if (/[·×*]/.test(String(local.eq || ""))) return "computed step should not keep a multiply sign";
+    return "";
+  });
+
+  await check("prod-star", "2x+2*6=20", function (local) {
+    if (!isMulHint(local.hint) || local.hint.indexOf("2·6") < 0) return "star input still displays ·";
+    if (!sameLinear(Algebra, local.eq, "2x+12=20")) return "got " + local.eq;
+    return "";
+  });
+
+  await check("prod-times", "2x+2×6=20", function (local) {
+    if (!isMulHint(local.hint) || local.hint.indexOf("2·6") < 0) return "times sign displays as ·";
+    if (!sameLinear(Algebra, local.eq, "2x+12=20")) return "got " + local.eq;
+    return "";
+  });
+
+  await check("prod-then-move", "2x + 12 = 20", function (local) {
+    if (/כפל/.test(String(local.hint || ""))) return "12 is already computed";
+    if (!/העבירו/.test(String(local.hint || "")) || String(local.hint).indexOf("12") < 0) return "now move 12, got " + local.hint;
+    return "";
+  });
+
+  await check("expand-still-computes", "2(x+6)=20", function (local) {
+    if (/כפל/.test(String(local.hint || ""))) return "opening parens stays the site path";
+    if (!/סוגר/.test(String(local.hint || ""))) return "expected paren hint, got " + local.hint;
+    if (!sameLinear(Algebra, local.eq, "2x+12=20")) return "got " + local.eq;
+    return "";
+  });
+
+  await check("legal-student-path", "2x+2·6=20", function (local) {
+    var opened = Algebra.checkStep("2(x+6)=20", "2x+2·6=20");
+    if (!opened || !opened.ok) return "2x+2·6=20 should stay a legal expansion";
+    if (!isMulHint(local.hint)) return "follow the written product, got " + local.hint;
+    if (!sameLinear(Algebra, local.eq, "2x+12=20")) return "got " + local.eq;
+    return "";
+  });
+
+  var after = Teach.nextAction("2x + 2·6 = 20");
+  await check("after-product", after && after.eq, function (local) {
+    if (/כפל/.test(String(local.hint || ""))) return "next hint still talks about a product";
+    if (!/העבירו/.test(String(local.hint || ""))) return "after computing, move the constant, got " + local.hint;
+    return "";
+  });
+
+  await check("neg-product", "2x - 3·4 = 5", function (local) {
+    if (String(local.hint || "").indexOf("3·4") < 0) return "hint " + local.hint;
+    if (!sameLinear(Algebra, local.eq, "2x - 12 = 5")) return "got " + local.eq;
+    return "";
+  });
+
+  await check("paren-neg", "x + 5·(-2) = 1", function (local) {
+    if (String(local.hint || "").replace(/[−–—]/g, "-").indexOf("5·(-2)") < 0) return "hint " + local.hint;
+    if (!sameLinear(Algebra, local.eq, "x - 10 = 1")) return "got " + local.eq;
+    if (/\+\s*-/.test(String(local.eq || ""))) return "negative product should not stay as + -";
+    return "";
+  });
+
+  await check("two-products", "2·6 + 3·4 = x", function (local) {
+    if (String(local.hint || "").indexOf("2·6") < 0 || String(local.hint || "").indexOf("3·4") < 0) return "hint " + local.hint;
+    if (/אחדו|העבירו/.test(String(local.hint || ""))) return "compute both products before combining";
+    if (!sameLinear(Algebra, local.eq, "12 + 12 = x")) return "got " + local.eq;
+    return "";
+  });
+
+  await check("coeff-x", "2·x = 10", function (local) {
+    if (/כפל/.test(String(local.hint || ""))) return "2·x is not a numeric product";
+    if (!/חלקו/.test(String(local.hint || ""))) return "got " + local.hint;
+    return "";
+  });
+
+  await check("implicit-coeff", "2x = 10", function (local) {
+    if (/כפל/.test(String(local.hint || ""))) return "2x is not a numeric product";
+    return "";
+  });
+
+  await check("times-unknown", "2x·6 = 12", function (local) {
+    if (/כפל/.test(String(local.hint || ""))) return "a factor with x is not a pure numeric product";
+    return "";
+  });
+
+  await check("chain", "2·6·4 + x = 1", function (local) {
+    if (String(local.hint || "").indexOf("2·6·4") < 0) return "hint " + local.hint;
+    if (!sameLinear(Algebra, local.eq, "48 + x = 1")) return "got " + local.eq;
+    return "";
+  });
+
+  await check("div-chain", "12/2·3 + x = 1", function (local) {
+    if (String(local.hint || "").indexOf("·") < 0) return "hint " + local.hint;
+    if (!sameLinear(Algebra, local.eq, "18 + x = 1")) return "got " + local.eq;
+    return "";
+  });
+
+  await check("sum-unchanged", "x = 3 + 4", function (local) {
+    if (/כפל/.test(String(local.hint || ""))) return "addition is not a product";
+    if (!sameLinear(Algebra, local.eq, "x = 7")) return "got " + local.eq;
+    return "";
+  });
+
+  return mismatches;
+}
+
+function printReport(list, checkMismatches, tutorMismatches, mulMismatches) {
+  mulMismatches = mulMismatches || [];
   console.log("equations/basic parity");
   console.log("check cases: " + list.length);
   console.log("tutor eqs: " + tutorEqs().length + " × hint / one-step / solution");
   console.log("check mismatches: " + checkMismatches.length);
   console.log("tutor mismatches: " + tutorMismatches.length);
-  var all = checkMismatches.concat(tutorMismatches);
+  console.log("numeric-mul mismatches: " + mulMismatches.length);
+  var all = checkMismatches.concat(tutorMismatches).concat(mulMismatches);
   if (all.length) {
     all.forEach(function (m) {
       console.log("");
@@ -614,7 +764,8 @@ async function main() {
     await waitHealth(8000);
     var checkMismatches = await runCases(engine, list);
     var tutorMismatches = await runTutor(engine);
-    printReport(list, checkMismatches, tutorMismatches);
+    var mulMismatches = await numericMulContract(engine);
+    printReport(list, checkMismatches, tutorMismatches, mulMismatches);
   } finally {
     finished = true;
     child.kill("SIGTERM");
