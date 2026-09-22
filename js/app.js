@@ -53,6 +53,7 @@
   var geoBoardEl = document.getElementById("geo-board");
   var geoPartEl = document.getElementById("geo-part");
   var freqTableEl = document.getElementById("freq-table");
+  var freqAskEl = document.getElementById("freq-ask");
   var freqAnswerEl = document.getElementById("freq-answer");
   var lineMatchPanelEl = document.getElementById("line-match-panel");
   var coordBoard = geoBoardEl ? new DoctematicaCoordBoard(geoBoardEl) : null;
@@ -952,8 +953,13 @@
     }
     if (freqAnswerEl) {
       freqAnswerEl.classList.add("hidden");
+      freqAnswerEl.classList.remove("is-math");
       freqAnswerEl.value = "";
       freqAnswerEl.disabled = false;
+    }
+    if (freqAskEl) {
+      freqAskEl.classList.add("hidden");
+      freqAskEl.innerHTML = "";
     }
     if (yesnoAskEl && !isGeoLengthMode()) yesnoAskEl.classList.add("hidden");
   }
@@ -998,6 +1004,7 @@
     if (!part) {
       geoPartEl.classList.add("hidden");
       geoPartEl.innerHTML = "";
+      renderFreqAsk(view);
       return;
     }
     geoPartEl.classList.remove("hidden");
@@ -1013,6 +1020,25 @@
       else div.textContent = line;
       geoPartEl.appendChild(div);
     });
+    renderFreqAsk(view);
+  }
+
+  function renderFreqAsk(view) {
+    if (!freqAskEl) return;
+    var ask = view && !view.solved ? view.ask : "";
+    freqAskEl.innerHTML = "";
+    if (!ask) {
+      freqAskEl.classList.add("hidden");
+      return;
+    }
+    String(ask).split("\n").forEach(function (line) {
+      if (!line) return;
+      var div = document.createElement("div");
+      if (window.DoctematicaMath && DoctematicaMath.proseHTML) div.innerHTML = DoctematicaMath.proseHTML(line);
+      else div.textContent = line;
+      freqAskEl.appendChild(div);
+    });
+    freqAskEl.classList.remove("hidden");
   }
 
   function syncFreqYesNo(view) {
@@ -1032,6 +1058,31 @@
       }
     }
     state.history.push(marker);
+  }
+
+  function isFreqMathLine(line) {
+    var text = String(line || "").trim();
+    if (!text || /[א-ת]/.test(text)) return false;
+    return /[\d=+·×*]/.test(text);
+  }
+
+  function syncFreqAnswerDir() {
+    if (!freqAnswerEl) return;
+    var text = freqAnswerEl.value || "";
+    var math = !/[א-ת]/.test(text) && /[=+·×*]/.test(text);
+    freqAnswerEl.classList.toggle("is-math", math);
+  }
+
+  function continueFreqMathLine(suffix) {
+    var i;
+    for (i = state.history.length - 1; i >= 0; i--) {
+      var line = state.history[i];
+      if (isGeoPartHeader(line)) return false;
+      if (!isFreqMathLine(line) || line.indexOf("=") >= 0) return false;
+      state.history[i] = line + " = " + suffix;
+      return true;
+    }
+    return false;
   }
 
   function renderFreqSteps() {
@@ -1059,7 +1110,11 @@
       } else {
         stepNum += 1;
         n.textContent = String(stepNum);
-        if (window.DoctematicaMath && DoctematicaMath.proseHTML) body.innerHTML = DoctematicaMath.proseHTML(line);
+        if (isFreqMathLine(line) && window.DoctematicaMath && DoctematicaMath.toHTML) {
+          body.className = "freq-math-line";
+          body.dir = "ltr";
+          body.innerHTML = DoctematicaMath.toHTML(line);
+        } else if (window.DoctematicaMath && DoctematicaMath.proseHTML) body.innerHTML = DoctematicaMath.proseHTML(line);
         else body.textContent = line;
       }
       if (state.locked && index === state.history.length - 1 && !isGeoPartHeader(line)) {
@@ -1119,10 +1174,11 @@
     return true;
   }
 
-  function applyFreqLines(part, lines) {
-    (lines || []).forEach(function (line) {
+  function applyFreqLines(part, lines, joinPrev) {
+    (lines || []).forEach(function (line, index) {
       if (!line) return;
       if (part) ensureFreqPartHeader(part);
+      if (joinPrev && index === 0 && continueFreqMathLine(line)) return;
       state.history.push(line);
     });
   }
@@ -1139,7 +1195,7 @@
         applyFreqLines(line.part, [line.show]);
       });
     } else {
-      applyFreqLines(remote.part, remote.shows);
+      applyFreqLines(remote.part, remote.shows, remote.joinPrev);
     }
     if (remote.view) {
       state.freqView = remote.view;
@@ -7617,6 +7673,9 @@
     nextProblem();
   });
 
+  if (freqAnswerEl) {
+    freqAnswerEl.addEventListener("input", syncFreqAnswerDir);
+  }
   if (yesBtn) {
     yesBtn.addEventListener("click", function () {
       if (isFreqTableMode()) {

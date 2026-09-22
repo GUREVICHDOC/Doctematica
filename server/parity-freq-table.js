@@ -63,12 +63,18 @@ function main() {
   add(opened.view && opened.view.part && opened.view.part.label === "א" && opened.view.input === "text" && !opened.view.solved
     ? { ok: true, id: "opening-view" }
     : fail("opening-view", JSON.stringify(opened.view)));
+  add(opened.view.ask === "מהי השורה המייצגת את המשתנה ומהי השורה המייצגת את השכיחות?"
+    ? { ok: true, id: "opening-ask" }
+    : fail("opening-ask", opened.view.ask));
 
   var second = studentDto.openProblem(engine, "stat-freq-1", 1);
   add(second && second.problem.exerciseId === "stat-freq-1-ex-a002" && second.problem.displayNumber === 2 &&
     second.problem.table.variableLabel === "מספר הילדים במשפחה"
     ? { ok: true, id: "open-second" }
     : fail("open-second", JSON.stringify(second && second.problem && second.problem.table)));
+  add(second.view && second.view.ask === "איזו שורה מייצגת את המשתנה, ואיזו שורה מייצגת את השכיחות?"
+    ? { ok: true, id: "ex2-opening-ask" }
+    : fail("ex2-opening-ask", second.view && second.view.ask));
 
   function check(id, typed, progress) {
     return freq.handle(engine, {
@@ -84,6 +90,9 @@ function main() {
   add(both.ok && both.progress.done.var && both.progress.done.freq && !both.progress.done.scale && both.status === "task"
     ? { ok: true, id: "identify-both" }
     : fail("identify-both", JSON.stringify({ ok: both.ok, done: both.progress && both.progress.done, status: both.status, msg: both.message })));
+  add(both.view && both.view.ask === "האם המשתנה הוא כמותי או איכותי?"
+    ? { ok: true, id: "ask-advances-to-scale" }
+    : fail("ask-advances-to-scale", both.view && both.view.ask));
   var scale = check("stat-freq-1-ex-a001", "איכותי", both.progress);
   add(scale.ok && scale.progress.done.scale && scale.view.part.label === "ב"
     ? { ok: true, id: "scale-qualitative-advances" }
@@ -131,9 +140,9 @@ function main() {
   }
 
   runExercise("stat-freq-1-ex-a001", [
-    { id: "ex1-headers", typed: "היום בשבוע", expect: function (r) { return r.ok && r.progress.done.var && !r.progress.done.freq; } },
-    { id: "ex1-freq-header", typed: "מספר ההודעות", expect: function (r) { return r.ok && r.progress.done.freq; } },
-    { id: "ex1-scale", typed: "משתנה איכותי", expect: function (r) { return r.ok && r.view.part.label === "ב"; } },
+    { id: "ex1-headers", typed: "היום בשבוע", expect: function (r) { return r.ok && r.progress.done.var && !r.progress.done.freq && r.view.ask === "מהי השורה המייצגת את המשתנה ומהי השורה המייצגת את השכיחות?"; } },
+    { id: "ex1-freq-header", typed: "מספר ההודעות", expect: function (r) { return r.ok && r.progress.done.freq && r.view.ask === "האם המשתנה הוא כמותי או איכותי?"; } },
+    { id: "ex1-scale", typed: "משתנה איכותי", expect: function (r) { return r.ok && r.view.part.label === "ב" && r.view.ask === "כמה הודעות קיבל יונתן ביום ה'?"; } },
     { id: "ex1-lookup", typed: "25 הודעות", expect: function (r) { return r.ok && r.shows[0] === "25" && r.view.part.label === "ג"; } },
   ]);
 
@@ -151,7 +160,7 @@ function main() {
     ? { ok: true, id: "sum-grouped" }
     : fail("sum-grouped", JSON.stringify({ ok: grouped.ok, shows: grouped.shows, msg: grouped.message })));
   var groupedDone = check("stat-freq-1-ex-a001", "24 + 30 = 54", atLookup.progress);
-  add(groupedDone.ok && groupedDone.progress.done.first3
+  add(groupedDone.ok && groupedDone.progress.done.first3 && groupedDone.shows.length === 1 && groupedDone.shows[0] === "24 + 30 = 54" && !groupedDone.joinPrev
     ? { ok: true, id: "sum-grouped-equals" }
     : fail("sum-grouped-equals", JSON.stringify({ ok: groupedDone.ok, shows: groupedDone.shows, msg: groupedDone.message })));
   var badPartition = check("stat-freq-1-ex-a001", "50 + 4", atLookup.progress);
@@ -159,7 +168,30 @@ function main() {
   var partialOnly = check("stat-freq-1-ex-a001", "15 + 9", atLookup.progress);
   add(partialOnly.ok === false ? { ok: true, id: "sum-reject-incomplete" } : fail("sum-reject-incomplete", partialOnly.message));
   var afterExpr = check("stat-freq-1-ex-a001", "54", expr.progress);
-  add(afterExpr.ok && afterExpr.progress.done.first3 ? { ok: true, id: "sum-after-expr" } : fail("sum-after-expr", afterExpr.message));
+  add(afterExpr.ok && afterExpr.progress.done.first3 && !afterExpr.joinPrev && afterExpr.shows[0] === "54"
+    ? { ok: true, id: "sum-after-expr" }
+    : fail("sum-after-expr", afterExpr.message));
+  var leadEquals = check("stat-freq-1-ex-a001", "=54", atLookup.progress);
+  add(leadEquals.ok && leadEquals.progress.done.first3 && leadEquals.shows[0] === "54" && !leadEquals.joinPrev
+    ? { ok: true, id: "sum-leading-equals" }
+    : fail("sum-leading-equals", JSON.stringify({ ok: leadEquals.ok, shows: leadEquals.shows, join: leadEquals.joinPrev, msg: leadEquals.message })));
+  var continueEquals = check("stat-freq-1-ex-a001", "= 54", expr.progress);
+  add(continueEquals.ok && continueEquals.joinPrev && continueEquals.shows[0] === "54" && continueEquals.progress.done.first3
+    ? { ok: true, id: "sum-continue-equals" }
+    : fail("sum-continue-equals", JSON.stringify({ ok: continueEquals.ok, shows: continueEquals.shows, join: continueEquals.joinPrev, msg: continueEquals.message })));
+  var trailEquals = check("stat-freq-1-ex-a001", "54=", expr.progress);
+  add(trailEquals.ok && trailEquals.joinPrev ? { ok: true, id: "sum-trailing-equals" } : fail("sum-trailing-equals", trailEquals.message));
+  add(check("stat-freq-1-ex-a001", "=50", expr.progress).ok === false
+    ? { ok: true, id: "sum-leading-equals-wrong" }
+    : fail("sum-leading-equals-wrong", ""));
+  var oneLine = check("stat-freq-1-ex-a001", "15 + 9 + 30 = 54", atLookup.progress);
+  add(oneLine.ok && oneLine.shows.length === 1 && oneLine.shows[0] === "15 + 9 + 30 = 54" && !oneLine.joinPrev
+    ? { ok: true, id: "sum-one-line" }
+    : fail("sum-one-line", JSON.stringify(oneLine.shows)));
+  var lookupEquals = check("stat-freq-1-ex-a001", "=25", scale.progress);
+  add(lookupEquals.ok && lookupEquals.shows[0] === "25" && !lookupEquals.joinPrev
+    ? { ok: true, id: "lookup-leading-equals" }
+    : fail("lookup-leading-equals", JSON.stringify({ ok: lookupEquals.ok, shows: lookupEquals.shows, msg: lookupEquals.message })));
 
   var hintStart = freq.handle(engine, {
     levelId: "stat-freq-1", exerciseId: "stat-freq-1-ex-a001", intent: "hint",     progress: atLookup.progress,
@@ -223,8 +255,8 @@ function main() {
     : fail("lookup-hint-hides-number", lookupHint.message));
 
   runExercise("stat-freq-1-ex-a002", [
-    { id: "ex2-var", typed: "מספר הילדים במשפחה", expect: function (r) { return r.ok && r.progress.done.var; } },
-    { id: "ex2-freq", typed: "מספר המשפחות", expect: function (r) { return r.ok && r.view.part.label === "ב"; } },
+    { id: "ex2-var", typed: "מספר הילדים במשפחה", expect: function (r) { return r.ok && r.progress.done.var && r.view.ask === "איזו שורה מייצגת את המשתנה, ואיזו שורה מייצגת את השכיחות?"; } },
+    { id: "ex2-freq", typed: "מספר המשפחות", expect: function (r) { return r.ok && r.view.part.label === "ב" && r.view.ask === "לכמה משפחות יש 4 ילדים?"; } },
     { id: "ex2-four", typed: "5", expect: function (r) { return r.ok && r.view.part.label === "ג"; } },
     { id: "ex2-zero", typed: "2", expect: function (r) { return r.ok && r.view.part.label === "ד"; } },
     { id: "ex2-lt3-expr", typed: "2 + 1 + 6", expect: function (r) { return r.ok && r.status === "step" && !r.progress.done.lt3; } },
@@ -232,9 +264,9 @@ function main() {
     { id: "ex2-gt1", typed: "22", expect: function (r) { return r.ok && r.progress.done.gt1; } },
     { id: "ex2-in", typed: "6 + 8 = 14", expect: function (r) { return r.ok && r.progress.done["two-or-three"]; } },
     { id: "ex2-total-expr", typed: "2 + 1 + 6 + 8 + 5 + 3", expect: function (r) { return r.ok && r.status === "step"; } },
-    { id: "ex2-total", typed: "25", expect: function (r) { return r.ok && r.view.part.label === "ח" && r.view.input === "yesno"; } },
+    { id: "ex2-total", typed: "25", expect: function (r) { return r.ok && r.view.part.label === "ח" && r.view.input === "yesno" && r.view.ask.indexOf("האם ביישוב זה ניתן לקבל תקציב זה?") >= 0 && r.view.ask.indexOf("\n") >= 0; } },
     { id: "ex2-yes-too-soon", typed: "כן", expect: function (r) { return r.ok === false; } },
-    { id: "ex2-weighted", typed: "0·2 + 1·1 + 2·6 + 3·8 + 4·5 + 5·3", expect: function (r) { return r.ok && r.status === "step" && !r.progress.done.budget; } },
+    { id: "ex2-weighted", typed: "0·2 + 1·1 + 2·6 + 3·8 + 4·5 + 5·3", expect: function (r) { return r.ok && r.status === "step" && !r.progress.done.budget && r.view.ask.indexOf("האם ביישוב זה ניתן לקבל תקציב זה?") >= 0; } },
     { id: "ex2-children", typed: "72", expect: function (r) { return r.ok && r.progress.phase.budget === "value" && !r.progress.done.budget; } },
     { id: "ex2-no", typed: "לא", expect: function (r) { return r.ok && r.progress.done.budget && r.view.part.label === "ט"; } },
     { id: "ex2-mode", typed: "3", expect: function (r) { return r.ok && r.view.solved; } },
@@ -294,6 +326,15 @@ function main() {
   var altExpr = grade({ id: "s", kind: "sumFreq", values: [60, 70] }, "4 + 7");
   add(altExpr.ok && !altExpr.done && altExpr.shows[0] === "4 + 7" ? { ok: true, id: "alt-sum-expr" } : fail("alt-sum-expr", JSON.stringify(altExpr)));
   add(grade({ kind: "sumFreq", values: [60, 70] }, "11").done ? { ok: true, id: "alt-sum-direct" } : fail("alt-sum-direct", ""));
+  var altLead = grade({ id: "s", kind: "sumFreq", values: [60, 70] }, "=11");
+  add(altLead.done && !altLead.joinPrev && altLead.shows[0] === "11" ? { ok: true, id: "alt-leading-equals" } : fail("alt-leading-equals", JSON.stringify(altLead)));
+  var altJoin = grade({ id: "s", kind: "sumFreq", values: [60, 70] }, "=11", { phase: "expr" });
+  add(altJoin.done && altJoin.joinPrev && altJoin.shows[0] === "11" ? { ok: true, id: "alt-continue-equals" } : fail("alt-continue-equals", JSON.stringify(altJoin)));
+  add(!grade({ id: "s", kind: "sumFreq", values: [60, 70] }, "=12", { phase: "expr" }).ok
+    ? { ok: true, id: "alt-continue-wrong" } : fail("alt-continue-wrong", ""));
+  var altOne = grade({ id: "s", kind: "sumFreq", values: [60, 70] }, "7 + 4 = 11");
+  add(altOne.done && altOne.shows.length === 1 && altOne.shows[0] === "4 + 7 = 11"
+    ? { ok: true, id: "alt-one-line" } : fail("alt-one-line", JSON.stringify(altOne.shows)));
   add(!grade({ kind: "sumFreq", values: [60, 70] }, "5 + 6").ok ? { ok: true, id: "alt-sum-reject" } : fail("alt-sum-reject", ""));
   var tie = grade({ kind: "mode" }, "80 ו-70");
   add(tie.done ? { ok: true, id: "alt-mode-tie" } : fail("alt-mode-tie", JSON.stringify(tie)));
@@ -327,6 +368,11 @@ function main() {
   var weightedExpr = grade({ kind: "weightedSum" }, "60·4 + 70·7 + 80·7 + 90·3 + 100·1");
   add(weightedExpr.ok && !weightedExpr.done ? { ok: true, id: "alt-weighted-expr" } : fail("alt-weighted-expr", JSON.stringify(weightedExpr)));
   add(grade({ kind: "weightedSum" }, "1660").done ? { ok: true, id: "alt-weighted-total" } : fail("alt-weighted-total", ""));
+  var altWeightedJoin = grade({ id: "w", kind: "weightedSum" }, "=1660", { phase: "expr" });
+  add(altWeightedJoin.done && altWeightedJoin.joinPrev ? { ok: true, id: "alt-weighted-continue" } : fail("alt-weighted-continue", JSON.stringify(altWeightedJoin)));
+  var altWeightedLine = grade({ kind: "weightedSum" }, "60·4 + 70·7 + 80·7 + 90·3 + 100·1 = 1660");
+  add(altWeightedLine.done && altWeightedLine.shows.length === 1 && altWeightedLine.shows[0].indexOf("= 1660") > 0
+    ? { ok: true, id: "alt-weighted-one-line" } : fail("alt-weighted-one-line", JSON.stringify(altWeightedLine.shows)));
   add(grade({ kind: "yesNo", calc: { kind: "weightedSum" }, op: "gt", value: 1000 }, "כן").done
     ? { ok: true, id: "alt-yes" } : fail("alt-yes", ""));
   add(!grade({ kind: "yesNo", calc: { kind: "weightedSum" }, op: "gt", value: 2000 }, "כן").ok
@@ -354,6 +400,50 @@ function main() {
   add(!freq.assess({ variable: { label: "יום" }, frequency: { label: "כמות" }, rows: [{ value: "א", freq: 2 }] }, { kind: "weightedSum" }, "2").ok
     ? { ok: true, id: "weighted-needs-numbers" }
     : fail("weighted-needs-numbers", ""));
+
+  engine.DoctematicaCurriculum.levels.push({
+    id: "stat-freq-ask-probe",
+    topic: "statistics",
+    subtopic: "freq-table",
+    mode: "freq-table",
+    title: "בדיקת שאלה פעילה",
+    exercises: [
+      {
+        id: "stat-freq-ask-probe-ex-a001",
+        n: 1,
+        stem: "טבלת בדיקה.",
+        table: {
+          variable: { label: "ציון" },
+          frequency: { label: "תלמידים" },
+          rows: [{ value: 1, freq: 4 }, { value: 2, freq: 6 }],
+        },
+        parts: [
+          {
+            label: "א",
+            text: "(1) מה נמדד כאן?\nפירוט קצר.\n(2) כמה תלמידים קיבלו ציון 1?",
+            tasks: [
+              { id: "measured", kind: "identify", role: "variable", q: 1 },
+              { id: "count", kind: "lookup", value: 1, q: 2 },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  var probeOpen = freq.openingView(engine, "stat-freq-ask-probe", 0, "stat-freq-ask-probe-ex-a001");
+  add(probeOpen && probeOpen.ask === "מה נמדד כאן?\nפירוט קצר."
+    ? { ok: true, id: "probe-ask-q1" }
+    : fail("probe-ask-q1", probeOpen && probeOpen.ask));
+  var probeNext = freq.handle(engine, {
+    levelId: "stat-freq-ask-probe",
+    exerciseId: "stat-freq-ask-probe-ex-a001",
+    intent: "check",
+    typed: "ציון",
+    progress: { done: {}, phase: {}, found: {} },
+  });
+  add(probeNext.ok && probeNext.view.ask === "כמה תלמידים קיבלו ציון 1?"
+    ? { ok: true, id: "probe-ask-q2" }
+    : fail("probe-ask-q2", probeNext.view && probeNext.view.ask));
 
   var failed = checks.filter(function (item) { return !item.ok; });
   console.log("parity-freq-table: passed " + (checks.length - failed.length) + ", failed " + failed.length);

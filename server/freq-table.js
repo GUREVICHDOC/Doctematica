@@ -197,9 +197,19 @@ function sameMultiset(a, b) {
   return true;
 }
 
+function parseEqualsNumber(raw) {
+  var lead = /^=\s*(-?\d+(?:\.\d+)?)$/.exec(raw);
+  var trail = /^(-?\d+(?:\.\d+)?)\s*=$/.exec(raw);
+  var hit = lead || trail;
+  if (!hit) return null;
+  return { kind: "number", value: Number(hit[1]), continued: true };
+}
+
 function parseExpr(typed) {
   var raw = String(typed || "").trim().replace(/[−–—]/g, "-").replace(/[∙⋅•×✕]/g, "·");
   if (!raw) return null;
+  var continuedNumber = parseEqualsNumber(raw);
+  if (continuedNumber) return continuedNumber;
   var sides = raw.split("=");
   if (sides.length > 2) return null;
   var equals = null;
@@ -287,7 +297,7 @@ function matchScale(compiled, typed) {
 }
 
 function loneNumber(typed) {
-  var text = String(typed || "");
+  var text = String(typed || "").trim().replace(/^=\s*/, "").replace(/\s*=$/, "");
   if (/[=+·*xX×]/.test(text)) return null;
   var nums = text.match(/-?\d+(?:\.\d+)?/g);
   if (!nums || nums.length !== 1) return null;
@@ -322,12 +332,12 @@ function finishSum(total, displayExpr, reduced) {
   return {
     ok: true,
     done: true,
-    shows: [displayExpr, formatInt(total)],
+    shows: [displayExpr + " = " + formatInt(total)],
     message: "",
   };
 }
 
-function matchSum(compiled, task, typed) {
+function matchSum(compiled, task, typed, progress) {
   var freqs = freqList(compiled, task);
   var total = sum(freqs);
   var parsed = parseExpr(typed);
@@ -341,7 +351,12 @@ function matchSum(compiled, task, typed) {
     if (!sameNum(parsed.value, total)) {
       return { ok: false, message: "זה לא הסכום. אפשר גם לרשום קודם את תרגיל החיבור." };
     }
-    return { ok: true, done: true, shows: [formatInt(total)], message: "" };
+    var show = formatInt(total);
+    var phase = (progress && progress.phase && progress.phase[task.id]) || "";
+    if (parsed.continued && phase === "expr") {
+      return { ok: true, done: true, shows: [show], joinPrev: true, message: "" };
+    }
+    return { ok: true, done: true, shows: [show], message: "" };
   }
   if (parsed.terms.some(function (term) { return term.kind === "product"; })) {
     return { ok: false, message: "החיבור צריך לכלול את כל השכיחויות הרלוונטיות, או את הסכום הסופי." };
@@ -386,7 +401,7 @@ function takeProduct(remaining, a, b) {
   return remaining.splice(idx, 1)[0];
 }
 
-function matchWeighted(compiled, typed) {
+function matchWeighted(compiled, task, typed, progress) {
   if (compiled.rows.some(function (row) { return row.num == null; })) {
     return { ok: false, message: "סכום משוקלל מתאים למשתנה מספרי." };
   }
@@ -397,7 +412,12 @@ function matchWeighted(compiled, typed) {
     if (!sameNum(parsed.value, total)) {
       return { ok: false, message: "זה לא הסכום. אפשר גם לרשום קודם את המכפלות." };
     }
-    return { ok: true, done: true, shows: [formatInt(total)], message: "" };
+    var show = formatInt(total);
+    var phase = (progress && progress.phase && task && progress.phase[task.id]) || "";
+    if (parsed.continued && phase === "expr") {
+      return { ok: true, done: true, shows: [show], joinPrev: true, message: "" };
+    }
+    return { ok: true, done: true, shows: [show], message: "" };
   }
   var remaining = compiled.rows.slice();
   var numberTerms = [];
@@ -425,7 +445,7 @@ function matchWeighted(compiled, typed) {
     if (!sameNum(parsed.equals, total)) {
       return { ok: false, message: "התוצאה לא שווה לחישוב שרשמתם." };
     }
-    return { ok: true, done: true, shows: [displayExpr, formatInt(total)], message: "" };
+    return { ok: true, done: true, shows: [displayExpr + " = " + formatInt(total)], message: "" };
   }
   if (numberTerms.length === 1) {
     return { ok: true, done: true, shows: [formatInt(total)], message: "" };
@@ -612,6 +632,7 @@ function matchYesNo(compiled, task, typed, progress) {
       done: false,
       phase: "value",
       shows: result.shows || [],
+      joinPrev: !!result.joinPrev,
       message: "השוו את התוצאה לתנאי וענו כן או לא.",
     };
   }
@@ -620,6 +641,7 @@ function matchYesNo(compiled, task, typed, progress) {
     done: false,
     phase: result.phase || "expr",
     shows: result.shows || [],
+    joinPrev: !!result.joinPrev,
     message: result.message || "חשבו את התוצאה.",
   };
 }
@@ -628,8 +650,8 @@ function matchTask(compiled, task, typed, progress) {
   if (task.kind === "identify") return matchIdentify(compiled, task, typed);
   if (task.kind === "scale") return matchScale(compiled, typed);
   if (task.kind === "lookup") return matchLookup(compiled, task, typed);
-  if (task.kind === "sumFreq" || task.kind === "total") return matchSum(compiled, task, typed);
-  if (task.kind === "weightedSum") return matchWeighted(compiled, typed);
+  if (task.kind === "sumFreq" || task.kind === "total") return matchSum(compiled, task, typed, progress);
+  if (task.kind === "weightedSum") return matchWeighted(compiled, task, typed, progress);
   if (task.kind === "mode") return matchMode(compiled, task, typed, progress);
   if (task.kind === "matchValues") return matchValues(compiled, task, typed, progress);
   if (task.kind === "yesNo") return matchYesNo(compiled, task, typed, progress);
@@ -685,11 +707,40 @@ function currentPart(ex, progress) {
   return null;
 }
 
+function questionsIn(text) {
+  var blocks = [];
+  var current = null;
+  String(text || "").split("\n").forEach(function (line) {
+    var trimmed = line.trim();
+    var mark = /^\((\d+)\)\s*(.*)$/.exec(trimmed);
+    if (mark) {
+      current = { n: Number(mark[1]), lines: mark[2] ? [mark[2]] : [] };
+      blocks.push(current);
+      return;
+    }
+    if (current && trimmed) current.lines.push(trimmed);
+  });
+  return blocks;
+}
+
+function activeAsk(part, task) {
+  var text = String((part && part.text) || "").trim();
+  var q = task && task.q;
+  if (q == null || q === "") return text;
+  var blocks = questionsIn(text);
+  var i;
+  for (i = 0; i < blocks.length; i++) {
+    if (blocks[i].n === Number(q)) return blocks[i].lines.join("\n");
+  }
+  return text;
+}
+
 function viewOf(ex, progress) {
   var current = currentPart(ex, progress);
-  if (!current) return { part: null, input: "text", solved: true };
+  if (!current) return { part: null, ask: "", input: "text", solved: true };
   return {
     part: { label: current.part.label || "", text: current.part.text || "" },
+    ask: activeAsk(current.part, current.task),
     input: current.task.kind === "yesNo" ? "yesno" : "text",
     solved: false,
   };
@@ -835,6 +886,7 @@ function respond(ex, compiled, progress, extra) {
     status: extra.status || "",
     message: extra.message || "",
     shows: extra.shows || [],
+    joinPrev: !!extra.joinPrev,
     lines: extra.lines || null,
     part: extra.part || "",
     progress: progress,
@@ -870,11 +922,13 @@ function checkTyped(compiled, ex, typed, progress) {
   var shows = [];
   var detail = "";
   var onlySteps = true;
+  var joinPrev = false;
   hits.forEach(function (hit) {
     applyMatch(progress, hit.task, hit.result);
     (hit.result.shows || []).forEach(function (line) {
       if (line) shows.push(line);
     });
+    if (hit.result.joinPrev) joinPrev = true;
     if (hit.result.done) onlySteps = false;
     if (hit.result.message) detail = hit.result.message;
   });
@@ -883,6 +937,7 @@ function checkTyped(compiled, ex, typed, progress) {
     status: status,
     message: messageFor(status, detail),
     shows: shows,
+    joinPrev: joinPrev,
     part: current.part.label || "",
   });
 }

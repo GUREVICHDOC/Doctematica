@@ -877,6 +877,28 @@ code {
   font-weight: 800;
 }
 
+.freq-ask {
+  margin: 0 0 8px;
+  color: var(--ink, #14241a);
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.freq-ask .m-expr {
+  font-size: 1.05em;
+}
+
+.freq-answer.is-math {
+  direction: ltr;
+  text-align: right;
+}
+
+.freq-math-line {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 .freq-answer {
   flex: 1;
   min-width: 0;

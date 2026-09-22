@@ -5,6 +5,8 @@
   // matchValues (where), mode (of: value | frequency),
   // weightedSum, yesNo (calc, op, value).
   // where: { on: "variable" | "frequency", op: "gt" | "lt" | "gte" | "lte" | "eq" | "in", value, values }
+  // q על משימה בוחר את שורת (n) מתוך טקסט הסעיף כשאלה הפעילה. משימות של אותה שאלה חולקות q.
+  // בלי q, כל טקסט הסעיף הוא השאלה הפעילה.
   var C = global.DoctematicaCurriculum;
   if (!C || !C.levels) return;
   C.levels = C.levels.concat([
@@ -37,9 +39,9 @@
               label: "א",
               text: "(1) מהי השורה המייצגת את המשתנה ומהי השורה המייצגת את השכיחות?\n(2) האם המשתנה הוא כמותי או איכותי?",
               tasks: [
-                { id: "var", kind: "identify", role: "variable" },
-                { id: "freq", kind: "identify", role: "frequency" },
-                { id: "scale", kind: "scale" },
+                { id: "var", kind: "identify", role: "variable", q: 1 },
+                { id: "freq", kind: "identify", role: "frequency", q: 1 },
+                { id: "scale", kind: "scale", q: 2 },
               ],
             },
             {
