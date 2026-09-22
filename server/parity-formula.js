@@ -441,6 +441,266 @@ async function run(engine) {
   count += 1;
   md53Bad(mixedRemote, "md53-mixed-6plus7x");
 
+  function stubRootNum(view, sign) {
+    view = view || {};
+    if (sign < 0) return view.rootNumNeg || "";
+    return view.rootNum || "";
+  }
+
+  function stubDen(view) {
+    if (!view || view.denWant == null) return "";
+    return String(view.denWant);
+  }
+
+  function numNeedsSimplify(num) {
+    var s = String(num || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/^\s*-/, "");
+    return /[+\-]/.test(s);
+  }
+
+  async function checkRootTemplate(id, start) {
+    var want = Q.analyzeStart(start);
+    var counted = handleFormula(engine, {
+      intent: "check",
+      start: start,
+      phase: "count",
+      picked: want.kind,
+    });
+    count += 1;
+    if (want.kind === "none") {
+      var bare =
+        counted.view && (counted.view.rootNum != null || counted.view.rootNumNeg != null || counted.view.denWant != null);
+      if (!(counted.ok && counted.nextPhase === "nosol" && counted.nextRoot == null && !bare)) {
+        mismatches.push({
+          id: id + "-no-root-template",
+          local: {
+            ok: !!counted.ok,
+            nextPhase: counted.nextPhase,
+            nextRoot: counted.nextRoot,
+            rootNum: counted.view && counted.view.rootNum,
+          },
+          server: "no real roots stays on nosol without an x1/x2 template",
+        });
+      }
+      var none = handleFormula(engine, {
+        intent: "check",
+        start: start,
+        phase: "nosol",
+        typed: "אין פתרון ממשי",
+      });
+      count += 1;
+      if (!(none.ok && none.solved && none.nextPhase === "done" && none.nextRoot == null)) {
+        mismatches.push({
+          id: id + "-none-still-solves",
+          local: { ok: !!none.ok, solved: !!none.solved, nextPhase: none.nextPhase, nextRoot: none.nextRoot },
+          server: "nosol still completes",
+        });
+      }
+      await add(id + "-count", { intent: "check", start: start, phase: "count", picked: want.kind });
+      await add(id + "-nosol", { intent: "check", start: start, phase: "nosol", typed: "אין פתרון ממשי" });
+      return;
+    }
+
+    var view = counted.view || {};
+    var plus = stubRootNum(view, 1);
+    var minus = stubRootNum(view, -1);
+    var den = stubDen(view);
+    var expectPlus = Q.rootNumExpr(want, 1);
+    var expectMinus = Q.rootNumExpr(want, -1);
+    var expectDen = String(Q.denWant(want));
+    if (
+      !(
+        counted.ok &&
+        counted.nextPhase === "rootwork" &&
+        plus === expectPlus &&
+        minus === expectMinus &&
+        den === expectDen &&
+        plus !== "" &&
+        minus !== "" &&
+        den !== "" &&
+        view.numWant === Q.numWant(want, 1) &&
+        view.numWantNeg === Q.numWant(want, -1)
+      )
+    ) {
+      mismatches.push({
+        id: id + "-template",
+        local: {
+          ok: !!counted.ok,
+          nextPhase: counted.nextPhase,
+          plus: plus,
+          minus: minus,
+          den: den,
+          numWant: view.numWant,
+          numWantNeg: view.numWantNeg,
+        },
+        server: {
+          plus: expectPlus,
+          minus: expectMinus,
+          den: expectDen,
+          numWant: Q.numWant(want, 1),
+          numWantNeg: Q.numWant(want, -1),
+        },
+      });
+    }
+    if (want.kind === "two" && (!numNeedsSimplify(plus) || !numNeedsSimplify(minus))) {
+      mismatches.push({
+        id: id + "-keeps-sum",
+        local: { plus: plus, minus: minus },
+        server: "two real roots keep −b ± √Δ in the x1 and x2 template",
+      });
+    }
+    if (want.kind === "one" && (plus === "" || den === "" || numNeedsSimplify(plus))) {
+      mismatches.push({
+        id: id + "-one-number",
+        local: { plus: plus, den: den },
+        server: "one real root shows −b over 2a as a single number",
+      });
+    }
+    await add(id + "-count", { intent: "check", start: start, phase: "count", picked: want.kind });
+
+    var x1num = handleFormula(engine, {
+      intent: "check",
+      start: start,
+      phase: "rootwork",
+      root: { at: 1 },
+      slots: { rnum: String(Q.numWant(want, 1)), rden: String(Q.denWant(want)) },
+    });
+    count += 1;
+    if (
+      !(
+        x1num.ok &&
+        !x1num.solved &&
+        x1num.view &&
+        stubRootNum(x1num.view, 1) === expectPlus &&
+        stubDen(x1num.view) === expectDen
+      )
+    ) {
+      mismatches.push({
+        id: id + "-x1-fraction",
+        local: {
+          ok: !!x1num.ok,
+          solved: !!x1num.solved,
+          plus: x1num.view && stubRootNum(x1num.view, 1),
+          den: x1num.view && stubDen(x1num.view),
+        },
+        server: expectPlus + " / " + expectDen,
+      });
+    }
+
+    var x1 = handleFormula(engine, {
+      intent: "check",
+      start: start,
+      phase: "rootwork",
+      root: { at: 1, numDone: true, denDone: true },
+      slots: { rval: Q.fmt(Q.rootWant(want, 1)) },
+    });
+    count += 1;
+    if (want.kind === "one") {
+      if (!(x1.ok && x1.solved && x1.nextRoot == null)) {
+        mismatches.push({
+          id: id + "-one-solves",
+          local: { ok: !!x1.ok, solved: !!x1.solved, nextRoot: x1.nextRoot },
+          server: "one root finishes without x2",
+        });
+      }
+      await add(id + "-x1", {
+        intent: "check",
+        start: start,
+        phase: "rootwork",
+        root: { at: 1, numDone: true, denDone: true },
+        slots: { rval: Q.fmt(Q.rootWant(want, 1)) },
+      });
+      return;
+    }
+
+    if (
+      !(
+        x1.ok &&
+        !x1.solved &&
+        x1.nextRoot === -1 &&
+        x1.nextLetter === "x2" &&
+        x1.view &&
+        stubRootNum(x1.view, -1) === expectMinus &&
+        stubDen(x1.view) === expectDen
+      )
+    ) {
+      mismatches.push({
+        id: id + "-x2-template",
+        local: {
+          ok: !!x1.ok,
+          solved: !!x1.solved,
+          nextRoot: x1.nextRoot,
+          nextLetter: x1.nextLetter,
+          minus: x1.view && stubRootNum(x1.view, -1),
+          den: x1.view && stubDen(x1.view),
+        },
+        server: { minus: expectMinus, den: expectDen, nextRoot: -1 },
+      });
+    }
+    var x2num = handleFormula(engine, {
+      intent: "check",
+      start: start,
+      phase: "rootwork",
+      root: { at: -1 },
+      slots: { rnum: String(Q.numWant(want, -1)), rden: String(Q.denWant(want)) },
+    });
+    count += 1;
+    if (!(x2num.ok && !x2num.solved && x2num.view && stubRootNum(x2num.view, -1) === expectMinus)) {
+      mismatches.push({
+        id: id + "-x2-fraction",
+        local: { ok: !!x2num.ok, minus: x2num.view && stubRootNum(x2num.view, -1) },
+        server: expectMinus,
+      });
+    }
+    var x2 = handleFormula(engine, {
+      intent: "check",
+      start: start,
+      phase: "rootwork",
+      root: { at: -1, numDone: true, denDone: true },
+      slots: { rval: Q.fmt(Q.rootWant(want, -1)) },
+    });
+    count += 1;
+    if (!(x2.ok && x2.solved && x2.nextRoot == null && x2.nextPhase === "done")) {
+      mismatches.push({
+        id: id + "-x2-solves",
+        local: { ok: !!x2.ok, solved: !!x2.solved, nextRoot: x2.nextRoot, nextPhase: x2.nextPhase },
+        server: "x2 completes the equation",
+      });
+    }
+    await add(id + "-x1-to-x2", {
+      intent: "check",
+      start: start,
+      phase: "rootwork",
+      root: { at: 1, numDone: true, denDone: true },
+      slots: { rval: Q.fmt(Q.rootWant(want, 1)) },
+    });
+    await add(id + "-x2", {
+      intent: "check",
+      start: start,
+      phase: "rootwork",
+      root: { at: -1, numDone: true, denDone: true },
+      slots: { rval: Q.fmt(Q.rootWant(want, -1)) },
+    });
+  }
+
+  var screenshot = Q.analyzeStart("5x^2+11x+6=0");
+  count += 1;
+  if (!(screenshot.a === 5 && screenshot.b === 11 && screenshot.s === 1 && screenshot.kind === "two" && Q.denWant(screenshot) === 10)) {
+    mismatches.push({
+      id: "reg-pm-11-setup",
+      local: { a: screenshot.a, b: screenshot.b, s: screenshot.s, kind: screenshot.kind, den: Q.denWant(screenshot) },
+      server: "5x^2+11x+6=0 is x = (−11 ± 1) / 10",
+    });
+  }
+  await checkRootTemplate("reg-pm-11", "5x^2+11x+6=0");
+  await checkRootTemplate("reg-half", "2x^2-3x+1=0");
+  await checkRootTemplate("reg-integers", "x^2-5x+6=0");
+  await checkRootTemplate("reg-neg-den", "-x^2+3x-2=0");
+  await checkRootTemplate("reg-zero-num", "x^2-3x=0");
+  await checkRootTemplate("reg-one", "x^2-6x+9=0");
+  await checkRootTemplate("reg-none", "x^2+1=0");
+
   return { count: count, mismatches: mismatches };
 }
 

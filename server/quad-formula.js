@@ -12,6 +12,25 @@ function nextAfterCompute(want) {
   return want.kind === "none" ? "count" : "sqrt";
 }
 
+// The browser stub only displays these; it does not recompute −b ± √Δ or 2a.
+function rootWorkView(Q, want) {
+  var view = {
+    a: want.a,
+    b: want.b,
+    c: want.c,
+    D: want.D,
+    s: want.s,
+    kind: want.kind,
+  };
+  if (!want || want.kind === "none" || want.s == null) return view;
+  view.denWant = Q.denWant(want);
+  view.numWant = Q.numWant(want, 1);
+  view.numWantNeg = Q.numWant(want, -1);
+  view.rootNum = Q.rootNumExpr(want, 1);
+  view.rootNumNeg = Q.rootNumExpr(want, -1);
+  return view;
+}
+
 function formulaHint(Q, want, phase, md53) {
   var tips = {
     abc: "a מקדם x², b מקדם x, c החופשי. כאן a = " + want.a + ".",
@@ -195,7 +214,10 @@ function handleFormulaCheck(engine, body, wantOverride) {
       phase: "count",
       nextPhase: nextC,
       kind: want.kind,
-      view: { a: want.a, b: want.b, c: want.c, D: want.D, s: want.s, kind: want.kind },
+      view:
+        cnt.ok && nextC === "rootwork"
+          ? rootWorkView(Q, want)
+          : { a: want.a, b: want.b, c: want.c, D: want.D, s: want.s, kind: want.kind },
     });
   }
 
@@ -219,7 +241,7 @@ function handleFormulaCheck(engine, body, wantOverride) {
         den: root.denDone ? String(Q.denWant(want)) : slots.rden,
       };
       var rc = Q.checkRootCompute(want, sign, fields);
-      return snapshotFormula(rc, { phase: "rootwork", nextPhase: "rootwork", view: { a: want.a, b: want.b, c: want.c, D: want.D, s: want.s, kind: want.kind } });
+      return snapshotFormula(rc, { phase: "rootwork", nextPhase: "rootwork", view: rootWorkView(Q, want) });
     }
     var typedR = slots.rval != null ? slots.rval : body.typed;
     var fin = Q.checkRootFinal(want, sign, typedR);
@@ -232,7 +254,7 @@ function handleFormulaCheck(engine, body, wantOverride) {
         nextPhase: "rootwork",
         nextLetter: "x2",
         nextRoot: -1,
-        view: { kind: want.kind },
+        view: rootWorkView(Q, want),
       });
     }
     return snapshotFormula(fin, {
