@@ -937,7 +937,7 @@
   }
 
   function emptyFreqProgress() {
-    return { done: {}, phase: {}, found: {} };
+    return { done: {}, phase: {}, found: {}, filled: {} };
   }
 
   function escapeFreqHtml(text) {
@@ -964,29 +964,232 @@
     if (yesnoAskEl && !isGeoLengthMode()) yesnoAskEl.classList.add("hidden");
   }
 
-  function renderFreqTable(table) {
+  function renderFreqBoard() {
     if (!freqTableEl) return;
+    var problem = state.problem || {};
+    var view = state.freqView || {};
+    var table = view.table || problem.table;
+    var data = view.data || problem.data || null;
+    var filling = !!(view.input === "cells" && !state.locked);
     freqTableEl.innerHTML = "";
-    if (!table) return;
-    var grid = document.createElement("table");
-    grid.className = "freq-grid";
-    function addRow(label, cells, isHead) {
-      var tr = document.createElement("tr");
-      var th = document.createElement("th");
-      th.textContent = label || "";
-      tr.appendChild(th);
-      cells.forEach(function (cell) {
-        var td = document.createElement(isHead ? "th" : "td");
-        td.textContent = cell == null ? "" : String(cell);
-        tr.appendChild(td);
+    if (!table && !(data && data.length)) return;
+    if (data && data.length) {
+      var note = document.createElement("p");
+      note.className = "freq-note";
+      note.textContent = "אפשר ללחוץ על מספר כדי לסמן אותו ככזה שכבר נספר.";
+      freqTableEl.appendChild(note);
+      var list = document.createElement("div");
+      list.className = "freq-data";
+      data.forEach(function (item, index) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "freq-datum";
+        btn.textContent = item == null ? "" : String(item);
+        btn.setAttribute("data-index", String(index));
+        btn.setAttribute("aria-pressed", state.freqMarks && state.freqMarks[index] ? "true" : "false");
+        if (state.freqMarks && state.freqMarks[index]) btn.classList.add("is-struck");
+        list.appendChild(btn);
       });
-      grid.appendChild(tr);
+      freqTableEl.appendChild(list);
     }
-    var rows = table.rows || [];
-    addRow(table.variableLabel, rows.map(function (row) { return row.value; }), true);
-    addRow(table.frequencyLabel, rows.map(function (row) { return row.freq; }), false);
-    freqTableEl.appendChild(grid);
+    var building = !!(view.input === "build" && table && table.build && !state.locked);
+    if (building) {
+      renderBuildTable(table);
+    } else if (table) {
+      var grid = document.createElement("table");
+      grid.className = "freq-grid";
+      var rows = table.rows || [];
+      function addLabel(tr, label) {
+        var th = document.createElement("th");
+        th.textContent = label || "";
+        tr.appendChild(th);
+      }
+      var head = document.createElement("tr");
+      addLabel(head, table.variableLabel);
+      rows.forEach(function (row) {
+        var th = document.createElement("th");
+        th.textContent = row.value == null ? "" : String(row.value);
+        head.appendChild(th);
+      });
+      grid.appendChild(head);
+      var freqRow = document.createElement("tr");
+      addLabel(freqRow, table.frequencyLabel);
+      rows.forEach(function (row) {
+        var td = document.createElement("td");
+        var value = row.value == null ? "" : String(row.value);
+        if (row.locked || (!filling && row.freq != null)) {
+          td.textContent = row.freq == null ? "" : String(row.freq);
+          if (row.locked) td.classList.add("is-locked");
+        } else if (filling) {
+          var input = document.createElement("input");
+          input.type = "text";
+          input.inputMode = "numeric";
+          input.className = "freq-cell";
+          input.setAttribute("data-value", value);
+          input.setAttribute("aria-label", "שכיחות של " + value);
+          input.autocomplete = "off";
+          if (state.freqDrafts && state.freqDrafts[value] != null) input.value = state.freqDrafts[value];
+          td.appendChild(input);
+        }
+        freqRow.appendChild(td);
+      });
+      grid.appendChild(freqRow);
+      freqTableEl.appendChild(grid);
+    }
     freqTableEl.classList.remove("hidden");
+    if (building) {
+      var openInput = freqTableEl.querySelector(".freq-build-value:not(:disabled), .freq-build-freq:not(:disabled)");
+      if (openInput) openInput.focus();
+      return;
+    }
+    if (!filling) return;
+    var focusValue = state.freqFocus;
+    var again = focusValue != null ? freqTableEl.querySelector('.freq-cell[data-value="' + focusValue + '"]') : null;
+    if (again) again.focus();
+    else {
+      var firstCell = freqTableEl.querySelector(".freq-cell");
+      if (firstCell) firstCell.focus();
+    }
+  }
+
+  function renderBuildTable(table) {
+    var columns = (table && table.columns) || [];
+    var grid = document.createElement("table");
+    grid.className = "freq-grid freq-build";
+    function field(className, value, locked, label) {
+      var input = document.createElement("input");
+      input.type = "text";
+      input.className = className;
+      input.value = value == null ? "" : String(value);
+      input.autocomplete = "off";
+      input.setAttribute("aria-label", label);
+      if (locked) input.disabled = true;
+      return input;
+    }
+    var head = document.createElement("tr");
+    var varHead = document.createElement("th");
+    varHead.textContent = table.variableLabel || "";
+    head.appendChild(varHead);
+    columns.forEach(function (col, index) {
+      var th = document.createElement("th");
+      th.className = "freq-build-col";
+      th.setAttribute("data-index", String(index));
+      if (col.valueLocked) th.classList.add("is-locked");
+      var tools = document.createElement("div");
+      tools.className = "freq-col-tools";
+      [["-1", "ימינה"], ["1", "שמאלה"]].forEach(function (pair) {
+        var move = document.createElement("button");
+        move.type = "button";
+        move.className = "freq-col-move";
+        move.setAttribute("data-dir", pair[0]);
+        move.textContent = pair[1];
+        tools.appendChild(move);
+      });
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "freq-col-delete";
+      del.textContent = "מחיקה";
+      tools.appendChild(del);
+      th.appendChild(tools);
+      th.appendChild(field("freq-build-value", col.value, col.valueLocked, "ערך בעמודה " + (index + 1)));
+      head.appendChild(th);
+    });
+    grid.appendChild(head);
+    var freqRow = document.createElement("tr");
+    var freqHead = document.createElement("th");
+    freqHead.textContent = table.frequencyLabel || "";
+    freqRow.appendChild(freqHead);
+    columns.forEach(function (col, index) {
+      var td = document.createElement("td");
+      td.className = "freq-build-col";
+      td.setAttribute("data-index", String(index));
+      if (col.freqLocked) td.classList.add("is-locked");
+      td.appendChild(field(
+        "freq-build-freq",
+        col.freq,
+        col.freqLocked,
+        "שכיחות בעמודה " + (index + 1)
+      ));
+      freqRow.appendChild(td);
+    });
+    grid.appendChild(freqRow);
+    freqTableEl.appendChild(grid);
+    var add = document.createElement("button");
+    add.type = "button";
+    add.className = "freq-add-col";
+    add.textContent = "הוספת עמודה";
+    freqTableEl.appendChild(add);
+  }
+
+  function readBuildColumns() {
+    if (!freqTableEl) return ((state.freqView && state.freqView.table && state.freqView.table.columns) || []).slice();
+    var values = freqTableEl.querySelectorAll(".freq-build-value");
+    var freqs = freqTableEl.querySelectorAll(".freq-build-freq");
+    if (!values.length && !freqs.length) {
+      return ((state.freqView && state.freqView.table && state.freqView.table.columns) || []).slice();
+    }
+    var cols = [];
+    var i;
+    for (i = 0; i < values.length; i++) {
+      cols.push({
+        value: values[i].value || "",
+        freq: freqs[i] ? freqs[i].value || "" : "",
+        valueLocked: !!values[i].disabled,
+        freqLocked: !!(freqs[i] && freqs[i].disabled),
+      });
+    }
+    return cols;
+  }
+
+  function rememberBuildColumns(columns) {
+    if (!state.freqView) return;
+    state.freqView.table = state.freqView.table || {};
+    state.freqView.table.columns = columns;
+    state.freqView.table.build = true;
+  }
+
+  function submitBuildTable() {
+    if (state.locked) return;
+    var columns = readBuildColumns();
+    rememberBuildColumns(columns);
+    if (!requestStatistics({ intent: "check", columns: columns }, applyFreqRemote)) {
+      showBasicEqServerUnavailable();
+    }
+  }
+
+  function freqCellToCheck() {
+    var active = document.activeElement;
+    if (active && active.classList && active.classList.contains("freq-cell")) return active;
+    if (!freqTableEl) return null;
+    var inputs = freqTableEl.querySelectorAll(".freq-cell");
+    var i;
+    for (i = 0; i < inputs.length; i++) {
+      if (String(inputs[i].value || "").trim()) return inputs[i];
+    }
+    return inputs[0] || null;
+  }
+
+  function submitFreqCell(input) {
+    if (state.locked) return;
+    if (!input) {
+      showFeedback(false, "<strong>עוד לא.</strong> כתבו שכיחות באחד מתאי הטבלה.");
+      return;
+    }
+    state.freqFocus = input.getAttribute("data-value");
+    state.freqDrafts = state.freqDrafts || {};
+    state.freqDrafts[state.freqFocus] = input.value;
+    if (!requestStatistics({
+      intent: "check",
+      fill: { value: state.freqFocus, typed: input.value },
+    }, applyFreqRemote)) {
+      showBasicEqServerUnavailable();
+    }
+  }
+
+  function syncFreqEntry(view) {
+    var board = !!(view && (view.input === "cells" || view.input === "build") && !state.locked);
+    if (freqAnswerEl) freqAnswerEl.classList.toggle("hidden", board || !isFreqTableMode());
+    if (answerLabelEl && isFreqTableMode()) answerLabelEl.classList.toggle("hidden", board);
   }
 
   function freqPartByLabel(label) {
@@ -1141,6 +1344,9 @@
       progress: state.freq || emptyFreqProgress(),
     };
     if (payload.typed != null) body.typed = payload.typed;
+    if (payload.fill) body.fill = payload.fill;
+    if (payload.columns) body.columns = payload.columns;
+    else if (state.freqView && state.freqView.input === "build") body.columns = readBuildColumns();
     fetch(STATISTICS_URL, {
       method: "POST",
       credentials: "same-origin",
@@ -1184,12 +1390,25 @@
   }
 
   function applyFreqRemote(remote) {
-    if (!remote || remote.ok === false) {
+    var failed = !remote || remote.ok === false;
+    var keepBoard = !!(failed && remote && remote.view && remote.view.input === "build");
+    if (failed && !keepBoard) {
       var bad = remote && remote.message ? remote.message : "נסו שוב.";
       showFeedback(false, "<strong>עוד לא.</strong> " + escapeFreqHtml(bad));
       return;
     }
     if (remote.progress) state.freq = remote.progress;
+    if (failed) {
+      if (remote.view) {
+        state.freqView = remote.view;
+        renderFreqBoard();
+        renderFreqPart(remote.view);
+        syncFreqYesNo(remote.view);
+        syncFreqEntry(remote.view);
+      }
+      showFeedback(false, "<strong>עוד לא.</strong> " + escapeFreqHtml(remote.message || "נסו שוב."));
+      return;
+    }
     if (remote.lines && remote.lines.length) {
       remote.lines.forEach(function (line) {
         applyFreqLines(line.part, [line.show], line.joinPrev);
@@ -1199,12 +1418,18 @@
     }
     if (remote.view) {
       state.freqView = remote.view;
+      renderFreqBoard();
       renderFreqPart(remote.view);
       syncFreqYesNo(remote.view);
+      syncFreqEntry(remote.view);
     }
     renderSteps();
     if (freqAnswerEl && ((remote.shows && remote.shows.length) || (remote.lines && remote.lines.length))) {
       freqAnswerEl.value = "";
+    }
+    if (remote.status === "note") {
+      showFeedback(true, escapeFreqHtml(remote.message || ""), "tip");
+      return;
     }
     if (remote.status === "solved" || (remote.view && remote.view.solved)) {
       markSolved();
@@ -7331,6 +7556,9 @@
       state.domain = null;
       state.history = [];
       state.freq = emptyFreqProgress();
+      state.freqMarks = [];
+      state.freqDrafts = {};
+      state.freqFocus = null;
       clearGeoUi();
     } else if (state.problem && state.problem.mode === "geo-length") {
       state.sys = null;
@@ -7396,9 +7624,10 @@
         freqAnswerEl.disabled = false;
         freqAnswerEl.value = "";
       }
-      renderFreqTable(state.problem.table);
+      renderFreqBoard();
       renderFreqPart(state.freqView);
       syncFreqYesNo(state.freqView);
+      syncFreqEntry(state.freqView);
       renderSteps();
       if (freqAnswerEl) freqAnswerEl.focus();
       return;
@@ -7509,11 +7738,80 @@
     });
   }
 
+  if (freqTableEl) {
+    freqTableEl.addEventListener("click", function (event) {
+      var addCol = event.target && event.target.closest ? event.target.closest(".freq-add-col") : null;
+      var moveCol = event.target && event.target.closest ? event.target.closest(".freq-col-move") : null;
+      var deleteCol = event.target && event.target.closest ? event.target.closest(".freq-col-delete") : null;
+      if (addCol || moveCol || deleteCol) {
+        if (state.locked) return;
+        var columns = readBuildColumns();
+        if (addCol) columns.push({ value: "", freq: "" });
+        else {
+          var cell = (moveCol || deleteCol).closest(".freq-build-col");
+          var index = cell ? Number(cell.getAttribute("data-index")) : -1;
+          if (deleteCol && index >= 0) columns.splice(index, 1);
+          if (moveCol && index >= 0) {
+            var next = index + Number(moveCol.getAttribute("data-dir"));
+            if (next >= 0 && next < columns.length) {
+              var held = columns[index];
+              columns[index] = columns[next];
+              columns[next] = held;
+            }
+          }
+        }
+        rememberBuildColumns(columns);
+        renderFreqBoard();
+        return;
+      }
+      var btn = event.target && event.target.closest ? event.target.closest(".freq-datum") : null;
+      if (!btn || state.locked) return;
+      var index = Number(btn.getAttribute("data-index"));
+      if (!isFinite(index)) return;
+      state.freqMarks = state.freqMarks || [];
+      state.freqMarks[index] = !state.freqMarks[index];
+      btn.classList.toggle("is-struck", !!state.freqMarks[index]);
+      btn.setAttribute("aria-pressed", state.freqMarks[index] ? "true" : "false");
+    });
+    freqTableEl.addEventListener("input", function (event) {
+      var input = event.target;
+      if (input && input.classList && (input.classList.contains("freq-build-value") || input.classList.contains("freq-build-freq"))) {
+        rememberBuildColumns(readBuildColumns());
+        return;
+      }
+      if (!input || !input.classList || !input.classList.contains("freq-cell")) return;
+      state.freqDrafts = state.freqDrafts || {};
+      state.freqDrafts[input.getAttribute("data-value")] = input.value;
+      state.freqFocus = input.getAttribute("data-value");
+    });
+    freqTableEl.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter") return;
+      var input = event.target;
+      if (!input || !input.classList) return;
+      if (input.classList.contains("freq-build-value") || input.classList.contains("freq-build-freq")) {
+        event.preventDefault();
+        submitBuildTable();
+        return;
+      }
+      if (!input.classList.contains("freq-cell")) return;
+      event.preventDefault();
+      submitFreqCell(input);
+    });
+  }
+
   formEl.addEventListener("submit", function (event) {
     event.preventDefault();
     if (state.locked || !state.problem) return;
 
     if (isFreqTableMode()) {
+      if (state.freqView && state.freqView.input === "cells") {
+        submitFreqCell(freqCellToCheck());
+        return;
+      }
+      if (state.freqView && state.freqView.input === "build") {
+        submitBuildTable();
+        return;
+      }
       applyFreqTyped(freqAnswerEl ? freqAnswerEl.value : "");
       return;
     }

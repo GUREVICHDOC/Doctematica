@@ -854,6 +854,100 @@ code {
   overflow-x: auto;
 }
 
+.freq-note {
+  margin: 0 0 8px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--muted, #5c6b62);
+}
+
+.freq-data {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.freq-datum {
+  border: 1px solid rgba(20, 36, 26, 0.16);
+  background: #fff;
+  border-radius: 8px;
+  min-width: 2.1rem;
+  padding: 4px 8px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  color: inherit;
+}
+
+.freq-datum.is-struck {
+  text-decoration: line-through;
+  color: #8a938c;
+  background: #f3f5f3;
+}
+
+.freq-cell {
+  width: 3.4rem;
+  border: 1px solid rgba(20, 36, 26, 0.22);
+  border-radius: 8px;
+  padding: 6px 4px;
+  text-align: center;
+  font: inherit;
+  font-weight: 700;
+  background: #fff;
+}
+
+.freq-grid td.is-locked,
+.freq-grid th.is-locked {
+  background: #eef6ef;
+  color: #1e6b3a;
+}
+
+.freq-build-value,
+.freq-build-freq {
+  width: 4.6rem;
+  border: 1px solid rgba(20, 36, 26, 0.22);
+  border-radius: 8px;
+  padding: 6px 4px;
+  text-align: center;
+  font: inherit;
+  font-weight: 700;
+  background: #fff;
+}
+
+.freq-build-value:disabled,
+.freq-build-freq:disabled {
+  background: transparent;
+  color: #1e6b3a;
+  border-color: transparent;
+}
+
+.freq-col-tools {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.freq-col-tools button,
+.freq-add-col {
+  border: 1px solid rgba(20, 36, 26, 0.16);
+  background: #fff;
+  border-radius: 8px;
+  padding: 2px 6px;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  color: inherit;
+}
+
+.freq-add-col {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  padding: 6px 12px;
+}
+
 .freq-grid {
   border-collapse: collapse;
   background: #fff;

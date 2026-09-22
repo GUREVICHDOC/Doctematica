@@ -20,9 +20,11 @@ function main() {
   add(page && page.topic === "statistics" && page.subtopic === "freq-table" && page.mode === "freq-table"
     ? { ok: true, id: "page-hierarchy" }
     : fail("page-hierarchy", page && page.topic));
-  add(page && page.exercises.length === 3 ? { ok: true, id: "two-exercises" } : fail("two-exercises", ""));
+  add(page && page.exercises.length === 8 ? { ok: true, id: "eight-exercises" } : fail("eight-exercises", String(page && page.exercises.length)));
   add(page && page.exercises[0].id === "stat-freq-1-ex-a001" && page.exercises[1].id === "stat-freq-1-ex-a002" &&
-    page.exercises[2].id === "stat-freq-1-ex-a003"
+    page.exercises[2].id === "stat-freq-1-ex-a003" && page.exercises[3].id === "stat-freq-1-ex-a004" &&
+    page.exercises[4].id === "stat-freq-1-ex-a005" && page.exercises[5].id === "stat-freq-1-ex-a006" &&
+    page.exercises[6].id === "stat-freq-1-ex-a007" && page.exercises[7].id === "stat-freq-1-ex-a008"
     ? { ok: true, id: "stable-ids" }
     : fail("stable-ids", ""));
   add(page.exercises[2].parts.map(function (part) { return part.label; }).join(",") === "א,ב,ד,ה,ו,ז,ח"
@@ -126,6 +128,7 @@ function main() {
         exerciseId: id,
         intent: step.intent || "check",
         typed: step.typed,
+        fill: step.fill,
         progress: progress,
       });
       if (last.progress) progress = last.progress;
@@ -519,6 +522,428 @@ function main() {
   add(freq.assess(grades, { kind: "scale" }, "כמותי").done
     ? { ok: true, id: "scale-short-still-quantitative" }
     : fail("scale-short-still-quantitative", ""));
+
+  function fillHandle(id, fill, progress, intent) {
+    return freq.handle(engine, {
+      levelId: "stat-freq-1",
+      exerciseId: id,
+      intent: intent || "check",
+      fill: fill,
+      progress: progress || { done: {}, phase: {}, found: {}, filled: {} },
+    });
+  }
+  function rowState(view, value) {
+    var rows = view && view.table && view.table.rows || [];
+    var i;
+    for (i = 0; i < rows.length; i++) {
+      if (String(rows[i].value) === String(value)) return rows[i];
+    }
+    return null;
+  }
+  var nutrition = studentDto.openProblem(engine, "stat-freq-1", 3);
+  var nutritionDump = JSON.stringify(nutrition);
+  add(nutrition && nutrition.problem.exerciseId === "stat-freq-1-ex-a004" && nutrition.problem.displayNumber === 4 &&
+    nutrition.problem.data.length === 15 && nutrition.view.input === "cells" && nutrition.view.data.length === 15
+    ? { ok: true, id: "nutrition-open" }
+    : fail("nutrition-open", nutritionDump.slice(0, 240)));
+  add(!/"freq":\s*\d/.test(nutritionDump) && nutrition.problem.parts.map(function (part) { return part.label; }).join(",") === "א,ב,ג"
+    ? { ok: true, id: "nutrition-hides-freqs" }
+    : fail("nutrition-hides-freqs", nutritionDump));
+  var booksOpen = studentDto.openProblem(engine, "stat-freq-1", 4);
+  var booksDump = JSON.stringify(booksOpen);
+  add(booksOpen && booksOpen.problem.exerciseId === "stat-freq-1-ex-a005" && booksOpen.problem.data.length === 17 &&
+    booksDump.indexOf("6") < 0 && !/"freq":\s*\d/.test(booksDump)
+    ? { ok: true, id: "books-hides-freqs" }
+    : fail("books-hides-freqs", booksDump.slice(0, 300)));
+
+  var early = fillHandle("stat-freq-1-ex-a004", null, null);
+  add(early.ok === false && early.view.part.label === "א"
+    ? { ok: true, id: "fill-before-table-blocks-later" }
+    : fail("fill-before-table-blocks-later", early.message));
+  var typedLater = freq.handle(engine, {
+    levelId: "stat-freq-1",
+    exerciseId: "stat-freq-1-ex-a004",
+    intent: "check",
+    typed: "2",
+    progress: { done: { fill: true }, phase: {}, found: {}, filled: {} },
+  });
+  add(typedLater.ok === false && typedLater.view.part.label === "א" && !typedLater.progress.done.fill
+    ? { ok: true, id: "fill-ignores-forced-done" }
+    : fail("fill-ignores-forced-done", JSON.stringify({ ok: typedLater.ok, part: typedLater.view && typedLater.view.part, done: typedLater.progress.done })));
+
+  var offHigh = fillHandle("stat-freq-1-ex-a004", { value: 6, typed: "4" });
+  add(offHigh.ok === false && offHigh.message.indexOf("מופע אחד נוסף") >= 0 && offHigh.message.indexOf("3") < 0
+    ? { ok: true, id: "fill-off-by-one-high" }
+    : fail("fill-off-by-one-high", offHigh.message));
+  var offLow = fillHandle("stat-freq-1-ex-a004", { value: 6, typed: "2" });
+  add(offLow.ok === false && offLow.message.indexOf("פספסתם מופע אחד") >= 0
+    ? { ok: true, id: "fill-off-by-one-low" }
+    : fail("fill-off-by-one-low", offLow.message));
+  var far = fillHandle("stat-freq-1-ex-a004", { value: 6, typed: "9" });
+  add(far.ok === false && far.message.indexOf("אינה נכונה") >= 0 && far.message.indexOf("מופע אחד") < 0 && far.message.indexOf("עודף") < 0
+    ? { ok: true, id: "fill-far-generic" }
+    : fail("fill-far-generic", far.message));
+  var asValue = fillHandle("stat-freq-1-ex-a004", { value: 6, typed: "6" });
+  add(asValue.ok === false && asValue.message.indexOf("הערך") >= 0 && asValue.message.indexOf("3") < 0
+    ? { ok: true, id: "fill-entered-value" }
+    : fail("fill-entered-value", asValue.message));
+  var marked = fillHandle("stat-freq-1-ex-a004", { value: 8, typed: "4" }, {
+    done: {}, phase: {}, found: {}, filled: {}, marks: [true, false, true],
+  });
+  add(marked.ok && marked.progress.filled["8"] === 4 && marked.progress.marks == null && rowState(marked.view, 8).locked &&
+    rowState(marked.view, 6).freq == null
+    ? { ok: true, id: "fill-marks-do-not-affect-check" }
+    : fail("fill-marks-do-not-affect-check", JSON.stringify({ ok: marked.ok, filled: marked.progress.filled, msg: marked.message })));
+
+  var order = [10, 8, 9, 7, 6];
+  var progress = { done: {}, phase: {}, found: {}, filled: {} };
+  order.forEach(function (value) {
+    var hit = fillHandle("stat-freq-1-ex-a004", { value: value, typed: { 6: "3", 7: "5", 8: "4", 9: "1", 10: "2" }[value] }, progress);
+    progress = hit.progress;
+    add(hit.ok && rowState(hit.view, value).locked
+      ? { ok: true, id: "fill-any-order-" + value }
+      : fail("fill-any-order-" + value, hit.message));
+  });
+  add(progress.done.fill && progress.view == null
+    ? { ok: true, id: "fill-complete-flag" }
+    : fail("fill-complete-flag", ""));
+  var afterFill = fillHandle("stat-freq-1-ex-a004", null, progress);
+  add(afterFill.view.part.label === "ב"
+    ? { ok: true, id: "fill-then-next-part" }
+    : fail("fill-then-next-part", afterFill.view && afterFill.view.part && afterFill.view.part.label));
+  var above = freq.handle(engine, {
+    levelId: "stat-freq-1",
+    exerciseId: "stat-freq-1-ex-a004",
+    intent: "check",
+    typed: "2",
+    progress: progress,
+  });
+  add(above.ok && above.view.part.label === "ג" && above.shows[0] === "2"
+    ? { ok: true, id: "nutrition-above-9" }
+    : fail("nutrition-above-9", JSON.stringify({ ok: above.ok, shows: above.shows, msg: above.message, part: above.view && above.view.part })));
+  var below = freq.handle(engine, {
+    levelId: "stat-freq-1",
+    exerciseId: "stat-freq-1-ex-a004",
+    intent: "check",
+    typed: "3 + 5 = 8",
+    progress: above.progress,
+  });
+  add(below.ok && below.view.solved
+    ? { ok: true, id: "nutrition-below-8" }
+    : fail("nutrition-below-8", JSON.stringify({ ok: below.ok, shows: below.shows, msg: below.message })));
+
+  var almost = { done: {}, phase: {}, found: {}, filled: { "6": 3, "7": 5, "8": 4, "9": 1 } };
+  var surplus = fillHandle("stat-freq-1-ex-a004", { value: 10, typed: "9" }, almost);
+  add(surplus.ok === false && surplus.message.indexOf("עודף") >= 0
+    ? { ok: true, id: "fill-surplus" }
+    : fail("fill-surplus", surplus.message));
+  var shortfall = fillHandle("stat-freq-1-ex-a004", { value: 10, typed: "0" }, almost);
+  add(shortfall.ok === false && shortfall.message.indexOf("חוסר") >= 0
+    ? { ok: true, id: "fill-shortfall" }
+    : fail("fill-shortfall", shortfall.message));
+  var lastSlip = fillHandle("stat-freq-1-ex-a004", { value: 10, typed: "1" }, almost);
+  add(lastSlip.ok === false && lastSlip.message.indexOf("מופע אחד") >= 0 && lastSlip.message.indexOf("חוסר") < 0
+    ? { ok: true, id: "fill-last-off-by-one" }
+    : fail("fill-last-off-by-one", lastSlip.message));
+
+  var guided = freq.handle(engine, {
+    levelId: "stat-freq-1",
+    exerciseId: "stat-freq-1-ex-a004",
+    intent: "step",
+    progress: { done: {}, phase: {}, found: {}, filled: { "10": 2, "8": 4 } },
+  });
+  add(guided.ok && guided.shows[0] === "השכיחות של 6 היא 3" && rowState(guided.view, 6).locked && !rowState(guided.view, 7).locked
+    ? { ok: true, id: "fill-step-smallest-open" }
+    : fail("fill-step-smallest-open", JSON.stringify(guided.shows)));
+  var solvedLines = freq.handle(engine, {
+    levelId: "stat-freq-1",
+    exerciseId: "stat-freq-1-ex-a004",
+    intent: "solution",
+    progress: { done: {}, phase: {}, found: {}, filled: {} },
+  });
+  add(solvedLines.ok && solvedLines.lines[0].show === "השכיחות של 6 היא 3" &&
+    solvedLines.lines[1].show === "השכיחות של 7 היא 5" && solvedLines.view.solved
+    ? { ok: true, id: "fill-solution-numeric-order" }
+    : fail("fill-solution-numeric-order", JSON.stringify(solvedLines.lines && solvedLines.lines.slice(0, 3))));
+
+  var messy = {
+    variable: { label: "ציון" },
+    frequency: { label: "תלמידים" },
+    rows: [{ value: 10 }, { value: 6 }, { value: 8 }],
+  };
+  var messyData = [10, 6, 6, 8, 10];
+  var messyStep = freq.nextStep(messy, { id: "fill", kind: "fillFreq" }, {}, messyData);
+  add(messyStep.line === "השכיחות של 6 היא 2"
+    ? { ok: true, id: "fill-unsorted-smallest-first" }
+    : fail("fill-unsorted-smallest-first", messyStep.line));
+  var messyNext = freq.nextStep(messy, { id: "fill", kind: "fillFreq" }, { filled: { "6": 2 } }, messyData);
+  add(messyNext.line === "השכיחות של 8 היא 1"
+    ? { ok: true, id: "fill-unsorted-then-8-not-10" }
+    : fail("fill-unsorted-then-8-not-10", messyNext.line));
+  var messyFar = freq.assess(messy, { id: "fill", kind: "fillFreq" }, "", { fill: { value: 10, typed: "9" } }, messyData);
+  add(messyFar.ok === false && messyFar.message.indexOf("עודף") >= 0
+    ? { ok: true, id: "fill-unsorted-surplus" }
+    : fail("fill-unsorted-surplus", messyFar.message));
+  var messySlip = freq.assess(messy, { id: "fill", kind: "fillFreq" }, "", { fill: { value: 8, typed: "2" } }, messyData);
+  add(messySlip.ok === false && messySlip.message.indexOf("מופע אחד נוסף") >= 0
+    ? { ok: true, id: "fill-unsorted-off-by-one" }
+    : fail("fill-unsorted-off-by-one", messySlip.message));
+
+  var bookProgress = { done: {}, phase: {}, found: {}, filled: {} };
+  [0, 5, 2, 4, 1, 3].forEach(function (value) {
+    var count = { 0: "2", 1: "3", 2: "1", 3: "2", 4: "6", 5: "3" }[value];
+    var hit = fillHandle("stat-freq-1-ex-a005", { value: value, typed: count }, bookProgress);
+    bookProgress = hit.progress;
+    add(hit.ok ? { ok: true, id: "books-fill-" + value } : fail("books-fill-" + value, hit.message));
+  });
+  var bookUnder = freq.handle(engine, {
+    levelId: "stat-freq-1",
+    exerciseId: "stat-freq-1-ex-a005",
+    intent: "check",
+    typed: "6",
+    progress: bookProgress,
+  });
+  add(bookUnder.ok && bookUnder.view.part.label === "ג"
+    ? { ok: true, id: "books-under-3" }
+    : fail("books-under-3", JSON.stringify({ ok: bookUnder.ok, shows: bookUnder.shows, msg: bookUnder.message, part: bookUnder.view && bookUnder.view.part })));
+  var bookYes = freq.handle(engine, {
+    levelId: "stat-freq-1",
+    exerciseId: "stat-freq-1-ex-a005",
+    intent: "check",
+    typed: "כן",
+    progress: bookUnder.progress,
+  });
+  add(bookYes.ok && bookYes.view.part.label === "ד"
+    ? { ok: true, id: "books-majority-yes" }
+    : fail("books-majority-yes", JSON.stringify({ ok: bookYes.ok, msg: bookYes.message, part: bookYes.view && bookYes.view.part })));
+  var bookNo = freq.handle(engine, {
+    levelId: "stat-freq-1",
+    exerciseId: "stat-freq-1-ex-a005",
+    intent: "check",
+    typed: "לא",
+    progress: bookUnder.progress,
+  });
+  add(bookNo.ok === false ? { ok: true, id: "books-majority-no" } : fail("books-majority-no", bookNo.message));
+  var bookMode = freq.handle(engine, {
+    levelId: "stat-freq-1",
+    exerciseId: "stat-freq-1-ex-a005",
+    intent: "check",
+    typed: "6",
+    progress: bookYes.progress,
+  });
+  add(bookMode.ok && bookMode.view.solved && bookMode.shows[0] === "6"
+    ? { ok: true, id: "books-mode-frequency" }
+    : fail("books-mode-frequency", JSON.stringify({ ok: bookMode.ok, shows: bookMode.shows, msg: bookMode.message })));
+  var bookValue = freq.handle(engine, {
+    levelId: "stat-freq-1",
+    exerciseId: "stat-freq-1-ex-a005",
+    intent: "check",
+    typed: "4",
+    progress: bookYes.progress,
+  });
+  add(bookValue.ok === false ? { ok: true, id: "books-mode-rejects-value" } : fail("books-mode-rejects-value", bookValue.message));
+
+  function buildHandle(id, columns, progress, intent, typed) {
+    return freq.handle(engine, {
+      levelId: "stat-freq-1",
+      exerciseId: id,
+      intent: intent || "check",
+      columns: columns,
+      typed: typed,
+      progress: progress || { done: {}, phase: {}, found: {}, filled: {}, columns: [] },
+    });
+  }
+  function col(value, freq) {
+    return { value: String(value), freq: String(freq) };
+  }
+  var soc = "stat-freq-1-ex-a006";
+  var glide = "stat-freq-1-ex-a007";
+  var food = "stat-freq-1-ex-a008";
+  var socSorted = [col(2, 3), col(6, 2), col(7, 6), col(8, 4), col(10, 1)];
+  var socOpen = studentDto.openProblem(engine, "stat-freq-1", 5);
+  var socDump = JSON.stringify(socOpen);
+  add(socOpen && socOpen.problem.exerciseId === soc && socOpen.problem.displayNumber === 6 &&
+    socOpen.view.input === "build" && socOpen.view.table.build && socOpen.view.table.columns.length === 0 &&
+    socOpen.view.table.variableLabel === "ציון" && socOpen.view.table.frequencyLabel === "מספר התלמידים" &&
+    socOpen.problem.data.length === 16 && socOpen.problem.table.rows.length === 0 &&
+    !/"freq":\s*\d/.test(socDump) && socDump.indexOf("entries") < 0
+    ? { ok: true, id: "soc-open-headers-only" }
+    : fail("soc-open-headers-only", socDump.slice(0, 400)));
+  var glideOpen = studentDto.openProblem(engine, "stat-freq-1", 6);
+  add(glideOpen && glideOpen.problem.data.length === 20 && glideOpen.view.input === "build" &&
+    glideOpen.view.table.columns.length === 0 && glideOpen.view.table.variableLabel === "מספר פעמים"
+    ? { ok: true, id: "glide-open-headers-only" }
+    : fail("glide-open-headers-only", JSON.stringify(glideOpen && glideOpen.view && glideOpen.view.table)));
+  var foodOpen = studentDto.openProblem(engine, "stat-freq-1", 7);
+  var foodDump = JSON.stringify(foodOpen);
+  add(foodOpen && foodOpen.view.input === "build" && foodOpen.view.table.columns.length === 0 &&
+    !foodOpen.problem.data && foodOpen.problem.table.rows.length === 0 &&
+    foodOpen.problem.stem.indexOf("פלאפל") >= 0 && foodOpen.problem.stem.indexOf("71") >= 0 &&
+    foodDump.indexOf("entries") < 0 && foodDump.indexOf("count") < 0 && !/"freq":\s*\d/.test(foodDump)
+    ? { ok: true, id: "food-open-hides-entries" }
+    : fail("food-open-hides-entries", foodDump.slice(0, 500)));
+
+  var socMiss = buildHandle(soc, [col(2, 3), col(6, 2), col(7, 6), col(8, 4)]);
+  add(socMiss.ok && !socMiss.progress.done.build && socMiss.message.indexOf("חסר") >= 0 && socMiss.view.input === "build"
+    ? { ok: true, id: "soc-missing-column" }
+    : fail("soc-missing-column", socMiss.message));
+  var socExtra = buildHandle(soc, socSorted.concat([{ value: "", freq: "" }]));
+  add(socExtra.ok === false && socExtra.message.indexOf("מיותרת") >= 0
+    ? { ok: true, id: "soc-extra-column" }
+    : fail("soc-extra-column", socExtra.message));
+  var socDup = buildHandle(soc, [col(2, 3), col(2, 3), col(6, 2)]);
+  add(socDup.ok === false && socDup.message.indexOf("יותר מעמודה") >= 0
+    ? { ok: true, id: "soc-duplicate-value" }
+    : fail("soc-duplicate-value", socDup.message));
+  var socUnknown = buildHandle(soc, [col(9, 1)]);
+  add(socUnknown.ok === false && socUnknown.message.indexOf("אינו מופיע") >= 0 &&
+    socUnknown.view.table.columns[0].valueLocked === false
+    ? { ok: true, id: "soc-unknown-value" }
+    : fail("soc-unknown-value", socUnknown.message));
+  var socSlip = buildHandle(soc, [col(2, 4)]);
+  add(socSlip.ok === false && socSlip.message.indexOf("נוסף") >= 0 &&
+    socSlip.view.table.columns[0].valueLocked === true && socSlip.view.table.columns[0].freqLocked === false
+    ? { ok: true, id: "soc-freq-off-by-one" }
+    : fail("soc-freq-off-by-one", JSON.stringify({ msg: socSlip.message, col: socSlip.view.table.columns[0] })));
+  var socValueAsFreq = buildHandle(soc, [col(2, 2)]);
+  add(socValueAsFreq.ok === false && socValueAsFreq.message.indexOf("עצמו") >= 0
+    ? { ok: true, id: "soc-typed-value-as-freq" }
+    : fail("soc-typed-value-as-freq", socValueAsFreq.message));
+  var socBig = buildHandle(soc, [col(2, 8)]);
+  add(socBig.ok === false && socBig.message.indexOf("אינה נכונה") >= 0 && socBig.message.indexOf("פספסתם") < 0
+    ? { ok: true, id: "soc-freq-generic" }
+    : fail("soc-freq-generic", socBig.message));
+  var socOrder = buildHandle(soc, [col(10, 1), col(8, 4), col(7, 6), col(6, 2), col(2, 3)]);
+  add(socOrder.ok && socOrder.status === "note" && !socOrder.progress.done.build &&
+    socOrder.message.indexOf("מהקטן לגדול") >= 0 && socOrder.view.part.label === "א" &&
+    socOrder.view.table.columns.every(function (item) { return item.freqLocked && item.valueLocked; })
+    ? { ok: true, id: "soc-wrong-order-is-not-calc-error" }
+    : fail("soc-wrong-order-is-not-calc-error", JSON.stringify({ ok: socOrder.ok, status: socOrder.status, msg: socOrder.message })));
+  var socDone = buildHandle(soc, socSorted, socOrder.progress);
+  add(socDone.ok && socDone.view.part.label === "ב"
+    ? { ok: true, id: "soc-sorted-continues" }
+    : fail("soc-sorted-continues", socDone.message + " " + (socDone.view && socDone.view.part && socDone.view.part.label)));
+  var socTotal = buildHandle(soc, null, socDone.progress, "check", "16");
+  add(socTotal.ok && socTotal.view.part.label === "ג"
+    ? { ok: true, id: "soc-class-total" }
+    : fail("soc-class-total", socTotal.message));
+  var socBetween = buildHandle(soc, null, socTotal.progress, "check", "6 + 4 + 1 = 11");
+  add(socBetween.ok && socBetween.view.solved
+    ? { ok: true, id: "soc-between-inclusive" }
+    : fail("soc-between-inclusive", JSON.stringify({ ok: socBetween.ok, msg: socBetween.message, shows: socBetween.shows })));
+
+  var random = { done: {}, phase: {}, found: {}, filled: {}, columns: [] };
+  var randomPairs = [[8, 4], [2, 3], [10, 1], [6, 2], [7, 6]];
+  var randomLast = null;
+  randomPairs.forEach(function (pair, index) {
+    var columns = randomPairs.slice(0, index + 1).map(function (item) { return col(item[0], item[1]); });
+    randomLast = buildHandle(soc, columns, random);
+    random = randomLast.progress;
+  });
+  add(randomLast && randomLast.status === "note" && randomLast.view.part.label === "א"
+    ? { ok: true, id: "soc-random-fill-then-order" }
+    : fail("soc-random-fill-then-order", randomLast && randomLast.message));
+  var randomFixed = buildHandle(soc, socSorted, random);
+  add(randomFixed.ok && randomFixed.view.part.label === "ב"
+    ? { ok: true, id: "soc-random-then-sort" }
+    : fail("soc-random-then-sort", randomFixed.message));
+  var forged = buildHandle(soc, [], { done: { build: true }, phase: {}, found: {}, filled: {}, columns: [] });
+  add(forged.ok === false && forged.view.part.label === "א"
+    ? { ok: true, id: "soc-forged-done-ignored" }
+    : fail("soc-forged-done-ignored", forged.view && forged.view.part && forged.view.part.label));
+  var socHint = buildHandle(soc, [], null, "hint");
+  add(socHint.ok && socHint.status === "hint" && !/\d/.test(socHint.message) && socHint.message.indexOf("עמודה") >= 0
+    ? { ok: true, id: "soc-hint-hides-column-count" }
+    : fail("soc-hint-hides-column-count", socHint.message));
+  var socStep = buildHandle(soc, [], null, "step");
+  add(socStep.ok && socStep.shows[0] === "הערך 2" && socStep.view.table.columns.length === 1 &&
+    socStep.view.table.columns[0].valueLocked && !socStep.view.table.columns[0].freqLocked
+    ? { ok: true, id: "soc-step-smallest-value" }
+    : fail("soc-step-smallest-value", JSON.stringify(socStep.shows)));
+  var socStep2 = buildHandle(soc, null, socStep.progress, "step");
+  add(socStep2.ok && socStep2.shows[0] === "השכיחות של 2 היא 3" && socStep2.view.table.columns[0].freqLocked
+    ? { ok: true, id: "soc-step-frequency" }
+    : fail("soc-step-frequency", JSON.stringify(socStep2.shows)));
+  var socSolution = buildHandle(soc, [], null, "solution");
+  var socLines = (socSolution.lines || []).map(function (line) { return line.show; }).join("\n");
+  add(socSolution.ok && socSolution.view.solved && socLines.indexOf("השכיחות של 2 היא 3") >= 0 &&
+    socLines.indexOf("11") >= 0 && socLines.indexOf("16") >= 0
+    ? { ok: true, id: "soc-full-solution" }
+    : fail("soc-full-solution", socLines));
+
+  var glideSorted = [col(1, 3), col(2, 4), col(3, 3), col(4, 5), col(5, 4), col(6, 1)];
+  var glideDone = buildHandle(glide, glideSorted);
+  var glideTotal = buildHandle(glide, null, glideDone.progress, "check", "20");
+  var glideUnder = buildHandle(glide, null, glideTotal.progress, "check", "7");
+  add(glideDone.view.part.label === "ב" && glideTotal.view.part.label === "ג" && glideUnder.view.solved
+    ? { ok: true, id: "glide-build-then-parts" }
+    : fail("glide-build-then-parts", JSON.stringify({
+      build: glideDone.view.part && glideDone.view.part.label,
+      total: glideTotal.message,
+      under: glideUnder.message,
+    })));
+  var glideStep = buildHandle(glide, [col(6, 1)], null, "step");
+  add(glideStep.shows[0] === "הערך 1"
+    ? { ok: true, id: "glide-step-smallest-not-first-typed" }
+    : fail("glide-step-smallest-not-first-typed", JSON.stringify(glideStep.shows)));
+
+  var foodPerm = [col("במבה", 36), col("צ׳יפס", 18), col("חומוס", 25), col("פלאפל", 71)];
+  var foodDone = buildHandle(food, foodPerm);
+  add(foodDone.ok && foodDone.view.part.label === "ב" && foodDone.status !== "note" &&
+    foodDone.view.table.rows.map(function (row) { return row.value; }).join(",") === "במבה,צ'יפס,חומוס,פלאפל"
+    ? { ok: true, id: "food-any-order" }
+    : fail("food-any-order", JSON.stringify({
+      ok: foodDone.ok,
+      status: foodDone.status,
+      msg: foodDone.message,
+      rows: foodDone.view && foodDone.view.table && foodDone.view.table.rows,
+    })));
+  var foodGuide = buildHandle(food, [col("פלאפל", 71), col("חומוס", 25), col("צ'יפס", 18), col("במבה", 36)]);
+  add(foodGuide.ok && foodGuide.view.part.label === "ב"
+    ? { ok: true, id: "food-guide-order-also-accepted" }
+    : fail("food-guide-order-also-accepted", foodGuide.message));
+  var foodMiss = buildHandle(food, [col("פלאפל", 71), col("חומוס", 25), col("צ'יפס", 18)]);
+  add(foodMiss.message.indexOf("חסר") >= 0 && !foodMiss.progress.done.build
+    ? { ok: true, id: "food-missing-category" }
+    : fail("food-missing-category", foodMiss.message));
+  var foodDup = buildHandle(food, [col("פלאפל", 71), col("פלאפל", 71)]);
+  add(foodDup.ok === false && foodDup.message.indexOf("יותר מעמודה") >= 0
+    ? { ok: true, id: "food-duplicate" }
+    : fail("food-duplicate", foodDup.message));
+  var foodUnknown = buildHandle(food, [col("פיצה", 10)]);
+  add(foodUnknown.ok === false && foodUnknown.message.indexOf("פיצה") >= 0
+    ? { ok: true, id: "food-unknown" }
+    : fail("food-unknown", foodUnknown.message));
+  var foodSlip = buildHandle(food, [col("פלאפל", 70)]);
+  add(foodSlip.ok === false && foodSlip.message.indexOf("פספסתם") >= 0
+    ? { ok: true, id: "food-freq-off-by-one" }
+    : fail("food-freq-off-by-one", foodSlip.message));
+  var foodBad = buildHandle(food, [col("פלאפל", 50)]);
+  add(foodBad.ok === false && foodBad.message.indexOf("אינה נכונה") >= 0
+    ? { ok: true, id: "food-freq-generic" }
+    : fail("food-freq-generic", foodBad.message));
+  var foodScale = buildHandle(food, null, foodDone.progress, "check", "איכותי");
+  add(foodScale.ok && foodScale.view.part.label === "ג"
+    ? { ok: true, id: "food-qualitative" }
+    : fail("food-qualitative", foodScale.message));
+  var foodQuant = buildHandle(food, null, foodDone.progress, "check", "כמותי");
+  add(foodQuant.ok === false ? { ok: true, id: "food-rejects-quantitative" } : fail("food-rejects-quantitative", foodQuant.message));
+  var foodMode = buildHandle(food, null, foodScale.progress, "check", "פלאפל");
+  add(foodMode.ok && foodMode.view.solved && foodMode.shows[0] === "פלאפל"
+    ? { ok: true, id: "food-mode-is-category" }
+    : fail("food-mode-is-category", JSON.stringify({ ok: foodMode.ok, shows: foodMode.shows, msg: foodMode.message })));
+  var foodCount = buildHandle(food, null, foodScale.progress, "check", "71");
+  add(foodCount.ok === false ? { ok: true, id: "food-mode-rejects-frequency" } : fail("food-mode-rejects-frequency", foodCount.message));
+  var foodStep = buildHandle(food, [col("במבה", 36)], null, "step");
+  add(foodStep.shows[0] === "הערך פלאפל" && foodStep.view.table.columns.length === 2
+    ? { ok: true, id: "food-step-uses-guide-order" }
+    : fail("food-step-uses-guide-order", JSON.stringify({ shows: foodStep.shows, n: foodStep.view.table.columns.length })));
+  var foodSolution = buildHandle(food, [], null, "solution");
+  var foodLines = (foodSolution.lines || []).map(function (line) { return line.show; }).join("\n");
+  add(foodSolution.view.solved && foodLines.indexOf("הערך פלאפל") >= 0 && foodLines.indexOf("איכותי") >= 0 &&
+    foodLines.indexOf("פלאפל") >= 0
+    ? { ok: true, id: "food-full-solution" }
+    : fail("food-full-solution", foodLines));
 
   var failed = checks.filter(function (item) { return !item.ok; });
   console.log("parity-freq-table: passed " + (checks.length - failed.length) + ", failed " + failed.length);

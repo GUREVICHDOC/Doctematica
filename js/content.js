@@ -130,10 +130,15 @@
         table: {
           variableLabel: variable.label || "",
           frequencyLabel: frequency.label || "",
-          rows: (table.rows || []).map(function (row) {
-            return { value: row.value, freq: row.freq };
+          fill: !!(ex.data && ex.data.length) && !table.build,
+          build: !!table.build,
+          rows: table.build ? [] : (table.rows || []).map(function (row) {
+            var cell = { value: row.value };
+            if (!(ex.data && ex.data.length) && row.freq != null) cell.freq = row.freq;
+            return cell;
           }),
         },
+        data: ex.data && ex.data.length ? ex.data.slice() : null,
         parts: (ex.parts || []).map(function (part) {
           return { label: part.label || "", text: part.text || "" };
         }),

@@ -492,8 +492,13 @@
       .replace(/ל[\-־—–](?=\s*[0-9]*\s*[xyXY])/gi, " \u2066");
   }
 
+  // «מ-70» הוא מקף עברי (יותר מ־70), לא המספר −70.
+  function hebrewMaqaf(text) {
+    return String(text || "").replace(/([\u05D0-\u05EA])[−–—\-]\s*(?=\d)/g, "$1־");
+  }
+
   function proseHTML(text) {
-    var src = detachHebrewFromMath(text);
+    var src = hebrewMaqaf(detachHebrewFromMath(text));
     var slots = [];
     function stash(chunk) {
       var id = "\x00M" + slots.length + "\x00";
@@ -517,6 +522,7 @@
     src = src.replace(
       /(^|[^A-Za-z0-9])([−–—-]\s*(?:\d+\s+\d+\s*\/\s*\d+|\(\d+\s*\/\s*\d+\)|\d+\s*\/\s*\d+|\d+(?:\.\d+)?))/g,
       function (_, pre, num) {
+        if (/[\u05D0-\u05EA]/.test(pre)) return pre + num;
         return pre + stash(num);
       }
     );

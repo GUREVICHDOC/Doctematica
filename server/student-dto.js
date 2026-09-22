@@ -80,6 +80,7 @@ function slimProblem(problem) {
     out.stem = problem.stem || "";
     out.prompt = problem.stem || problem.prompt || "";
     out.table = problem.table || null;
+    if (problem.data) out.data = problem.data;
     out.parts = (problem.parts || []).map(function (part) {
       return { label: part.label || "", text: part.text || "" };
     });

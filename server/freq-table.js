@@ -1,6 +1,6 @@
 "use strict";
 
-var OPS = { gt: true, lt: true, gte: true, lte: true, eq: true, in: true };
+var OPS = { gt: true, lt: true, gte: true, lte: true, eq: true, in: true, between: true };
 
 function sum(nums) {
   var total = 0;
@@ -40,11 +40,60 @@ function parseNumber(value) {
   return isFinite(n) ? n : null;
 }
 
-function compileTable(table) {
+function sameObservation(row, item) {
+  if (row.num != null) {
+    var num = typeof item === "number" && isFinite(item) ? item : parseNumber(item);
+    return num != null && sameNum(row.num, num);
+  }
+  return valueKey(item) === row.key;
+}
+
+function observeValue(value) {
+  var num = null;
+  if (typeof value === "number" && isFinite(value)) num = value;
+  else if (parseNumber(value) != null && String(value).trim() !== "") num = parseNumber(value);
+  return { value: num != null ? num : value, key: valueKey(value), num: num };
+}
+
+function rowsFromObservations(data, entries) {
+  var rows = [];
+  function add(value, freq) {
+    var seen = observeValue(value);
+    var existing = null;
+    var i;
+    for (i = 0; i < rows.length; i++) {
+      if (rows[i].key === seen.key || (seen.num != null && rows[i].num != null && sameNum(rows[i].num, seen.num))) {
+        existing = rows[i];
+        break;
+      }
+    }
+    if (existing) {
+      existing.freq += freq;
+      return;
+    }
+    rows.push({
+      value: seen.value,
+      key: seen.key,
+      num: seen.num,
+      freq: freq,
+      index: rows.length,
+    });
+  }
+  if (entries && entries.length) {
+    entries.forEach(function (item) { add(item.value, Number(item.count) || 0); });
+    return rows;
+  }
+  (data || []).forEach(function (item) { add(item, 1); });
+  return rows;
+}
+
+function compileTable(table, dataList, entries) {
   table = table || {};
   var variable = table.variable || {};
   var frequency = table.frequency || {};
-  var rows = (table.rows || []).map(function (row, index) {
+  var build = !!table.build;
+  var data = Array.isArray(dataList) ? dataList.slice() : null;
+  var rows = build ? rowsFromObservations(data, entries) : (table.rows || []).map(function (row, index) {
     var value = row.value;
     var num = null;
     if (typeof value === "number" && isFinite(value)) num = value;
@@ -66,11 +115,31 @@ function compileTable(table) {
     });
     scale = !numeric ? "qualitative" : fractional ? "continuous" : "discrete";
   }
+  var fill = !build && !!(data && data.length && rows.length);
+  if (fill) {
+    rows.forEach(function (row) {
+      var count = 0;
+      data.forEach(function (item) {
+        if (sameObservation(row, item)) count += 1;
+      });
+      row.freq = count;
+    });
+  }
+  var quantitative = scale !== "qualitative";
+  var ordered = rows.slice().sort(function (a, b) {
+    if (quantitative && a.num != null && b.num != null && !sameNum(a.num, b.num)) return a.num - b.num;
+    return a.index - b.index;
+  });
   return {
     variableLabel: variable.label || "",
     frequencyLabel: frequency.label || "",
     scale: scale,
     rows: rows,
+    ordered: ordered,
+    data: build && !(data && data.length) ? null : data,
+    fill: fill,
+    build: build,
+    quantitative: quantitative,
   };
 }
 
@@ -93,6 +162,12 @@ function compareOp(left, where) {
       if (num == null) return valueKey(item) === valueKey(left);
       return sameNum(left, num);
     });
+  }
+  if (where.op === "between") {
+    var low = Number(where.low);
+    var high = Number(where.high);
+    if (!isFinite(low) || !isFinite(high)) return false;
+    return left >= low && left <= high;
   }
   var right = Number(where.value);
   if (!isFinite(right)) return false;
@@ -137,6 +212,45 @@ function displayValue(row) {
     return formatInt(row.num);
   }
   return String(row.value);
+}
+
+function displayDatum(item) {
+  if (typeof item === "number" && isFinite(item)) return formatInt(item);
+  var num = parseNumber(item);
+  if (num != null && String(item).trim() !== "") return formatInt(num);
+  return String(item);
+}
+
+function fillOrder(compiled) {
+  return compiled.rows.slice().sort(function (a, b) {
+    if (a.num != null && b.num != null && !sameNum(a.num, b.num)) return a.num - b.num;
+    if (a.num != null && b.num == null) return -1;
+    if (a.num == null && b.num != null) return 1;
+    return a.index - b.index;
+  });
+}
+
+function nextOpenRow(compiled, progress) {
+  var filled = (progress && progress.filled) || {};
+  var order = fillOrder(compiled);
+  var i;
+  for (i = 0; i < order.length; i++) {
+    if (!Object.prototype.hasOwnProperty.call(filled, order[i].key)) return order[i];
+  }
+  return null;
+}
+
+function fillShow(row) {
+  return "השכיחות של " + displayValue(row) + " היא " + formatInt(row.freq);
+}
+
+function tableTotal(compiled) {
+  return sum(compiled.rows.map(function (row) { return Number(row.freq) || 0; }));
+}
+
+function population(compiled) {
+  if (compiled.data && compiled.data.length) return compiled.data.length;
+  return tableTotal(compiled);
 }
 
 function formatList(rows) {
@@ -674,9 +788,352 @@ function holds(total, op, value) {
   return compareOp(total, { op: op, value: value });
 }
 
+function decisionValue(compiled, task) {
+  if (task && task.against === "half") return population(compiled) / 2;
+  return Number(task && task.value);
+}
+
 function verdictWord(compiled, task) {
   var total = numericTotal(compiled, task.calc || { kind: "total" });
-  return holds(total, task.op, task.value) ? "כן" : "לא";
+  return holds(total, task.op, decisionValue(compiled, task)) ? "כן" : "לא";
+}
+
+function asCount(typed) {
+  var n = loneNumber(typed);
+  if (n == null) return null;
+  if (n < -1e-9 || Math.abs(n - Math.round(n)) > 1e-9) return NaN;
+  return Math.round(n);
+}
+
+function matchFill(compiled, task, typed, progress, entry) {
+  var row = null;
+  var countText = typed;
+  if (entry && entry.value != null && String(entry.value) !== "") {
+    row = findRow(compiled.rows, entry.value);
+    if (!row) return { ok: false, message: "הערך הזה לא מופיע בטבלה." };
+    countText = entry.typed;
+  } else {
+    var guided = nextOpenRow(compiled, progress);
+    if (!guided || String(typed || "").trim() !== fillShow(guided)) {
+      return { ok: false, message: "כתבו שכיחות באחד מתאי הטבלה." };
+    }
+    row = guided;
+    countText = formatInt(guided.freq);
+  }
+  var filled = {};
+  Object.keys((progress && progress.filled) || {}).forEach(function (key) {
+    filled[key] = progress.filled[key];
+  });
+  if (Object.prototype.hasOwnProperty.call(filled, row.key)) {
+    return { ok: false, message: "התא הזה כבר נעול." };
+  }
+  var n = asCount(countText);
+  if (n == null) return { ok: false, message: "כתבו את השכיחות כמספר." };
+  if (typeof n !== "number" || !isFinite(n)) {
+    return { ok: false, message: "שכיחות היא מספר הפעמים שהערך מופיע, ולכן היא מספר שלם שאינו שלילי." };
+  }
+  if (sameNum(n, row.freq)) {
+    filled[row.key] = row.freq;
+    var done = compiled.rows.every(function (item) {
+      return Object.prototype.hasOwnProperty.call(filled, item.key);
+    });
+    return {
+      ok: true,
+      done: done,
+      filled: filled,
+      shows: [fillShow(row)],
+      message: done ? "" : "התא נעול. אפשר למלא תא אחר.",
+    };
+  }
+  var valueText = displayValue(row);
+  if (row.num != null && sameNum(n, row.num) && !sameNum(row.num, row.freq)) {
+    return { ok: false, message: "כתבתם את הערך " + valueText + " עצמו. בתא צריך את מספר הפעמים שהוא מופיע ברשימה." };
+  }
+  if (sameNum(Math.abs(n - row.freq), 1)) {
+    var slip = n < row.freq ? "נראה שפספסתם מופע אחד." : "נראה שספרתם מופע אחד נוסף.";
+    return { ok: false, message: slip + " כדאי לספור שוב את " + valueText + "." };
+  }
+  var lockedSum = 0;
+  var open = 0;
+  compiled.rows.forEach(function (item) {
+    if (Object.prototype.hasOwnProperty.call(filled, item.key)) lockedSum += Number(filled[item.key]) || 0;
+    else open += 1;
+  });
+  var expectedTotal = tableTotal(compiled);
+  if (lockedSum + n > expectedTotal + 1e-9) {
+    return {
+      ok: false,
+      message: "נוצר עודף בספירה. יחד עם התאים שכבר מולאו, השכיחויות גדולות מ־" + formatInt(expectedTotal) + ", מספר הנתונים שמתאימים לערכי הטבלה.",
+    };
+  }
+  if (open === 1 && lockedSum + n < expectedTotal - 1e-9) {
+    return {
+      ok: false,
+      message: "נוצר חוסר בספירה. סכום השכיחויות קטן מ־" + formatInt(expectedTotal) + ", מספר הנתונים שמתאימים לערכי הטבלה.",
+    };
+  }
+  return { ok: false, message: "השכיחות של " + valueText + " אינה נכונה. עברו שוב על הרשימה וספרו את כל המופעים של הערך הזה." };
+}
+
+function countSlip(row, n) {
+  var valueText = displayValue(row);
+  if (row.num != null && sameNum(n, row.num) && !sameNum(row.num, row.freq)) {
+    return "כתבתם את הערך " + valueText + " עצמו. בתא צריך את מספר הפעמים שהוא מופיע ברשימה.";
+  }
+  if (sameNum(Math.abs(n - row.freq), 1)) {
+    var slip = n < row.freq ? "נראה שפספסתם מופע אחד." : "נראה שספרתם מופע אחד נוסף.";
+    return slip + " כדאי לספור שוב את " + valueText + ".";
+  }
+  return "השכיחות של " + valueText + " אינה נכונה. עברו שוב על הנתונים וספרו את כל המופעים של הערך הזה.";
+}
+
+function assessColumns(compiled, rawColumns) {
+  var incoming = (rawColumns || []).map(function (col) {
+    return {
+      value: col && col.value != null ? String(col.value).trim() : "",
+      freqText: col && col.freq != null ? String(col.freq).trim() : "",
+    };
+  });
+  var used = {};
+  var issues = [];
+  var columns = incoming.map(function (col) {
+    var out = { value: col.value, freq: col.freqText, valueLocked: false, freqLocked: false, issue: "" };
+    if (!col.value && !col.freqText) {
+      issues.push("empty");
+      return out;
+    }
+    if (!col.value) {
+      issues.push("novalue");
+      out.issue = "novalue";
+      return out;
+    }
+    var row = findRow(compiled.rows, col.value);
+    if (!row) {
+      issues.push("unknown");
+      out.issue = "unknown";
+      return out;
+    }
+    if (used[row.key]) {
+      out.value = displayValue(row);
+      issues.push("duplicate");
+      out.issue = "duplicate";
+      return out;
+    }
+    used[row.key] = true;
+    out.value = displayValue(row);
+    out.valueLocked = true;
+    if (!col.freqText) {
+      issues.push("nofreq");
+      out.issue = "nofreq";
+      return out;
+    }
+    var n = asCount(col.freqText);
+    if (n == null || typeof n !== "number" || !isFinite(n)) {
+      issues.push("badfreq");
+      out.issue = "badfreq";
+      return out;
+    }
+    if (!sameNum(n, row.freq)) {
+      issues.push("freq");
+      out.issue = "freq";
+      out.freqMessage = countSlip(row, n);
+      return out;
+    }
+    out.freq = formatInt(row.freq);
+    out.freqLocked = true;
+    return out;
+  });
+  var missing = compiled.rows.some(function (row) { return !used[row.key]; });
+  var emptyCount = 0;
+  columns.forEach(function (col) {
+    if (!col.value && !col.freq) emptyCount += 1;
+  });
+  var seq = [];
+  columns.forEach(function (col) {
+    if (!col.valueLocked) return;
+    var row = findRow(compiled.rows, col.value);
+    if (row) seq.push(row);
+  });
+  var inOrder = true;
+  if (compiled.quantitative) {
+    var ordered = compiled.ordered || compiled.rows;
+    if (seq.length !== ordered.length) inOrder = false;
+    else {
+      var i;
+      for (i = 0; i < ordered.length; i++) {
+        if (seq[i].key !== ordered[i].key) inOrder = false;
+      }
+    }
+  }
+  var message = "";
+  var status = "";
+  var ok = true;
+  var done = false;
+  var unknown = columns.filter(function (col) { return col.issue === "unknown"; })[0];
+  var duplicate = columns.filter(function (col) { return col.issue === "duplicate"; })[0];
+  var freqIssue = columns.filter(function (col) { return col.issue === "freq"; })[0];
+  if (unknown) {
+    message = "הערך " + unknown.value + " אינו מופיע בנתונים.";
+    ok = false;
+  } else if (duplicate) {
+    message = "הערך " + duplicate.value + " הוזן ביותר מעמודה אחת.";
+    ok = false;
+  } else if (freqIssue) {
+    message = freqIssue.freqMessage;
+    ok = false;
+  } else if (issues.indexOf("badfreq") >= 0 || issues.indexOf("novalue") >= 0) {
+    message = "בכל עמודה צריך ערך מהנתונים, ומתחתיו שכיחות שהיא מספר שלם שאינו שלילי.";
+    ok = false;
+  } else if (issues.indexOf("nofreq") >= 0) {
+    message = "לכל ערך שכתבתם, ספרו כמה פעמים הוא מופיע בנתונים.";
+    ok = columns.some(function (col) { return col.freqLocked; });
+  } else if (missing) {
+    message = columns.some(function (col) { return col.valueLocked; })
+      ? "חסר ערך שמופיע בנתונים. הוסיפו לו עמודה."
+      : "הוסיפו עמודה, וכתבו בה ערך מהנתונים ואת השכיחות שלו.";
+    ok = columns.some(function (col) { return col.freqLocked; });
+  } else if (emptyCount > 0) {
+    message = "יש עמודה מיותרת.";
+    ok = false;
+  } else if (compiled.quantitative && !inOrder) {
+    message = "הערכים והשכיחויות נכונים, אבל יש לסדר את ערכי המשתנה מהקטן לגדול.";
+    ok = true;
+    status = "note";
+  } else {
+    done = compiled.rows.length > 0;
+    ok = done;
+    message = "";
+  }
+  return {
+    ok: ok,
+    done: done,
+    status: status,
+    message: message,
+    missing: missing,
+    inOrder: inOrder,
+    columns: columns.map(function (col) {
+      return {
+        value: col.value,
+        freq: col.freq,
+        valueLocked: col.valueLocked,
+        freqLocked: col.freqLocked,
+      };
+    }),
+  };
+}
+
+function newBuildShows(prevRaw, columns, compiled) {
+  var prevFreq = {};
+  var prevValue = {};
+  (prevRaw || []).forEach(function (col) {
+    if (!col) return;
+    var row = findRow(compiled.rows, col.value);
+    if (!row) return;
+    prevValue[row.key] = true;
+    var n = asCount(col.freq);
+    if (n != null && sameNum(n, row.freq)) prevFreq[row.key] = true;
+  });
+  var shows = [];
+  columns.forEach(function (col) {
+    if (!col.valueLocked) return;
+    var row = findRow(compiled.rows, col.value);
+    if (!row) return;
+    if (col.freqLocked) {
+      if (!prevFreq[row.key]) shows.push(fillShow(row));
+      return;
+    }
+    if (!prevValue[row.key]) shows.push("הערך " + displayValue(row));
+  });
+  return shows;
+}
+
+function copyBuildColumns(columns) {
+  return (columns || []).map(function (col) {
+    return {
+      value: col.value == null ? "" : String(col.value),
+      freq: col.freq == null ? "" : String(col.freq),
+      valueLocked: !!col.valueLocked,
+      freqLocked: !!col.freqLocked,
+    };
+  });
+}
+
+function columnIndexFor(columns, row) {
+  var i;
+  for (i = 0; i < columns.length; i++) {
+    if (!columns[i].valueLocked) continue;
+    if (valueKey(columns[i].value) === row.key) return i;
+  }
+  return -1;
+}
+
+function firstBlankColumn(columns) {
+  var i;
+  for (i = 0; i < columns.length; i++) {
+    if (!String(columns[i].value || "").trim() && !String(columns[i].freq || "").trim()) return i;
+  }
+  return -1;
+}
+
+function nextBuildAction(compiled, rawColumns) {
+  var assessed = assessColumns(compiled, rawColumns);
+  var columns = assessed.columns;
+  var guide = compiled.ordered || compiled.rows;
+  var i;
+  for (i = 0; i < guide.length; i++) {
+    var row = guide[i];
+    var at = columnIndexFor(columns, row);
+    if (at < 0) {
+      var next = copyBuildColumns(columns);
+      var placed = { value: displayValue(row), freq: "", valueLocked: true, freqLocked: false };
+      var blank = firstBlankColumn(next);
+      if (blank >= 0) next[blank] = placed;
+      else next.push(placed);
+      return {
+        ok: true,
+        done: false,
+        columns: next,
+        shows: ["הערך " + displayValue(row)],
+        message: "",
+      };
+    }
+    if (!columns[at].freqLocked) {
+      var filled = copyBuildColumns(columns);
+      filled[at] = {
+        value: displayValue(row),
+        freq: formatInt(row.freq),
+        valueLocked: true,
+        freqLocked: true,
+      };
+      var again = assessColumns(compiled, filled);
+      return {
+        ok: true,
+        done: again.done,
+        status: again.done ? "" : "",
+        columns: again.columns,
+        shows: [fillShow(row)],
+        message: "",
+      };
+    }
+  }
+  if (assessed.status === "note") {
+    var sorted = guide.map(function (item) {
+      return {
+        value: displayValue(item),
+        freq: formatInt(item.freq),
+        valueLocked: true,
+        freqLocked: true,
+      };
+    });
+    return {
+      ok: true,
+      done: true,
+      columns: sorted,
+      shows: ["סדר עולה: " + guide.map(displayValue).join(", ")],
+      message: "",
+    };
+  }
+  return null;
 }
 
 function parseYesNo(typed) {
@@ -744,6 +1201,7 @@ function matchTask(compiled, task, typed, progress) {
   if (task.kind === "mode") return matchMode(compiled, task, typed, progress);
   if (task.kind === "matchValues") return matchValues(compiled, task, typed, progress);
   if (task.kind === "yesNo") return matchYesNo(compiled, task, typed, progress);
+  if (task.kind === "fillFreq") return matchFill(compiled, task, typed, progress, null);
   return { ok: false, message: "השאלה לא נתמכת." };
 }
 
@@ -758,7 +1216,7 @@ function taskIds(ex) {
 }
 
 function emptyProgress() {
-  return { done: {}, phase: {}, found: {} };
+  return { done: {}, phase: {}, found: {}, filled: {} };
 }
 
 function sanitizeProgress(ex, raw) {
@@ -778,6 +1236,54 @@ function sanitizeProgress(ex, raw) {
     progress.found[id] = raw.found[id].map(function (item) { return String(item); }).filter(Boolean);
   });
   return progress;
+}
+
+function sanitizeFilled(compiled, raw) {
+  var filled = {};
+  if (!compiled || !compiled.fill || !raw || typeof raw !== "object") return filled;
+  compiled.rows.forEach(function (row) {
+    if (!Object.prototype.hasOwnProperty.call(raw, row.key)) return;
+    var n = Number(raw[row.key]);
+    if (sameNum(n, row.freq)) filled[row.key] = row.freq;
+  });
+  return filled;
+}
+
+function sanitizeColumns(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 30).map(function (col) {
+    return {
+      value: col && col.value != null ? String(col.value).slice(0, 40) : "",
+      freq: col && col.freq != null ? String(col.freq).slice(0, 20) : "",
+    };
+  });
+}
+
+function reconcileBuild(compiled, ex, progress) {
+  if (!compiled || !compiled.build) return;
+  var result = assessColumns(compiled, progress.columns || []);
+  progress.columns = result.columns;
+  (ex.parts || []).forEach(function (part) {
+    (part.tasks || []).forEach(function (task) {
+      if (task.kind !== "buildFreq") return;
+      if (result.done) progress.done[task.id] = true;
+      else delete progress.done[task.id];
+    });
+  });
+}
+
+function reconcileFill(compiled, ex, progress) {
+  if (!compiled || !compiled.fill) return;
+  (ex.parts || []).forEach(function (part) {
+    (part.tasks || []).forEach(function (task) {
+      if (task.kind !== "fillFreq") return;
+      var complete = compiled.rows.length > 0 && compiled.rows.every(function (row) {
+        return Object.prototype.hasOwnProperty.call(progress.filled || {}, row.key);
+      });
+      if (complete) progress.done[task.id] = true;
+      else delete progress.done[task.id];
+    });
+  });
 }
 
 function openTasks(part, progress) {
@@ -825,18 +1331,93 @@ function activeAsk(part, task) {
   return text;
 }
 
-function viewOf(ex, progress) {
-  var current = currentPart(ex, progress);
-  if (!current) return { part: null, ask: "", input: "text", solved: true };
+function viewTable(compiled, progress) {
+  if (!compiled || !compiled.fill) return null;
+  var filled = (progress && progress.filled) || {};
   return {
-    part: { label: current.part.label || "", text: current.part.text || "" },
-    ask: activeAsk(current.part, current.task),
-    input: current.task.kind === "yesNo" ? "yesno" : "text",
-    solved: false,
+    variableLabel: compiled.variableLabel,
+    frequencyLabel: compiled.frequencyLabel,
+    fill: true,
+    rows: compiled.rows.map(function (row) {
+      var locked = Object.prototype.hasOwnProperty.call(filled, row.key);
+      return {
+        value: displayValue(row),
+        freq: locked ? filled[row.key] : null,
+        locked: locked,
+      };
+    }),
   };
 }
 
+function viewData(compiled) {
+  if (!compiled || !compiled.data) return null;
+  return compiled.data.map(displayDatum);
+}
+
+function viewBuild(compiled, progress, building) {
+  if (!compiled || !compiled.build) return null;
+  if (building) {
+    return {
+      build: true,
+      variableLabel: compiled.variableLabel,
+      frequencyLabel: compiled.frequencyLabel,
+      columns: ((progress && progress.columns) || []).map(function (col) {
+        return {
+          value: col.value == null ? "" : String(col.value),
+          freq: col.freq == null ? "" : String(col.freq),
+          valueLocked: !!col.valueLocked,
+          freqLocked: !!col.freqLocked,
+        };
+      }),
+    };
+  }
+  var source = compiled.ordered || compiled.rows;
+  if (!compiled.quantitative && progress && progress.columns && progress.columns.length) {
+    var kept = [];
+    progress.columns.forEach(function (col) {
+      if (!col.valueLocked || !col.freqLocked) return;
+      var row = findRow(compiled.rows, col.value);
+      if (row) kept.push(row);
+    });
+    if (kept.length === compiled.rows.length) source = kept;
+  }
+  return {
+    variableLabel: compiled.variableLabel,
+    frequencyLabel: compiled.frequencyLabel,
+    rows: source.map(function (row) {
+      return { value: displayValue(row), freq: row.freq, locked: true };
+    }),
+  };
+}
+
+function viewOf(ex, progress, compiled) {
+  var current = currentPart(ex, progress);
+  var building = !!(current && current.task.kind === "buildFreq");
+  var table = compiled && compiled.build ? viewBuild(compiled, progress, building) : viewTable(compiled, progress);
+  var data = viewData(compiled);
+  if (!current) {
+    var solved = { part: null, ask: "", input: "text", solved: true };
+    if (table) solved.table = table;
+    if (data) solved.data = data;
+    return solved;
+  }
+  var input = "text";
+  if (current.task.kind === "yesNo") input = "yesno";
+  if (current.task.kind === "fillFreq") input = "cells";
+  if (current.task.kind === "buildFreq") input = "build";
+  var view = {
+    part: { label: current.part.label || "", text: current.part.text || "" },
+    ask: activeAsk(current.part, current.task),
+    input: input,
+    solved: false,
+  };
+  if (table) view.table = table;
+  if (data) view.data = data;
+  return view;
+}
+
 function applyMatch(progress, task, result) {
+  if (result.filled) progress.filled = result.filled;
   if (result.found) progress.found[task.id] = result.found;
   if (result.phase) progress.phase[task.id] = result.phase;
   if (result.done) {
@@ -880,8 +1461,38 @@ function hintForTask(compiled, task, progress) {
     }
     return "עברו על השכיחויות ובדקו אילו מהן מקיימות את התנאי. רשמו את ערכי המשתנה המתאימים.";
   }
+  if (task.kind === "fillFreq") {
+    if (nextOpenRow(compiled, progress) && progress.filled && Object.keys(progress.filled).length) {
+      return "המשיכו לספור ברשימה את הערכים שהתא שלהם עוד פתוח.";
+    }
+    return "לכל ערך בטבלה, ספרו כמה פעמים הוא מופיע ברשימת הנתונים וכתבו את זה בתא שמתחתיו.";
+  }
+  if (task.kind === "buildFreq") {
+    var built = assessColumns(compiled, (progress && progress.columns) || []);
+    if (built.status === "note") {
+      return "הערכים והשכיחויות נכונים. סדרו את ערכי המשתנה מהקטן לגדול: הקטן ביותר מימין, והגדולים משמאלו.";
+    }
+    if (!built.ok && built.message.indexOf("אינו מופיע") >= 0) {
+      return "כל ערך בעמודה צריך להופיע בנתונים. מחקו ערך שלא מופיע.";
+    }
+    if (!built.ok && built.message.indexOf("יותר מעמודה") >= 0) {
+      return "כל ערך מופיע בעמודה אחת. מחקו את העמודה הכפולה.";
+    }
+    if (!built.ok && built.message.indexOf("מיותרת") >= 0) {
+      return "יש עמודה בלי ערך מהנתונים. מחקו אותה.";
+    }
+    var openFreq = built.columns.some(function (col) { return col.valueLocked && !col.freqLocked; });
+    var anyValue = built.columns.some(function (col) { return col.valueLocked; });
+    if (openFreq) return "ספרו כמה פעמים מופיע הערך שכתבתם, וכתבו את המספר בתא השכיחות.";
+    if (anyValue && built.missing) return "יש עוד ערך שמופיע בנתונים ואין לו עמודה. מצאו אותו והוסיפו עמודה.";
+    if (!anyValue) return "הוסיפו עמודה לכל ערך שונה שמופיע בנתונים, וכתבו מתחתיו כמה פעמים הוא מופיע.";
+    return "השלימו את הטבלה: לכל ערך מהנתונים עמודה אחת, ובה השכיחות שלו.";
+  }
   if (task.kind === "yesNo") {
     if (phase === "value") return "השוו את התוצאה לתנאי שבשאלה, וענו כן או לא.";
+    if (task.against === "half" && !phase) {
+      return "חשבו את הגודל שהשאלה בודקת, והשוו אותו למחצית מכלל הנתונים. אחר כך ענו כן או לא.";
+    }
     if (phase === "expr") return "חשבו את התוצאה, ואחר כך ענו כן או לא.";
     if (task.calc && task.calc.kind === "weightedSum") {
       return "כפלו כל ערך של המשתנה בשכיחות שלו, ואז חברו את המכפלות. בסוף ענו כן או לא.";
@@ -908,6 +1519,11 @@ function guidedExpr(compiled, task) {
 
 function nextLine(compiled, task, progress) {
   var phase = progress.phase[task.id] || "";
+  if (task.kind === "buildFreq") return null;
+  if (task.kind === "fillFreq") {
+    var openRow = nextOpenRow(compiled, progress);
+    return openRow ? fillShow(openRow) : null;
+  }
   if (task.kind === "identify") {
     return task.role === "frequency" ? compiled.frequencyLabel : compiled.variableLabel;
   }
@@ -987,17 +1603,58 @@ function respond(ex, compiled, progress, extra) {
     lines: extra.lines || null,
     part: extra.part || "",
     progress: progress,
-    view: viewOf(ex, progress),
+    view: viewOf(ex, progress, compiled),
   };
 }
 
-function checkTyped(compiled, ex, typed, progress) {
+function checkTyped(compiled, ex, typed, progress, fill, priorColumns) {
   var current = currentPart(ex, progress);
   if (!current) {
     return respond(ex, compiled, progress, {
       ok: true,
       status: "solved",
       message: "כל הסעיפים נכונים.",
+    });
+  }
+  if (current.task.kind === "buildFreq") {
+    var previous = priorColumns || [];
+    var built = assessColumns(compiled, progress.columns || []);
+    progress.columns = built.columns;
+    if (built.done) progress.done[current.task.id] = true;
+    else delete progress.done[current.task.id];
+    if (!built.ok) {
+      return {
+        ok: false,
+        message: built.message || "עוד לא.",
+        view: viewOf(ex, progress, compiled),
+        progress: progress,
+      };
+    }
+    var builtStatus = built.status === "note" ? "note" : statusAfter(ex, progress, false);
+    return respond(ex, compiled, progress, {
+      status: builtStatus,
+      message: built.status === "note" ? built.message : messageFor(builtStatus, built.message),
+      shows: built.status === "note" ? [] : newBuildShows(previous, built.columns, compiled),
+      part: current.part.label || "",
+    });
+  }
+  if (current.task.kind === "fillFreq") {
+    var filledResult = matchFill(compiled, current.task, typed, progress, fill || null);
+    if (!filledResult.ok) {
+      return {
+        ok: false,
+        message: filledResult.message || "עוד לא.",
+        view: viewOf(ex, progress, compiled),
+        progress: progress,
+      };
+    }
+    applyMatch(progress, current.task, filledResult);
+    var filledStatus = statusAfter(ex, progress, false);
+    return respond(ex, compiled, progress, {
+      status: filledStatus,
+      message: messageFor(filledStatus, filledResult.message),
+      shows: filledResult.shows || [],
+      part: current.part.label || "",
     });
   }
   var open = openTasks(current.part, progress);
@@ -1012,7 +1669,7 @@ function checkTyped(compiled, ex, typed, progress) {
     return {
       ok: false,
       message: (focusMiss && focusMiss.message) || "עוד לא.",
-      view: viewOf(ex, progress),
+      view: viewOf(ex, progress, compiled),
       progress: progress,
     };
   }
@@ -1051,9 +1708,25 @@ function hintResponse(compiled, ex, progress) {
   });
 }
 
+function stepBuildOnce(compiled, ex, progress) {
+  var current = currentPart(ex, progress);
+  if (!current) return null;
+  var action = nextBuildAction(compiled, progress.columns || []);
+  if (!action) return null;
+  progress.columns = action.columns;
+  if (action.done) progress.done[current.task.id] = true;
+  else delete progress.done[current.task.id];
+  return {
+    part: current.part.label || "",
+    shows: action.shows || [],
+    result: action,
+  };
+}
+
 function stepOnce(compiled, ex, progress) {
   var current = currentPart(ex, progress);
   if (!current) return null;
+  if (current.task.kind === "buildFreq") return stepBuildOnce(compiled, ex, progress);
   var phaseBefore = (progress.phase && progress.phase[current.task.id]) || "";
   var line = nextLine(compiled, current.task, progress);
   if (line == null) return null;
@@ -1073,7 +1746,7 @@ function stepOnce(compiled, ex, progress) {
 function stepResponse(compiled, ex, progress) {
   var stepped = stepOnce(compiled, ex, progress);
   if (!stepped) {
-    return { ok: false, message: "אין צעד נוסף.", view: viewOf(ex, progress), progress: progress };
+    return { ok: false, message: "אין צעד נוסף.", view: viewOf(ex, progress, compiled), progress: progress };
   }
   var onlySteps = !stepped.result.done;
   var status = statusAfter(ex, progress, onlySteps);
@@ -1119,19 +1792,37 @@ function loadExercise(engine, body) {
 function handle(engine, body) {
   var found = loadExercise(engine, body);
   if (!found) return { error: "unknown exercise", message: "unknown exercise" };
-  var compiled = compileTable(found.ex.table);
+  var compiled = compileTable(found.ex.table, found.ex.data, found.ex.entries);
   var progress = sanitizeProgress(found.ex, body.progress);
+  progress.filled = sanitizeFilled(compiled, body.progress && body.progress.filled);
+  var priorColumns = sanitizeColumns(body.progress && body.progress.columns);
+  var incoming = sanitizeColumns(body.columns != null ? body.columns : priorColumns);
+  progress.columns = incoming;
+  reconcileFill(compiled, found.ex, progress);
   var intent = String(body.intent || "check");
+  if (intent === "check" && compiled.build) {
+    var preview = assessColumns(compiled, incoming);
+    (found.ex.parts || []).forEach(function (part) {
+      (part.tasks || []).forEach(function (task) {
+        if (task.kind === "buildFreq" && !preview.done) delete progress.done[task.id];
+      });
+    });
+    return checkTyped(compiled, found.ex, body.typed, progress, body.fill, priorColumns);
+  }
+  reconcileBuild(compiled, found.ex, progress);
   if (intent === "hint") return hintResponse(compiled, found.ex, progress);
   if (intent === "step") return stepResponse(compiled, found.ex, progress);
   if (intent === "solution") return solutionResponse(compiled, found.ex, progress);
-  return checkTyped(compiled, found.ex, body.typed, progress);
+  return checkTyped(compiled, found.ex, body.typed, progress, body.fill, priorColumns);
 }
 
 function openingView(engine, levelId, index, exerciseId) {
   var found = findExercise(engine, levelId, null, index, exerciseId);
   if (!found) return null;
-  return viewOf(found.ex, emptyProgress());
+  var compiled = compileTable(found.ex.table, found.ex.data, found.ex.entries);
+  var progress = emptyProgress();
+  progress.columns = [];
+  return viewOf(found.ex, progress, compiled);
 }
 
 function withState(task, state) {
@@ -1143,22 +1834,39 @@ function withState(task, state) {
   return { id: id, progress: progress, task: Object.assign({ id: id }, task) };
 }
 
-function assess(table, task, typed, state) {
+function preparePacked(table, task, state, data) {
   var packed = withState(task, state);
-  var compiled = compileTable(table);
-  return matchTask(compiled, packed.task, typed, packed.progress);
+  var compiled = compileTable(table, data, state && state.entries);
+  packed.progress.filled = sanitizeFilled(compiled, state && state.filled);
+  packed.progress.columns = sanitizeColumns(state && state.columns);
+  if (compiled.build) reconcileBuild(compiled, { parts: [{ tasks: [packed.task] }] }, packed.progress);
+  return { packed: packed, compiled: compiled };
 }
 
-function hintText(table, task, state) {
-  var packed = withState(task, state);
-  return hintForTask(compileTable(table), packed.task, packed.progress);
+function assess(table, task, typed, state, data) {
+  var ready = preparePacked(table, task, state, data);
+  if (task && task.kind === "buildFreq") {
+    return assessColumns(ready.compiled, ready.packed.progress.columns);
+  }
+  if (state && state.fill) {
+    return matchFill(ready.compiled, ready.packed.task, typed, ready.packed.progress, state.fill);
+  }
+  return matchTask(ready.compiled, ready.packed.task, typed, ready.packed.progress);
 }
 
-function nextStep(table, task, state) {
-  var packed = withState(task, state);
-  var compiled = compileTable(table);
-  var line = nextLine(compiled, packed.task, packed.progress);
-  var result = line == null ? null : matchTask(compiled, packed.task, line, packed.progress);
+function hintText(table, task, state, data) {
+  var ready = preparePacked(table, task, state, data);
+  return hintForTask(ready.compiled, ready.packed.task, ready.packed.progress);
+}
+
+function nextStep(table, task, state, data) {
+  var ready = preparePacked(table, task, state, data);
+  if (task && task.kind === "buildFreq") {
+    var action = nextBuildAction(ready.compiled, ready.packed.progress.columns);
+    return { line: action && action.shows ? action.shows[0] : null, result: action, columns: action && action.columns };
+  }
+  var line = nextLine(ready.compiled, ready.packed.task, ready.packed.progress);
+  var result = line == null ? null : matchTask(ready.compiled, ready.packed.task, line, ready.packed.progress);
   return { line: line, result: result };
 }
 
