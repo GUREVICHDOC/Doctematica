@@ -14,168 +14,231 @@
     <link rel="stylesheet" href="css/math.css" />
     <link rel="stylesheet" href="css/coord-board.css" />
     <link rel="stylesheet" href="css/line-match.css" />
+    <link rel="stylesheet" href="css/shell.css?v=13" />
   </head>
-  <body>
-    <div class="ambiance" aria-hidden="true">
-      <svg class="plant plant-left" viewBox="0 0 220 720" fill="none">
-        <path
-          d="M48 720c8-92 18-168 52-236 22 48 70 78 132 86-78-28-118-82-128-148 36 22 92 18 138-8-86-8-138-58-156-122 40 10 86-8 118-42-72 4-118-38-132-98 32 6 64-14 82-46-48 12-86-18-98-62 22 4 40-12 48-34C86 48 62 22 48 0c-6 78 4 142-10 214-18 92-8 188 10 506z"
-          fill="#2f6b45"
-          opacity="0.22"
-        />
-        <path
-          d="M72 720c4-120-8-220 18-320 14 36 48 58 92 64-54-22-80-62-84-112 28 14 64 8 96-12-58-4-92-42-102-88 26 6 56-10 76-34-46 2-76-28-84-70 20 4 40-10 52-28-28 6-50-16-56-44 18 118 6 248-8 644z"
-          fill="#4a8f62"
-          opacity="0.28"
-        />
-        <ellipse cx="38" cy="210" rx="28" ry="54" transform="rotate(-28 38 210)" fill="#3d7a52" opacity="0.2" />
-        <ellipse cx="92" cy="132" rx="22" ry="40" transform="rotate(18 92 132)" fill="#2f6b45" opacity="0.18" />
-        <ellipse cx="54" cy="318" rx="34" ry="62" transform="rotate(-12 54 318)" fill="#5fa375" opacity="0.16" />
-      </svg>
-      <svg class="plant plant-right" viewBox="0 0 220 720" fill="none">
-        <path
-          d="M172 720c-8-92-18-168-52-236-22 48-70 78-132 86 78-28 118-82 128-148-36 22-92 18-138-8 86-8 138-58 156-122-40 10-86-8-118-42 72 4 118-38 132-98-32 6-64-14-82-46 48 12 86-18 98-62-22 4-40-12-48-34 16 38 40 64 54 86 6 78-4 142 10 214 18 92 8 188-10 506z"
-          fill="#2f6b45"
-          opacity="0.22"
-        />
-        <path
-          d="M148 720c-4-120 8-220-18-320-14 36-48 58-92 64 54-22 80-62 84-112-28 14-64 8-96-12 58-4 92-42 102-88-26 6-56-10-76-34 46 2 76-28 84-70-20 4-40-10-52-28 28 6 50-16 56-44-18 118-6 248 8 644z"
-          fill="#4a8f62"
-          opacity="0.28"
-        />
-        <ellipse cx="182" cy="248" rx="30" ry="56" transform="rotate(24 182 248)" fill="#3d7a52" opacity="0.2" />
-        <ellipse cx="128" cy="156" rx="24" ry="44" transform="rotate(-16 128 156)" fill="#2f6b45" opacity="0.18" />
-      </svg>
-      <span class="glyph g1">π</span>
-      <span class="glyph g2">×</span>
-      <span class="glyph g3">√</span>
-      <span class="glyph g4">+</span>
-      <span class="glyph g5">÷</span>
-      <span class="glyph g6">x²</span>
-      <span class="glyph g7">½</span>
-      <span class="glyph g8">−</span>
-      <span class="glyph g9">∞</span>
-      <span class="glyph g10">=</span>
-      <span class="glyph g11">7</span>
-      <span class="glyph g12">∫</span>
+  <body class="is-pick">
+    <div class="scene" aria-hidden="true">
+      <div class="scene-photo"></div>
+      <div class="doodles">
+        <span class="doodle c d-pi" dir="ltr">π ≈ 3.14</span>
+        <svg class="doodle y d-tri" viewBox="0 0 118 108" width="128" height="116" aria-hidden="true">
+          <path d="M22 16 V88 H108" fill="none" stroke="currentColor" stroke-width="2.2" />
+          <path d="M22 16 L108 88" fill="none" stroke="currentColor" stroke-width="2.2" />
+          <path d="M22 74 H36 V88" fill="none" stroke="currentColor" stroke-width="1.6" />
+          <text x="2" y="58" fill="currentColor" stroke="none" font-size="18" font-family="Times New Roman, serif">a</text>
+          <text x="58" y="106" fill="currentColor" stroke="none" font-size="18" font-family="Times New Roman, serif">b</text>
+          <text x="62" y="46" fill="currentColor" stroke="none" font-size="18" font-family="Times New Roman, serif">c</text>
+        </svg>
+        <span class="doodle y d-quad" dir="ltr">
+          <span class="df">
+            <span>x =</span>
+            <span class="df-frac">
+              <span class="df-num">−b ± √(b² − 4ac)</span>
+              <span class="df-den">2a</span>
+            </span>
+          </span>
+        </span>
+        <span class="doodle c d-sin" dir="ltr">sin(θ)</span>
+        <span class="doodle w d-int" dir="ltr">
+          <span class="d-int-row">
+            <span class="d-int-sign">∫</span>
+            <span class="d-bounds"><span>b</span><span>a</span></span>
+            <span>f(x) dx</span>
+          </span>
+        </span>
+        <span class="doodle y d-root" dir="ltr">√(a² + b²)</span>
+        <svg class="doodle w d-graph" viewBox="0 0 140 110" width="150" height="118" aria-hidden="true">
+          <path d="M22 18 V92 H128" fill="none" stroke="currentColor" stroke-width="2" />
+          <path d="M36 78 Q70 12 118 70" fill="none" stroke="currentColor" stroke-width="2" />
+          <path d="M122 86 L128 92 L120 96" fill="none" stroke="currentColor" stroke-width="2" />
+          <path d="M18 24 L22 18 L28 24" fill="none" stroke="currentColor" stroke-width="2" />
+          <text x="8" y="16" fill="currentColor" stroke="none" font-size="14" font-family="Times New Roman, serif">y</text>
+          <text x="124" y="108" fill="currentColor" stroke="none" font-size="14" font-family="Times New Roman, serif">x</text>
+        </svg>
+        <span class="doodle w d-line" dir="ltr">y = mx + b</span>
+        <span class="doodle c d-sum" dir="ltr">
+          <span class="d-sum-col">
+            <span>n</span>
+            <span class="d-sum-sign">∑</span>
+            <span>i = 1</span>
+          </span>
+        </span>
+        <span class="doodle y d-poly" dir="ltr">ax² + bx + c = 0</span>
+        <svg class="doodle c d-cube" viewBox="0 0 90 90" width="92" height="92" aria-hidden="true">
+          <path d="M16 32 L46 16 L76 32 L46 48 Z M16 32 V64 L46 80 V48 M76 32 V64 L46 80" fill="none" stroke="currentColor" stroke-width="1.8" />
+        </svg>
+        <span class="doodle c d-pi-r" dir="ltr">π ≈ 3.14</span>
+        <span class="doodle w d-line-r" dir="ltr">y = mx + b</span>
+      </div>
     </div>
-    <div class="page">
-      <header class="hero">
-        <p class="eyebrow">למורה ולתלמיד</p>
-        <h1>Doctematica</h1>
+
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <h1>Doctematica</h1>
+          <p class="eyebrow">למורה ולתלמיד</p>
+        </div>
         <div class="who" id="who-wrap">
-          <span id="whoami"></span>
+          <span class="who-avatar" id="who-avatar" aria-hidden="true"></span>
+          <span class="who-hello">שלום, <span id="whoami"></span></span>
           <button type="button" class="ghost hidden" id="logout-btn">יציאה</button>
         </div>
       </header>
 
-      <section class="panel" aria-label="בחירת נושא">
-        <h2>נושא</h2>
-        <div class="topics" id="topics"></div>
-        <div id="subtopics-wrap" class="hidden">
-          <h2 class="sub">תת-נושא</h2>
-          <div class="topics" id="subtopics"></div>
-        </div>
-        <div id="sources-wrap">
-          <h2 class="sub">דף תרגול</h2>
-          <div class="topics" id="sources"></div>
-        </div>
-        <div class="row" id="random-wrap">
-          <label>
-            רמה
-            <select id="level">
-              <option value="easy">קל</option>
-              <option value="medium" selected>בינוני</option>
-              <option value="hard">מאתגר</option>
-            </select>
-          </label>
-          <button type="button" class="ghost" id="new-problem">שאלה חדשה</button>
-        </div>
-        <div id="worksheet-nav" class="hidden">
-          <p class="instruction" id="instruction"></p>
-          <div class="topics" id="exercise-nums"></div>
-          <div class="row">
-            <button type="button" class="ghost" id="prev-ex">הקודם</button>
-            <button type="button" class="ghost" id="next-ex">הבא</button>
+      <div class="workspace">
+        <aside class="picker" aria-label="בחירת תרגיל">
+          <div class="rail" id="topic-rail">
+            <button
+              type="button"
+              id="nav-toggle"
+              class="rail-btn"
+              aria-label="פתיחה וסגירה של התפריט"
+              aria-expanded="false"
+            >
+              <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12.2 4.5 6.5 10l5.7 5.5" />
+              </svg>
+            </button>
           </div>
-        </div>
-        <div id="kinds-wrap">
-          <h2 class="sub">סוג משוואה</h2>
-          <div class="topics" id="kinds"></div>
-          <p class="bank-count" id="bank-count"></p>
-        </div>
-      </section>
 
-      <section class="card" aria-live="polite">
-        <div class="meta">
-          <span id="topic-label">משוואות בנעלם אחד</span>
-          <span id="score">0 נכונות ברצף</span>
-        </div>
-        <div class="solve-wrap" id="solve-wrap">
-          <div id="geo-board" class="geo-board hidden" aria-label="מערכת צירים"></div>
-          <aside id="sys-known" class="sys-known hidden" aria-label="משתנים ידועים"></aside>
-          <div class="solve-main">
-            <p class="prompt" id="prompt">טוען שאלה…</p>
-            <div id="geo-part" class="geo-part hidden"></div>
-            <div id="freq-table" class="freq-table hidden" aria-label="טבלת שכיחויות"></div>
-            <div id="line-match-panel" class="line-match-panel hidden" aria-label="שיוך משוואות לישרים"></div>
-            <ol class="steps hidden" id="steps" aria-label="צעדי המשוואה"></ol>
-            <div id="lcd-guide" class="lcd-guide hidden"></div>
-            <div id="factor-guide" class="factor-guide hidden"></div>
-            <div id="sys-guide" class="sys-guide hidden"></div>
-            <form id="answer-form">
-              <label id="answer-label">התשובה שלך</label>
-              <div id="domain-guide" class="domain-guide hidden"></div>
-              <div id="quad-guide" class="quad-guide hidden"></div>
-              <div id="freq-ask" class="freq-ask hidden"></div>
-              <div class="answer-row" id="answer-row">
-                <div id="math-wrap">
-                  <div class="math-line" id="math-field"></div>
-                </div>
-                <input id="freq-answer" class="freq-answer hidden" type="text" dir="rtl" autocomplete="off" placeholder="תשובה או שלב ביניים" />
-                <button type="submit" id="check">בדיקה</button>
-              </div>
-              <div id="percent-fields" class="percent-fields hidden"></div>
-              <div id="yesno-ask" class="yesno-ask hidden">
-                <p id="yesno-q"></p>
-                <div class="yesno-btns">
-                  <button type="button" id="yes-btn">כן</button>
-                  <button type="button" id="no-btn">לא</button>
-                </div>
-              </div>
-              <div id="reason-box" class="reason-box hidden">
-                <label for="reason-input">נימוק</label>
-                <div id="reason-choices" class="reason-choices"></div>
-                <textarea id="reason-input" rows="2" dir="rtl" placeholder="או כתבו נימוק משלכם"></textarea>
-                <button type="button" id="reason-check">שמירה</button>
-              </div>
-              <div class="math-actions" id="math-keys"></div>
-              <input id="answer" class="sr-only" name="answer" type="text" autocomplete="off" tabindex="-1" />
-              <p class="hint" id="hint">אפשר לכתוב מספר שלם, שבר כמו 3/4, או עשרוני כמו 0.75</p>
-            </form>
-            <div class="actions" id="eq-actions">
-              <button type="button" class="ghost hidden" id="domain-btn">הצג תחום הצבה</button>
-              <button type="button" class="ghost hidden" id="split-domain-btn">פיצול תחום</button>
-              <button type="button" class="ghost hidden" id="lcd-btn">ביצוע מכנה משותף</button>
-              <button type="button" class="ghost hidden" id="split-eqs-btn">חילוק למשוואות</button>
-              <button type="button" class="ghost hidden" id="use-formula-btn">נוסחת שורשים</button>
-              <button type="button" class="ghost hidden" id="md53-btn">md53</button>
-              <button type="button" class="ghost" id="hint-btn">רמז</button>
-              <button type="button" class="ghost" id="one-step-btn">צעד אחד</button>
-              <button type="button" class="ghost" id="show-solution">פתרון מלא</button>
-              <button type="button" class="hidden" id="next-after-solve">לתרגיל הבא</button>
+          <section class="nav-col" id="topics-col" aria-label="נושאים">
+            <div class="nav-scroll">
+              <button type="button" id="home-btn" class="nav-item">
+                <span class="nav-ico" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 11.5 12 4l8 7.5" />
+                    <path d="M7 10.5V20h10v-9.5" />
+                  </svg>
+                </span>
+                <span class="nav-label">בית</span>
+              </button>
+              <div class="topics" id="topics"></div>
             </div>
-            <div class="feedback hidden" id="feedback"></div>
-            <div class="model hidden" id="model"></div>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <footer>
-        <p>
-          Doctematica
-        </p>
-      </footer>
+          <section class="nav-col hidden" id="subtopics-wrap" aria-label="תתי נושאים">
+            <h2>
+              <span>תתי נושאים</span>
+              <span class="head-chev" aria-hidden="true">
+                <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.5 6.5 10l5.7 5.5" /></svg>
+              </span>
+            </h2>
+            <div class="nav-scroll">
+              <div class="topics" id="subtopics"></div>
+            </div>
+          </section>
+
+          <section class="nav-col" id="sources-wrap" aria-label="דפי תרגול">
+            <h2>
+              <span>דפי תרגול</span>
+              <span class="head-chev" aria-hidden="true">
+                <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.5 6.5 10l5.7 5.5" /></svg>
+              </span>
+            </h2>
+            <div class="nav-scroll">
+              <div class="topics" id="sources"></div>
+            </div>
+          </section>
+        </aside>
+
+        <button type="button" id="nav-scrim" class="nav-scrim hidden" aria-label="סגירת התפריט"></button>
+
+        <main class="solve-stage">
+          <nav class="crumb" id="crumb" aria-label="מיקום"></nav>
+          <section class="card solve-card" aria-live="polite">
+            <div id="worksheet-nav" class="hidden">
+              <div class="qstrip">
+                <button type="button" class="ghost" id="prev-ex">הקודם</button>
+                <div class="topics" id="exercise-nums"></div>
+                <button type="button" class="ghost" id="next-ex">הבא</button>
+                <span id="exercise-pos" dir="rtl"></span>
+              </div>
+              <p class="instruction" id="instruction"></p>
+            </div>
+            <div class="meta">
+              <span id="topic-label">משוואות בנעלם אחד</span>
+              <span id="score">0 נכונות ברצף</span>
+            </div>
+            <div class="row" id="random-wrap">
+              <label>
+                רמה
+                <select id="level">
+                  <option value="easy">קל</option>
+                  <option value="medium" selected>בינוני</option>
+                  <option value="hard">מאתגר</option>
+                </select>
+              </label>
+              <button type="button" class="ghost" id="new-problem">שאלה חדשה</button>
+            </div>
+            <div id="kinds-wrap">
+              <h2 class="sub">סוג משוואה</h2>
+              <div class="topics" id="kinds"></div>
+              <p class="bank-count" id="bank-count"></p>
+            </div>
+            <div class="solve-wrap" id="solve-wrap">
+              <div id="geo-board" class="geo-board hidden" aria-label="מערכת צירים"></div>
+              <aside id="sys-known" class="sys-known hidden" aria-label="משתנים ידועים"></aside>
+              <div class="solve-main">
+                <p class="prompt" id="prompt">טוען שאלה…</p>
+                <div id="geo-part" class="geo-part hidden"></div>
+                <div id="freq-table" class="freq-table hidden" aria-label="טבלת שכיחויות"></div>
+                <div id="line-match-panel" class="line-match-panel hidden" aria-label="שיוך משוואות לישרים"></div>
+                <ol class="steps hidden" id="steps" aria-label="צעדי המשוואה"></ol>
+                <div id="lcd-guide" class="lcd-guide hidden"></div>
+                <div id="factor-guide" class="factor-guide hidden"></div>
+                <div id="sys-guide" class="sys-guide hidden"></div>
+                <form id="answer-form">
+                  <label id="answer-label">התשובה שלך</label>
+                  <div id="domain-guide" class="domain-guide hidden"></div>
+                  <div id="quad-guide" class="quad-guide hidden"></div>
+                  <div id="freq-ask" class="freq-ask hidden"></div>
+                  <div class="answer-row" id="answer-row">
+                    <div id="math-wrap">
+                      <div class="math-line" id="math-field"></div>
+                    </div>
+                    <input id="freq-answer" class="freq-answer hidden" type="text" dir="rtl" autocomplete="off" placeholder="תשובה או שלב ביניים" />
+                    <button type="submit" id="check">בדיקה</button>
+                  </div>
+                  <div id="percent-fields" class="percent-fields hidden"></div>
+                  <div id="yesno-ask" class="yesno-ask hidden">
+                    <p id="yesno-q"></p>
+                    <div class="yesno-btns">
+                      <button type="button" id="yes-btn">כן</button>
+                      <button type="button" id="no-btn">לא</button>
+                    </div>
+                  </div>
+                  <div id="reason-box" class="reason-box hidden">
+                    <label for="reason-input">נימוק</label>
+                    <div id="reason-choices" class="reason-choices"></div>
+                    <textarea id="reason-input" rows="2" dir="rtl" placeholder="או כתבו נימוק משלכם"></textarea>
+                    <button type="button" id="reason-check">שמירה</button>
+                  </div>
+                  <div class="math-actions" id="math-keys"></div>
+                  <input id="answer" class="sr-only" name="answer" type="text" autocomplete="off" tabindex="-1" />
+                  <p class="hint" id="hint">אפשר לכתוב מספר שלם, שבר כמו 3/4, או עשרוני כמו 0.75</p>
+                </form>
+                <div class="actions" id="eq-actions">
+                  <button type="button" class="ghost hidden" id="domain-btn">הצג תחום הצבה</button>
+                  <button type="button" class="ghost hidden" id="split-domain-btn">פיצול תחום</button>
+                  <button type="button" class="ghost hidden" id="lcd-btn">ביצוע מכנה משותף</button>
+                  <button type="button" class="ghost hidden" id="split-eqs-btn">חילוק למשוואות</button>
+                  <button type="button" class="ghost hidden" id="use-formula-btn">נוסחת שורשים</button>
+                  <button type="button" class="ghost hidden" id="md53-btn">md53</button>
+                  <button type="button" class="ghost" id="hint-btn">רמז</button>
+                  <button type="button" class="ghost" id="one-step-btn">צעד אחד</button>
+                  <button type="button" class="ghost" id="show-solution">פתרון מלא</button>
+                  <button type="button" class="hidden" id="next-after-solve">לתרגיל הבא</button>
+                </div>
+                <div class="feedback hidden" id="feedback"></div>
+                <div class="model hidden" id="model"></div>
+              </div>
+            </div>
+          </section>
+          <footer>
+            <p>Doctematica</p>
+          </footer>
+        </main>
+      </div>
     </div>
     <script src="js/geo/draw.js"></script>
     <script src="js/coord-board.js"></script>

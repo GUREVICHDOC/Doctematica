@@ -16,6 +16,8 @@
       }
       if (out.data.user && who) {
         who.textContent = out.data.user.username;
+        var avatar = document.getElementById("who-avatar");
+        if (avatar) avatar.textContent = String(out.data.user.username || "").slice(0, 1);
         if (btn) btn.classList.remove("hidden");
       }
     })

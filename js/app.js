@@ -68,6 +68,14 @@
   var splitDomainBtn = document.getElementById("split-domain-btn");
   var domainGuideEl = document.getElementById("domain-guide");
   var lcdGuideEl = document.getElementById("lcd-guide");
+  var crumbEl = document.getElementById("crumb");
+  var exercisePosEl = document.getElementById("exercise-pos");
+  var topicRailEl = document.getElementById("topic-rail");
+  var navToggleBtn = document.getElementById("nav-toggle");
+  var homeBtn = document.getElementById("home-btn");
+  var navScrim = document.getElementById("nav-scrim");
+  var shellMode = "pick";
+  var navOpen = false;
 
   var state = {
     topic: "equations",
@@ -2101,6 +2109,24 @@
     return isQuadMode() || mixedPath() === "formula";
   }
 
+  function hideQuadGuide() {
+    if (!quadGuideEl) return;
+    quadGuideEl.classList.add("hidden");
+    quadGuideEl.innerHTML = "";
+  }
+
+  function hideSysPanels() {
+    if (sysGuideEl) {
+      sysGuideEl.classList.add("hidden");
+      sysGuideEl.innerHTML = "";
+    }
+    if (sysKnownEl) {
+      sysKnownEl.classList.add("hidden");
+      sysKnownEl.innerHTML = "";
+    }
+    if (solveWrap) solveWrap.classList.remove("is-system");
+  }
+
   function factorWorkActive() {
     return isFactorEqMode() || mixedPath() === "factor";
   }
@@ -3691,24 +3717,234 @@
     );
   }
 
+  function topicIconName(id) {
+    if (id === "equations") return "eq";
+    if (id === "quadratic") return "quad";
+    if (id === "high-power") return "pow";
+    if (id === "systems-sub") return "sys";
+    if (id === "percents") return "pct";
+    if (id === "analytic") return "geo";
+    if (id === "statistics") return "stat";
+    return "eq";
+  }
+
+  function navIcon(name) {
+    var common =
+      'viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+    if (name === "home") {
+      return "<svg " + common + '><path d="M4 11.5 12 4l8 7.5"/><path d="M7 10.5V20h10v-9.5"/></svg>';
+    }
+    if (name === "quad") {
+      return "<svg " + common + '><path d="M4 16c2.2-7 4.2-7 6.2 0s4 7 6.2 0"/><path d="M4 20h16"/></svg>';
+    }
+    if (name === "pow") {
+      return "<svg " + common + '><path d="M7 16l4-9 4 9"/><path d="M8.2 13h5.6"/><path d="M17 6h3"/></svg>';
+    }
+    if (name === "sys") {
+      return "<svg " + common + '><path d="M8 7h11"/><path d="M8 12h11"/><path d="M8 17h11"/><path d="M5 7h.01M5 12h.01M5 17h.01"/></svg>';
+    }
+    if (name === "pct") {
+      return "<svg " + common + '><circle cx="8" cy="8" r="2.2"/><circle cx="16" cy="16" r="2.2"/><path d="M16 6 8 18"/></svg>';
+    }
+    if (name === "geo") {
+      return "<svg " + common + '><path d="M4 20V5"/><path d="M4 20h16"/><path d="M4 20 16 8"/></svg>';
+    }
+    if (name === "stat") {
+      return "<svg " + common + '><path d="M5 19V11"/><path d="M10 19V6"/><path d="M15 19v-5"/><path d="M20 19V8"/><path d="M4 19h16"/></svg>';
+    }
+    return "<svg " + common + '><path d="M5 8h14"/><path d="M5 12h8"/><path d="M5 16h11"/></svg>';
+  }
+
+  function navChevronHtml() {
+    return '<span class="nav-chevron" aria-hidden="true"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.5 6.5 10l5.7 5.5"/></svg></span>';
+  }
+
+  function paintNavButton(btn, label, iconName, active, withChevron) {
+    btn.className = "nav-item" + (active ? " active" : "");
+    btn.innerHTML =
+      (iconName ? '<span class="nav-ico">' + navIcon(iconName) + "</span>" : "") +
+      '<span class="nav-label"></span>' +
+      (withChevron ? navChevronHtml() : "");
+    btn.querySelector(".nav-label").textContent = label;
+  }
+
+  function goHome() {
+    shellMode = "pick";
+    navOpen = false;
+    syncShell();
+  }
+
+  function enterSolve() {
+    shellMode = "solve";
+    navOpen = false;
+    syncShell();
+  }
+
+  function syncShell() {
+    document.body.classList.toggle("is-solve", shellMode === "solve");
+    document.body.classList.toggle("is-pick", shellMode !== "solve");
+    document.body.classList.toggle("nav-open", shellMode === "solve" && navOpen);
+    if (navToggleBtn) {
+      navToggleBtn.setAttribute("aria-expanded", shellMode === "solve" && navOpen ? "true" : "false");
+    }
+    if (homeBtn) homeBtn.classList.remove("active");
+    var navCols = document.querySelectorAll(".nav-col");
+    var collapsed = shellMode === "solve" && !navOpen;
+    for (var c = 0; c < navCols.length; c++) {
+      if (collapsed) navCols[c].setAttribute("inert", "");
+      else navCols[c].removeAttribute("inert");
+    }
+    if (navScrim) {
+      var overlay =
+        shellMode === "solve" &&
+        navOpen &&
+        window.matchMedia("(max-width: 1180px)").matches &&
+        window.matchMedia("(min-width: 861px)").matches;
+      navScrim.classList.toggle("hidden", !overlay);
+    }
+    renderCrumb();
+  }
+
+  function renderCrumb() {
+    if (!crumbEl) return;
+    crumbEl.innerHTML = "";
+    var bits = [{ label: "בית", home: true }];
+    var topics = (state.catalog && state.catalog.topics) || [];
+    var topic = topics.filter(function (t) {
+      return t.id === state.topic;
+    })[0];
+    if (topic) bits.push({ label: topic.label });
+    var subs = ((state.catalog && state.catalog.subtopics) || {})[state.topic] || [];
+    var sub = subs.filter(function (s) {
+      return s.id === state.subtopic;
+    })[0];
+    if (sub) bits.push({ label: sub.label });
+    if (shellMode === "solve") {
+      if (state.source === "random") bits.push({ label: "מאגר אקראי" });
+      else {
+        var level = currentLevel();
+        if (level && level.title) bits.push({ label: level.title });
+      }
+    }
+    bits.forEach(function (bit, i) {
+      if (i) {
+        var sep = document.createElement("span");
+        sep.className = "crumb-sep";
+        sep.setAttribute("aria-hidden", "true");
+        sep.textContent = "‹";
+        crumbEl.appendChild(sep);
+      }
+      if (bit.home) {
+        var link = document.createElement("button");
+        link.type = "button";
+        link.className = "crumb-link";
+        link.textContent = bit.label;
+        link.addEventListener("click", goHome);
+        crumbEl.appendChild(link);
+      } else {
+        var span = document.createElement("span");
+        span.textContent = bit.label;
+        crumbEl.appendChild(span);
+      }
+    });
+  }
+
+  function renderRail() {
+    if (!topicRailEl) return;
+    var old = topicRailEl.querySelectorAll(".rail-icon");
+    for (var i = 0; i < old.length; i++) old[i].remove();
+    var home = document.createElement("button");
+    home.type = "button";
+    home.className = "rail-icon";
+    home.title = "בית";
+    home.setAttribute("aria-label", "בית");
+    home.innerHTML = navIcon("home");
+    home.addEventListener("click", goHome);
+    topicRailEl.appendChild(home);
+    ((state.catalog && state.catalog.topics) || []).forEach(function (topic) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "rail-icon" + (shellMode === "solve" && topic.id === state.topic ? " active" : "");
+      btn.title = topic.label;
+      btn.setAttribute("aria-label", topic.label);
+      btn.innerHTML = navIcon(topicIconName(topic.id));
+      btn.addEventListener("click", function () {
+        if (shellMode === "solve") navOpen = true;
+        selectTopic(topic);
+      });
+      topicRailEl.appendChild(btn);
+    });
+  }
+
+  function revealExerciseBtn(btn) {
+    if (!exerciseNumsEl || !btn) return;
+    var left = btn.offsetLeft;
+    var right = left + btn.offsetWidth;
+    if (left < exerciseNumsEl.scrollLeft) exerciseNumsEl.scrollLeft = Math.max(0, left - 8);
+    else if (right > exerciseNumsEl.scrollLeft + exerciseNumsEl.clientWidth) {
+      exerciseNumsEl.scrollLeft = right - exerciseNumsEl.clientWidth + 8;
+    }
+  }
+
+  function selectTopic(topic) {
+    state.topic = topic.id;
+    state.source = "worksheet";
+    state.exerciseIndex = 0;
+    if (topic.id === "equations" || topic.id === "analytic" || topic.id === "statistics" || topic.id === "percents") {
+      var subs = ((state.catalog && state.catalog.subtopics) || {})[topic.id] || [];
+      state.subtopic = state.subtopic || (subs[0] && subs[0].id);
+      if (!subs.some(function (s) { return s.id === state.subtopic; })) {
+        state.subtopic = subs[0] ? subs[0].id : null;
+      }
+      if (topic.id === "equations" && state.subtopic !== "basic" && state.source === "random") {
+        state.source = "worksheet";
+      }
+    }
+    var first = topicLevels()[0];
+    state.levelId = first ? first.id : "level-01";
+    renderTopics();
+    renderSubtopics();
+    renderSources();
+    renderKinds();
+    nextProblem();
+  }
+
+  function selectSubtopic(item) {
+    state.subtopic = item.id;
+    state.source = "worksheet";
+    state.exerciseIndex = 0;
+    var first = topicLevels()[0];
+    state.levelId = first ? first.id : "level-01";
+    renderSubtopics();
+    renderSources();
+    nextProblem();
+  }
+
   function renderSources() {
     sourcesEl.innerHTML = "";
     if (!isGuidedMode()) {
       sourcesWrap.classList.add("hidden");
       worksheetNav.classList.add("hidden");
       randomWrap.classList.remove("hidden");
+      syncShell();
       return;
     }
     sourcesWrap.classList.remove("hidden");
     topicLevels().forEach(function (level) {
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.textContent = level.title;
-      btn.className = state.source === "worksheet" && state.levelId === level.id ? "active" : "";
+      paintNavButton(
+        btn,
+        level.title,
+        null,
+        state.source === "worksheet" && state.levelId === level.id,
+        true
+      );
       btn.addEventListener("click", function () {
         state.source = "worksheet";
         state.levelId = level.id;
         state.exerciseIndex = 0;
+        enterSolve();
         nextProblem();
       });
       sourcesEl.appendChild(btn);
@@ -3716,20 +3952,23 @@
     if (state.topic === "equations" && state.subtopic === "basic") {
       var randomBtn = document.createElement("button");
       randomBtn.type = "button";
-      randomBtn.textContent = "מאגר אקראי";
-      randomBtn.className = state.source === "random" ? "active" : "";
+      paintNavButton(randomBtn, "מאגר אקראי", null, state.source === "random", true);
       randomBtn.addEventListener("click", function () {
         state.source = "random";
+        enterSolve();
         nextProblem();
       });
       sourcesEl.appendChild(randomBtn);
     }
+    syncShell();
   }
 
   function renderWorksheetNav() {
     if (!isWorksheet()) {
       worksheetNav.classList.add("hidden");
       randomWrap.classList.remove("hidden");
+      if (exercisePosEl) exercisePosEl.textContent = "";
+      syncShell();
       return;
     }
     worksheetNav.classList.remove("hidden");
@@ -3746,24 +3985,36 @@
           : level.instruction;
     }
     exerciseNumsEl.innerHTML = "";
+    var total = level.exercises ? level.exercises.length : 0;
+    if (exercisePosEl) {
+      exercisePosEl.textContent = total ? "שאלה " + (state.exerciseIndex + 1) + " מתוך " + total : "";
+    }
     if (!level.exercises || !level.exercises.length) {
       prevExBtn.classList.add("hidden");
       nextExBtn.classList.add("hidden");
+      syncShell();
       return;
     }
     prevExBtn.classList.remove("hidden");
     nextExBtn.classList.remove("hidden");
+    var activeBtn = null;
     level.exercises.forEach(function (ex, index) {
       var btn = document.createElement("button");
       btn.type = "button";
       btn.textContent = String(index + 1);
       btn.className = index === state.exerciseIndex ? "active" : "";
+      if (index === state.exerciseIndex) {
+        btn.setAttribute("aria-current", "true");
+        activeBtn = btn;
+      }
       btn.addEventListener("click", function () {
         state.exerciseIndex = index;
         nextProblem();
       });
       exerciseNumsEl.appendChild(btn);
     });
+    if (activeBtn) revealExerciseBtn(activeBtn);
+    syncShell();
   }
 
   function renderTopics() {
@@ -3771,38 +4022,22 @@
     ((state.catalog && state.catalog.topics) || []).forEach(function (topic) {
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.textContent = topic.label;
-      btn.className = topic.id === state.topic ? "active" : "";
+      paintNavButton(btn, topic.label, topicIconName(topic.id), topic.id === state.topic, true);
       btn.addEventListener("click", function () {
-        state.topic = topic.id;
-        state.source = "worksheet";
-        state.exerciseIndex = 0;
-        if (topic.id === "equations" || topic.id === "analytic" || topic.id === "statistics" || topic.id === "percents") {
-          var subs = ((state.catalog && state.catalog.subtopics) || {})[topic.id] || [];
-          state.subtopic = state.subtopic || (subs[0] && subs[0].id);
-          if (!subs.some(function (s) { return s.id === state.subtopic; })) {
-            state.subtopic = subs[0] ? subs[0].id : null;
-          }
-          if (topic.id === "equations" && state.subtopic !== "basic" && state.source === "random") {
-            state.source = "worksheet";
-          }
-        }
-        var first = topicLevels()[0];
-        state.levelId = first ? first.id : "level-01";
-        renderTopics();
-        renderSubtopics();
-        renderSources();
-        renderKinds();
-        nextProblem();
+        selectTopic(topic);
       });
       topicsEl.appendChild(btn);
     });
+    renderRail();
+    syncShell();
   }
 
   function renderSubtopics() {
     var list = ((state.catalog && state.catalog.subtopics) || {})[state.topic] || [];
     if (!list.length) {
       subtopicsWrap.classList.add("hidden");
+      subtopicsEl.innerHTML = "";
+      syncShell();
       return;
     }
     subtopicsWrap.classList.remove("hidden");
@@ -3810,20 +4045,13 @@
     list.forEach(function (item) {
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.textContent = item.label;
-      btn.className = item.id === state.subtopic ? "active" : "";
+      paintNavButton(btn, item.label, null, item.id === state.subtopic, true);
       btn.addEventListener("click", function () {
-        state.subtopic = item.id;
-        state.source = "worksheet";
-        state.exerciseIndex = 0;
-        var first = topicLevels()[0];
-        state.levelId = first ? first.id : "level-01";
-        renderSubtopics();
-        renderSources();
-        nextProblem();
+        selectSubtopic(item);
       });
       subtopicsEl.appendChild(btn);
     });
+    syncShell();
   }
 
   function renderKinds() {
@@ -8158,6 +8386,9 @@
     eqActions.classList.remove("hidden");
     formEl.classList.remove("hidden");
     if (!isWorksheet()) {
+      renderSources();
+      renderWorksheetNav();
+      renderKinds();
       showBasicEqServerUnavailable();
       return;
     }
@@ -8217,12 +8448,17 @@
       state.lcdMarks = {};
       state.domain = null;
       state.quad = null;
+      state.factor = emptyFactorState();
+      state.mixed = emptyMixedState();
+      clearLcdAssist();
     } else if (isQuadMode()) {
       state.sys = null;
       state.history = [];
       state.lcdMarks = {};
       state.domain = null;
+      state.mixed = emptyMixedState();
       startQuadSession();
+      clearLcdAssist();
       clearGeoUi();
     } else if (state.problem && state.problem.mode === "freq-table") {
       state.sys = null;
@@ -8238,6 +8474,7 @@
       state.freqWorkDrafts = {};
       state.freqCellCursor = null;
       state.freqFocus = null;
+      clearLcdAssist();
       clearGeoUi();
     } else if (isPercentMode()) {
       state.sys = null;
@@ -8248,6 +8485,7 @@
       state.domain = null;
       state.history = [];
       state.freq = { step: "", done: false, found: {} };
+      clearLcdAssist();
       clearGeoUi();
     } else if (state.problem && state.problem.mode === "geo-length") {
       state.sys = null;
@@ -8271,6 +8509,8 @@
       clearGeoUi();
       if (isDomainLcdServerMode()) requestDenomSetup();
     }
+    if (!formulaWorkActive()) hideQuadGuide();
+    if (!isSystemMode() && !formulaWorkActive()) hideSysPanels();
     topicLabelEl.textContent = isWorksheet()
       ? (state.topic === "equations" ||
         isQuadraticTopic() ||
@@ -8784,6 +9024,30 @@
   newBtn.addEventListener("click", nextProblem);
   levelEl.addEventListener("change", nextProblem);
 
+  if (homeBtn) homeBtn.addEventListener("click", goHome);
+  if (navToggleBtn) {
+    navToggleBtn.addEventListener("click", function () {
+      if (shellMode !== "solve") return;
+      navOpen = !navOpen;
+      syncShell();
+    });
+  }
+  if (navScrim) {
+    navScrim.addEventListener("click", function () {
+      navOpen = false;
+      syncShell();
+    });
+  }
+  window.addEventListener("resize", function () {
+    if (shellMode === "solve") syncShell();
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && shellMode === "solve" && navOpen) {
+      navOpen = false;
+      syncShell();
+    }
+  });
+
   function loadCatalog() {
     fetch(API_ROOT + "/api/catalog", { credentials: "same-origin" })
       .then(function (res) {
@@ -8801,6 +9065,7 @@
       })
       .catch(function () {
         showBasicEqServerUnavailable();
+        enterSolve();
       });
   }
 
