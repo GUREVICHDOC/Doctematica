@@ -302,6 +302,12 @@
   min-width: 1.4em;
 }
 
+.ml-rad-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
 .ml-rad .ml-pow {
   align-self: center;
 }

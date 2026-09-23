@@ -160,6 +160,9 @@
         table: {
           variableLabel: variable.label || "",
           frequencyLabel: frequency.label || "",
+          columnOrder: table.rows && table.rows.length && table.rows.every(function (row) {
+            return row.value != null && String(row.value).trim() !== "" && isFinite(Number(row.value));
+          }) ? "asc" : "given",
           fill: !!(ex.data && ex.data.length) && !table.build,
           build: !!table.build,
           rows: table.build ? [] : (table.rows || []).map(function (row) {

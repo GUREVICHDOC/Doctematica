@@ -754,6 +754,22 @@
       return out;
     }
 
+    function solutionLineMatch(pack, task, letter, typed) {
+      var mp = mixedPackFor(pack, task, letter);
+      if (!mp) return false;
+      var want = normEq(asX(typed, letter));
+      if (!want) return false;
+      var bags = [];
+      if (mp.quad && mp.quad.steps) bags = bags.concat(mp.quad.steps);
+      if (mp.factor && mp.factor.steps) bags = bags.concat(mp.factor.steps);
+      if (mp.sqrt && mp.sqrt.steps) bags = bags.concat(mp.sqrt.steps);
+      var i;
+      for (i = 0; i < bags.length; i++) {
+        if (normEq(bags[i]) === want) return true;
+      }
+      return false;
+    }
+
     function mixedPackFor(pack, task, letter) {
       var Quad = Q();
       if (!Quad || !Quad.analyzeMixedStart) return null;
@@ -973,6 +989,20 @@
       }
       if (pts.length === 1 && ans.length === 1 && nearNum(pts[0].x, ans[0].x) && nearNum(pts[0].y, ans[0].y)) {
         return finishTask(maps, pack, task, String(task.unknownPoint || "B").toUpperCase() + formatPointPair(ans[0].x, ans[0].y));
+      }
+      if (
+        pts.length === 1 &&
+        ans.length > 1 &&
+        ans.some(function (a) {
+          return nearNum(a.x, pts[0].x) && nearNum(a.y, pts[0].y);
+        })
+      ) {
+        return acceptStep(
+          maps,
+          task,
+          String(typed || "").replace(/\s+/g, ""),
+          "נכון. רשמו גם את הנקודה השנייה."
+        );
       }
       return null;
     }
@@ -1210,7 +1240,14 @@
         }
       }
 
-      if (last && hasSqrt(last) && sides && !hasSqrt(raw)) {
+      var solLetterEarly = st.letter || letter || (unknownAxisOf(task) === "y" ? "y" : task.fromExpr ? "t" : "x");
+      if (
+        !(st.squared && solutionLineMatch(pack, task, solLetterEarly, raw)) &&
+        last &&
+        hasSqrt(last) &&
+        sides &&
+        !hasSqrt(raw)
+      ) {
         var prevSides = splitEq(stripDistTag(last));
         var d = distValue(task);
         var nL = evalMaybePow(sides.L);
@@ -1302,6 +1339,29 @@
             }
           } catch (eSkip) {}
         }
+      }
+      letter = st.letter || letter || (unknownAxisOf(task) === "y" ? "y" : task.fromExpr ? "t" : "x");
+      if (
+        (st.squared ||
+          (last && !hasSqrt(last) && /[xy]\^2|[xy]²/i.test(String(last).replace(/²/g, "^2")))) &&
+        solutionLineMatch(pack, task, letter, raw)
+      ) {
+        st.squared = true;
+        st.letter = letter;
+        extractRootValues(normEq(raw), letter).forEach(function (v) {
+          addFound(st, v, task);
+        });
+        var solKind = String(task.resultKind || "point");
+        if (solKind !== "point") {
+          var solFin = finishIfReady(maps, pack, task, raw.replace(/\s+/g, ""));
+          if (solFin) return solFin;
+        }
+        var solMsg = "נכון. המשיכו בפתרון.";
+        if (solKind === "point" && keepComplete(st, task)) {
+          solMsg =
+            "נכון. רשמו את הנקודה שמתאימה לנתונים" + (task.quadrant === 1 ? " (רביע ראשון)." : ".");
+        }
+        return acceptStep(maps, task, raw.replace(/\s+/g, ""), solMsg);
       }
       if (Quad && Quad.checkMixedTyped && (st.squared || (last && !hasSqrt(last)))) {
         var prev = last && !hasSqrt(last) ? last : st.mixedStart;
@@ -1464,9 +1524,7 @@
     function distUnknownWouldAccept(typed, pack, progress, lastNorm) {
       var s = String(typed || "").trim();
       if (!s) return false;
-      if (/^\s*a\s*=/i.test(s) && /b\s*=/i.test(s)) return false;
       if (lastNorm && normEq(s) === lastNorm) return false;
-      if (/^[xy]\s*[+\-−].*=\s*0$/i.test(s.replace(/\s+/g, "")) && !/\^2|²|x\(/i.test(s)) return false;
       var probe = {
         done: Object.assign({}, progress.done || {}),
         partial: Object.assign({}, progress.partial || {}),
@@ -1490,6 +1548,14 @@
       return false;
     }
 
+    function rewindPastSqrt(s) {
+      var t = String(s || "");
+      if (/[₁₂±]/.test(t) || /a\s*=/.test(t)) return false;
+      if (hasSqrt(t)) return true;
+      if (/^[xy]=0$/i.test(normEq(t))) return false;
+      return isEarlyDistUnknownMark(t);
+    }
+
     function nextDistUnknownStep(task, pack, progress) {
       var steps = canonicalDistUnknownSteps(task, pack);
       var last = progress.lastExpr && progress.lastExpr[task.id];
@@ -1504,14 +1570,14 @@
       var st = stOf(progress, task.id);
       var start = idx >= 0 ? idx + 1 : 0;
       var j;
-      if ((st.squared || (last && !hasSqrt(last) && /=/.test(String(last)))) && idx < 0) {
+      if (st.squared && idx < 0) {
         var si;
         for (si = 0; si < steps.length; si++) {
           if (!hasSqrt(steps[si]) && /[xy]\^2|[xy]²/i.test(String(steps[si]).replace(/²/g, "^2"))) start = si + 1;
         }
       }
       for (j = start; j < steps.length; j++) {
-        if ((st.squared || (last && !hasSqrt(last))) && (hasSqrt(steps[j]) || isEarlyDistUnknownMark(steps[j]))) continue;
+        if (st.squared && rewindPastSqrt(steps[j])) continue;
         if (distUnknownWouldAccept(steps[j], pack, progress, nLast)) return steps[j];
       }
       if (hasSqrt(last) && !st.squared) {

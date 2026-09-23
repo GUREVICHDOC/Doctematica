@@ -962,6 +962,93 @@ code {
   padding: 6px 12px;
 }
 
+.freq-add-select {
+  margin-top: 6px;
+  max-width: 9.2rem;
+  padding: 2px 4px;
+  border: 1px solid rgba(20, 36, 26, 0.16);
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.freq-remove-row {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  padding: 2px 6px;
+}
+
+.freq-row-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.freq-frac-edit {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2rem;
+  vertical-align: middle;
+  direction: ltr;
+}
+
+.freq-frac-slot {
+  width: 2.5rem;
+  height: 1.2rem;
+  border: 0;
+  padding: 0 2px;
+  text-align: center;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.2rem;
+  background: transparent;
+  direction: ltr;
+  color: inherit;
+}
+
+.freq-frac-slot::placeholder {
+  color: rgba(20, 36, 26, 0.28);
+}
+
+.freq-frac-slot[data-slot="num"] {
+  border-bottom: 2px solid currentColor;
+}
+
+.math-actions.is-frac-only > :not(:first-child) {
+  display: none;
+}
+
+.percent-frac-edit {
+  border: 1px solid rgba(20, 36, 26, 0.16);
+  border-radius: 12px;
+  background: #fff;
+  padding: 2px 8px;
+}
+
+.percent-frac-locked .m-expr {
+  font-size: 1em;
+}
+
+.freq-work-cell {
+  width: 4.4rem;
+  border: 1px solid rgba(20, 36, 26, 0.22);
+  border-radius: 8px;
+  padding: 6px 4px;
+  text-align: center;
+  font: inherit;
+  font-weight: 700;
+  background: #fff;
+  direction: ltr;
+}
+
 .freq-grid {
   width: max-content;
   border-collapse: collapse;
@@ -978,6 +1065,12 @@ code {
   text-align: center;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.freq-grid td .m-expr {
+  font-size: 0.95em;
+  line-height: 1;
+  vertical-align: middle;
 }
 
 .freq-grid th {

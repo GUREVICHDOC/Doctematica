@@ -29,6 +29,12 @@
     return { x: nx / nlen, y: ny / nlen };
   }
 
+  function pointCoordText(p, Geo) {
+    if (p && p.coordText) return String(p.coordText);
+    if (Geo && Geo.coordLabel) return Geo.coordLabel(p);
+    return String((p && p.label) || "");
+  }
+
   function pointLabelObstacles(points, sx, sy, Geo) {
     var out = [];
     points.forEach(function (p) {
@@ -38,7 +44,7 @@
       out.push({ x: cx, y: cy, r: 20 });
       var tx = cx + (p.x < 0 ? -8 : 8);
       var ty = cy - 10;
-      var label = Geo && Geo.coordLabel ? Geo.coordLabel(p) : String(p.label || "");
+      var label = pointCoordText(p, Geo);
       out.push({ x: tx, y: ty, r: Math.max(28, label.length * 4.2) });
     });
     return out;
@@ -1041,8 +1047,11 @@
       svg.appendChild(dot);
 
       var Geo = global.DoctematicaGeometry;
-      var label = Geo && Geo.coordLabel ? Geo.coordLabel(p) : p.label;
+      var label = pointCoordText(p, Geo);
       var labelHtml = Geo && Geo.coordLabelHTML ? Geo.coordLabelHTML(p) : null;
+      if (!labelHtml && label.indexOf("/") >= 0 && global.DoctematicaMath && DoctematicaMath.toHTML) {
+        labelHtml = DoctematicaMath.toHTML(label);
+      }
       var spot = pointLabelSpot(p, points);
       var tx = cx + spot.dx;
       var ty = cy + spot.dy;

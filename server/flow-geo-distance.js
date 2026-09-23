@@ -49,12 +49,14 @@ function walkExercise(engine, handler, levelId, ex, mode) {
   var saw = [];
   var caps = [];
   var heightAdds = 0;
+  var sawFormula = false;
+  var sawSplit = false;
   var i;
   for (i = 0; i < 400; i++) {
     var rec = reconstruct(engine, pack, history, { draw: draw });
     rec.draw = draw || rec.draw;
     if (!remainingRequired(pack, rec.done).length) {
-      return { ok: true, saw: saw, caps: caps, n: ex.n, history: history, geo: rec, pack: pack };
+      return { ok: true, saw: saw, caps: caps, n: ex.n, history: history, geo: rec, pack: pack, sawFormula: sawFormula, sawSplit: sawSplit };
     }
     var focus = G.currentFocusTask(pack, rec);
     if (!focus) {
@@ -130,7 +132,7 @@ function walkExercise(engine, handler, levelId, ex, mode) {
       continue;
     }
     if (one && one.ok && !one.step && !remainingRequired(pack, reconstruct(engine, pack, history, { draw: draw }).done).length) {
-      return { ok: true, saw: saw, caps: caps, n: ex.n, history: history, geo: reconstruct(engine, pack, history, { draw: draw }), pack: pack };
+      return { ok: true, saw: saw, caps: caps, n: ex.n, history: history, geo: reconstruct(engine, pack, history, { draw: draw }), pack: pack, sawFormula: sawFormula, sawSplit: sawSplit };
     }
     if (!one || !one.ok || !one.step) {
       return fail("walk-stuck:" + levelId + ":" + ex.n, JSON.stringify(one) + " saw=" + saw.join(">"));
@@ -144,6 +146,8 @@ function walkExercise(engine, handler, levelId, ex, mode) {
       geo: geoPayload,
       typed: one.step,
     });
+    if (ex.n === 16 && chk && chk.offerFormula) sawFormula = true;
+    if (ex.n === 16 && chk && chk.canSplit) sawSplit = true;
     if (!chk || !chk.ok) {
       return fail(
         "walk-onestep-rejected-by-check:" + levelId + ":" + ex.n,
@@ -245,13 +249,17 @@ function main() {
     if (ex.n === 16 || ex.n === 17 || ex.n === 23) {
       add(oneWalk.caps.indexOf("distance") >= 0 ? { ok: true, id: "n" + ex.n + "-used-distance" } : fail("n" + ex.n + "-used-distance", oneWalk.caps.join(">")));
     }
+    if (ex.n === 16) {
+      add(oneWalk.sawFormula ? { ok: true, id: "n16-offer-formula" } : fail("n16-offer-formula", "formula buttons never offered"));
+      add(oneWalk.sawSplit ? { ok: true, id: "n16-offer-split" } : fail("n16-offer-split", "split never offered"));
+    }
   });
 
   var src = fs.readFileSync(path.join(__dirname, "../js/app.js"), "utf8");
   add(/isGeoDistancePage/.test(src) && /geo-distance-1/.test(src) ? { ok: true, id: "client-dist-gate" } : fail("client-dist-gate", "missing"));
   add(/"distance"/.test(src) ? { ok: true, id: "client-capability" } : fail("client-capability", "missing"));
   add(/showBasicEqServerUnavailable/.test(src) && /isGeoDistancePage/.test(src) ? { ok: true, id: "node-off-wired" } : fail("node-off-wired", "missing"));
-  add(/isGeoDistancePage\(\) return false/.test(src) || /if \(isGeoDistancePage\(\)\) return false/.test(src) ? { ok: true, id: "no-mixed-ui-fallback" } : fail("no-mixed-ui-fallback", "geoEqSolveActive still on"));
+  add(/geoEqSolveActive\(\)\) return "mixed"/.test(src) ? { ok: true, id: "dist-uses-mixed-engine" } : fail("dist-uses-mixed-engine", "distance quadratic stage does not call the mixed engine"));
 
   var geoApi = fs.readFileSync(path.join(__dirname, "geometry.js"), "utf8");
   add(/capability === "distance"/.test(geoApi) ? { ok: true, id: "dist-capability-wired" } : fail("dist-capability-wired", "missing"));

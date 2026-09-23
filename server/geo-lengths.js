@@ -1024,6 +1024,51 @@ function progressForView(engine, pack, body, result) {
   return progress;
 }
 
+function attachDistQuadOffers(engine, pack, result) {
+  if (!result || result.error || !pack) return;
+  var Q = engine.DoctematicaQuadratic;
+  if (!Q || typeof Q.isAbcOrder !== "function" || typeof Q.parseABC !== "function") return;
+  var task = null;
+  (pack.tasks || []).some(function (t) {
+    if (String(t.kind || "") === "distUnknown" && !(result.done && result.done[t.id])) {
+      task = t;
+      return true;
+    }
+    return false;
+  });
+  if (!task) return;
+  var st = result.distUnk && result.distUnk[task.id];
+  var eq = result.lastExpr && result.lastExpr[task.id];
+  if (!st || !st.squared || !eq || /√|sqrt/i.test(String(eq))) {
+    result.offerFormula = false;
+    result.canSplit = false;
+    return;
+  }
+  var letter = String(st.letter || "x");
+  var asX = String(eq);
+  if (letter.toLowerCase() !== "x") {
+    var esc = letter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    asX = asX.replace(new RegExp("(?<![A-Za-z_])" + esc + "(?![A-Za-z])", "gi"), "x");
+  }
+  var offer = false;
+  try {
+    if (Q.isAbcOrder(asX)) {
+      var parsed = Q.parseABC(asX);
+      offer = !!(parsed && parsed.a);
+    }
+  } catch (errOffer) {
+    offer = false;
+  }
+  result.offerFormula = offer;
+  var split = false;
+  try {
+    split = typeof Q.isProductEq === "function" && Q.isProductEq(asX);
+  } catch (errSplit) {
+    split = false;
+  }
+  result.canSplit = !!split;
+}
+
 function handleLengths(engine, body) {
   var pack = packFor(engine, body.levelId, body.n, body.exerciseIndex, body.exerciseId);
   if (!pack) {
@@ -1037,6 +1082,7 @@ function handleLengths(engine, body) {
   else if (intent === "one-step") result = handleOneStep(engine, pack, body);
   else if (intent === "solution") result = handleSolution(engine, pack, body);
   else return { error: "unknown intent", message: "unknown intent" };
+  attachDistQuadOffers(engine, pack, result);
   if (result && !result.error) {
     try {
       result.view = require("./student-dto").buildClientView(

@@ -215,7 +215,7 @@
   }
 
   function quadraticSubtopic() {
-    if (isMixedServerMode()) return "mixed";
+    if (isMixedServerMode() || geoEqSolveActive()) return "mixed";
     if (isFactorServerMode()) return "factor";
     if (isFormulaServerMode()) return "formula";
     if (isSqrtServerMode()) return "sqrt";
@@ -361,6 +361,14 @@
     var subtopic = payload.subtopic || quadraticSubtopic();
     if (!subtopic) return false;
     if (equationsCheckBusy) return true;
+    if (geoEqSolveActive()) {
+      var chain = geoQuadChain();
+      payload = Object.assign({}, payload, {
+        start: chain.start,
+        history: chain.history,
+        previous: chain.history.length ? chain.history[chain.history.length - 1] : chain.start,
+      });
+    }
     equationsCheckBusy = true;
     var body = {
       topic: "quadratic",
@@ -684,7 +692,8 @@
   }
 
   function isGeoLengthsServerActive() {
-    if (!isGeoLengthMode() || geoEqSolveActive()) return false;
+    if (!isGeoLengthMode()) return false;
+    if (geoEqSolveActive() && mixedPath()) return false;
     var pack = state.problem && state.problem.geo;
     if (!pack) return false;
     if (
@@ -978,12 +987,56 @@
     }
   }
 
+  function splitFracDraft(text) {
+    var match = String(text || "").trim().match(/^(-?\d+(?:\.\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?)$/);
+    if (!match) return { num: String(text || "").trim(), den: "" };
+    return { num: match[1], den: match[2] };
+  }
+
+  function fracEditorValue(edit) {
+    if (!edit) return "";
+    var num = edit.querySelector('[data-slot="num"]');
+    var den = edit.querySelector('[data-slot="den"]');
+    var n = num ? String(num.value || "").trim() : "";
+    var d = den ? String(den.value || "").trim() : "";
+    if (n && d) return n + "/" + d;
+    return n || d;
+  }
+
+  function appendFracEditor(parent, opts) {
+    opts = opts || {};
+    var edit = document.createElement("span");
+    edit.className = "freq-frac-edit" + (opts.extraClass ? " " + opts.extraClass : "");
+    edit.dir = "ltr";
+    if (opts.row) edit.setAttribute("data-row", opts.row);
+    if (opts.value != null) edit.setAttribute("data-value", String(opts.value));
+    if (opts.id) edit.setAttribute("data-id", opts.id);
+    var parts = splitFracDraft(opts.draft);
+    ["num", "den"].forEach(function (slot) {
+      var input = document.createElement("input");
+      input.type = "text";
+      input.className = "freq-frac-slot";
+      input.dir = "ltr";
+      input.autocomplete = "off";
+      input.setAttribute("data-slot", slot);
+      input.setAttribute("inputmode", "decimal");
+      input.setAttribute("aria-label", (slot === "num" ? "מונה" : "מכנה") + (opts.label ? " " + opts.label : ""));
+      input.placeholder = "□";
+      input.value = parts[slot] || "";
+      edit.appendChild(input);
+    });
+    parent.appendChild(edit);
+    return edit;
+  }
+
   function readPercentFields() {
     var out = {};
     if (!percentFieldsEl) return out;
     var inputs = percentFieldsEl.querySelectorAll(".percent-field");
     var i;
     for (i = 0; i < inputs.length; i++) out[inputs[i].getAttribute("data-id")] = inputs[i].value;
+    var editors = percentFieldsEl.querySelectorAll(".percent-frac-edit");
+    for (i = 0; i < editors.length; i++) out[editors[i].getAttribute("data-id")] = fracEditorValue(editors[i]);
     return out;
   }
 
@@ -1002,6 +1055,21 @@
       row.className = "percent-field-row";
       var name = document.createElement("span");
       name.textContent = field.label ? field.label + ":" : "";
+      row.appendChild(name);
+      var shown = field.value != null && String(field.value) ? String(field.value) : (prev[field.id] || "");
+      if (field.id === "fraction" && (field.locked || state.locked) && shown && window.DoctematicaMath && DoctematicaMath.toHTML) {
+        var lockedFrac = document.createElement("span");
+        lockedFrac.className = "percent-frac-locked";
+        lockedFrac.innerHTML = DoctematicaMath.toHTML(shown);
+        row.appendChild(lockedFrac);
+        percentFieldsEl.appendChild(row);
+        return;
+      }
+      if (field.id === "fraction" && !field.locked && !state.locked) {
+        appendFracEditor(row, { id: field.id, draft: shown, label: field.label || "שבר", extraClass: "percent-frac-edit" });
+        percentFieldsEl.appendChild(row);
+        return;
+      }
       var input = document.createElement("input");
       input.type = "text";
       input.className = "percent-field";
@@ -1010,7 +1078,6 @@
       input.autocomplete = "off";
       input.value = field.value != null ? String(field.value) : (prev[field.id] || "");
       input.disabled = !!field.locked || !!state.locked;
-      row.appendChild(name);
       row.appendChild(input);
       if (field.unit) {
         var unit = document.createElement("span");
@@ -1019,6 +1086,26 @@
         row.appendChild(unit);
       }
       percentFieldsEl.appendChild(row);
+    });
+  }
+
+  function freqColumnOrder(table) {
+    if (table && (table.columnOrder === "asc" || table.columnOrder === "given")) return table.columnOrder;
+    var list = (table && table.rows) || [];
+    if (list.length && list.every(function (row) {
+      return row.value != null && String(row.value).trim() !== "" && isFinite(Number(String(row.value).replace(",", ".")));
+    })) return "asc";
+    return "given";
+  }
+
+  function orderFreqRows(table) {
+    var list = ((table && table.rows) || []).slice();
+    if (freqColumnOrder(table) !== "asc") return list;
+    return list.sort(function (a, b) {
+      var an = Number(String(a.value).replace(",", "."));
+      var bn = Number(String(b.value).replace(",", "."));
+      if (isFinite(an) && isFinite(bn) && an !== bn) return an - bn;
+      return 0;
     });
   }
 
@@ -1056,7 +1143,8 @@
     } else if (table) {
       var grid = document.createElement("table");
       grid.className = "freq-grid";
-      var rows = table.rows || [];
+      grid.setAttribute("dir", "rtl");
+      var rows = orderFreqRows(table);
       function addLabel(tr, label) {
         var th = document.createElement("th");
         th.textContent = label || "";
@@ -1075,8 +1163,23 @@
       rows.forEach(function (row) {
         var td = document.createElement("td");
         var value = row.value == null ? "" : String(row.value);
-        if (row.locked || (!filling && row.freq != null)) {
-          td.textContent = row.freq == null ? "" : String(row.freq);
+        td.setAttribute("data-row", "freq");
+        td.setAttribute("data-value", value);
+        if (row.open) {
+          var openCell = document.createElement("input");
+          openCell.type = "text";
+          openCell.className = "freq-cell";
+          openCell.setAttribute("dir", "ltr");
+          openCell.setAttribute("data-value", value);
+          openCell.setAttribute("aria-label", "שכיחות של " + value);
+          openCell.autocomplete = "off";
+          openCell.value = state.freqDrafts && state.freqDrafts[value] != null ? state.freqDrafts[value] : (row.expr || "");
+          td.appendChild(openCell);
+        } else if (row.locked || (!filling && row.freq != null)) {
+          if (row.freq == null && row.expr) {
+            if (window.DoctematicaMath && DoctematicaMath.toHTML) td.innerHTML = DoctematicaMath.toHTML(String(row.expr));
+            else td.textContent = String(row.expr);
+          } else td.textContent = row.freq == null ? "" : String(row.freq);
           if (row.locked) td.classList.add("is-locked");
         } else if (filling) {
           var input = document.createElement("input");
@@ -1092,16 +1195,23 @@
         freqRow.appendChild(td);
       });
       grid.appendChild(freqRow);
+      renderWorkBands(grid);
       appendFreqGrid(grid);
+      renderWorkTools();
     }
     freqTableEl.classList.remove("hidden");
     requestAnimationFrame(fitFreqTable);
+    if (state.freqCellCursor) {
+      var stayed = focusAfterLockedFreqCell(state.freqCellCursor);
+      state.freqCellCursor = null;
+      if (stayed) return;
+    }
     if (building) {
       var openInput = freqTableEl.querySelector(".freq-build-value:not(:disabled), .freq-build-freq:not(:disabled)");
       if (openInput) openInput.focus();
       return;
     }
-    if (!filling) return;
+    if (!filling && !freqTableEl.querySelector(".freq-cell")) return;
     var focusValue = state.freqFocus;
     var again = focusValue != null ? freqTableEl.querySelector('.freq-cell[data-value="' + focusValue + '"]') : null;
     if (again) again.focus();
@@ -1115,6 +1225,7 @@
     var columns = (table && table.columns) || [];
     var grid = document.createElement("table");
     grid.className = "freq-grid freq-build";
+    grid.setAttribute("dir", "rtl");
     function field(className, value, locked, label) {
       var input = document.createElement("input");
       input.type = "text";
@@ -1172,12 +1283,99 @@
       freqRow.appendChild(td);
     });
     grid.appendChild(freqRow);
+    renderWorkBands(grid);
     appendFreqGrid(grid);
+    renderWorkTools();
     var add = document.createElement("button");
     add.type = "button";
     add.className = "freq-add-col";
     add.textContent = "הוספת עמודה";
     freqTableEl.appendChild(add);
+  }
+
+  function renderWorkBands(grid) {
+    var work = (state.freqView && state.freqView.work) || {};
+    (work.rows || []).forEach(function (band) {
+      var tr = document.createElement("tr");
+      var th = document.createElement("th");
+      th.textContent = band.label || "";
+      if (band.removable && !state.locked) {
+        var remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "freq-remove-row";
+        remove.setAttribute("data-row", band.row || "");
+        remove.textContent = "הסרה";
+        th.appendChild(document.createElement("br"));
+        th.appendChild(remove);
+      }
+      tr.appendChild(th);
+      var tableOrder = freqColumnOrder((state.freqView && state.freqView.table) || (state.problem && state.problem.table) || {});
+      var bandCells = (band.cells || []).slice();
+      if (tableOrder === "asc") {
+        bandCells.sort(function (a, b) {
+          var an = Number(String(a.value).replace(",", "."));
+          var bn = Number(String(b.value).replace(",", "."));
+          if (isFinite(an) && isFinite(bn) && an !== bn) return an - bn;
+          return 0;
+        });
+      }
+      bandCells.forEach(function (cell) {
+        var td = document.createElement("td");
+        td.setAttribute("data-row", band.row || "");
+        td.setAttribute("data-value", cell.value == null ? "" : String(cell.value));
+        if (cell.locked) {
+          var lockedText = cell.text || "";
+          td.classList.add("is-locked");
+          if (lockedText.indexOf("/") >= 0 && window.DoctematicaMath && DoctematicaMath.toHTML) {
+            td.innerHTML = DoctematicaMath.toHTML(lockedText);
+          } else td.textContent = lockedText;
+        } else if (!state.locked && band.row === "relativeFraction") {
+          var fracKey = (band.row || "") + ":" + (cell.value == null ? "" : cell.value);
+          appendFracEditor(td, {
+            row: band.row,
+            value: cell.value,
+            draft: state.freqWorkDrafts && state.freqWorkDrafts[fracKey],
+            label: (band.label || "שבר") + " " + (cell.value == null ? "" : cell.value),
+          });
+        } else if (!state.locked) {
+          var input = document.createElement("input");
+          input.type = "text";
+          input.className = "freq-work-cell";
+          input.dir = "ltr";
+          input.autocomplete = "off";
+          input.setAttribute("data-row", band.row || "");
+          input.setAttribute("data-value", cell.value == null ? "" : String(cell.value));
+          input.setAttribute("aria-label", (band.label || "שורה") + " " + (cell.value == null ? "" : cell.value));
+          var draftKey = (band.row || "") + ":" + (cell.value == null ? "" : cell.value);
+          if (state.freqWorkDrafts && state.freqWorkDrafts[draftKey] != null) input.value = state.freqWorkDrafts[draftKey];
+          td.appendChild(input);
+        }
+        tr.appendChild(td);
+      });
+      grid.appendChild(tr);
+    });
+  }
+
+  function renderWorkTools() {
+    var work = (state.freqView && state.freqView.work) || {};
+    if (!freqTableEl || state.locked || !(work.available || []).length) return;
+    var bar = document.createElement("div");
+    bar.className = "freq-row-tools";
+    var select = document.createElement("select");
+    select.className = "freq-add-select";
+    select.setAttribute("aria-label", "הוספת שורת שכיחות יחסית");
+    var blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = "הוספת שורה";
+    select.appendChild(blank);
+    work.available.forEach(function (item) {
+      var option = document.createElement("option");
+      option.value = item.row || "";
+      option.textContent = item.label || "שורה";
+      select.appendChild(option);
+    });
+    bar.appendChild(select);
+    freqTableEl.appendChild(bar);
   }
 
   function appendFreqGrid(grid) {
@@ -1250,6 +1448,161 @@
     return inputs[0] || null;
   }
 
+  function submitWorkCell(input) {
+    if (state.locked || !input) return;
+    state.freqCellCursor = {
+      row: input.getAttribute("data-row") || "",
+      value: input.getAttribute("data-value") || "",
+    };
+    requestStatistics({
+      intent: "check",
+      fill: { row: input.getAttribute("data-row"), value: input.getAttribute("data-value"), typed: input.value },
+    }, applyFreqRemote);
+  }
+
+  function freqGridInputs() {
+    if (!freqTableEl) return [];
+    return Array.prototype.filter.call(freqTableEl.querySelectorAll(".freq-grid input"), function (input) {
+      return !input.disabled && (
+        input.classList.contains("freq-frac-slot") ||
+        input.classList.contains("freq-work-cell") ||
+        input.classList.contains("freq-cell") ||
+        input.classList.contains("freq-build-value") ||
+        input.classList.contains("freq-build-freq")
+      );
+    });
+  }
+
+  function freqInputsIn(cell) {
+    return freqGridInputs().filter(function (input) {
+      return input.closest("td, th") === cell;
+    }).sort(function (a, b) {
+      var rank = function (input) {
+        return input.classList.contains("freq-frac-slot") && input.getAttribute("data-slot") === "den" ? 1 : 0;
+      };
+      return rank(a) - rank(b);
+    });
+  }
+
+  function freqInputAt(rows, rowIndex, colIndex, slot, rowStep, colStep) {
+    var guard = 0;
+    while (rowIndex >= 0 && rowIndex < rows.length && colIndex >= 0 && guard < 40) {
+      guard += 1;
+      var row = rows[rowIndex];
+      var cell = row && row.cells ? row.cells[colIndex] : null;
+      if (cell && colIndex < row.cells.length) {
+        var inputs = freqInputsIn(cell);
+        if (inputs.length) {
+          if (slot < 0) return inputs[inputs.length - 1];
+          return inputs[Math.min(slot, inputs.length - 1)];
+        }
+      }
+      if (!rowStep && !colStep) return null;
+      rowIndex += rowStep;
+      colIndex += colStep;
+    }
+    return null;
+  }
+
+  function focusFreqInput(input, atEnd) {
+    input.focus();
+    var pos = atEnd ? (input.value || "").length : 0;
+    try { input.setSelectionRange(pos, pos); } catch (err) {}
+  }
+
+  function focusAfterLockedFreqCell(cursor) {
+    var grid = freqTableEl && freqTableEl.querySelector(".freq-grid");
+    if (!grid || !cursor) return false;
+    var cells = Array.prototype.slice.call(grid.querySelectorAll("td[data-row]"));
+    var index = -1;
+    var i;
+    for (i = 0; i < cells.length; i++) {
+      if (cells[i].getAttribute("data-row") === cursor.row && cells[i].getAttribute("data-value") === cursor.value) {
+        index = i;
+        break;
+      }
+    }
+    if (index < 0) return false;
+    var open = cells[index].querySelector("input:not(:disabled)");
+    if (open) {
+      var sameSlot = cursor.slot ? cells[index].querySelector('input[data-slot="' + cursor.slot + '"]:not(:disabled)') : null;
+      focusFreqInput(sameSlot || open, false);
+      return true;
+    }
+    for (i = index + 1; i < cells.length; i++) {
+      var next = cells[i].querySelector("input:not(:disabled)");
+      if (next) {
+        focusFreqInput(next, false);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function moveFreqTableFocus(event) {
+    var input = event.target;
+    var key = event.key;
+    if (!input || !input.closest || !input.closest(".freq-grid")) return false;
+    if (key !== "ArrowLeft" && key !== "ArrowRight" && key !== "ArrowUp" && key !== "ArrowDown") return false;
+    if (event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return false;
+    var cell = input.closest("td, th");
+    var row = input.closest("tr");
+    var grid = input.closest("table");
+    if (!cell || !row || !grid) return false;
+    var len = (input.value || "").length;
+    var atStart = input.selectionStart === 0 && input.selectionEnd === 0;
+    var atEnd = input.selectionStart === len && input.selectionEnd === len;
+    var rtl = window.getComputedStyle(input).direction === "rtl";
+    var leaveLeft = key === "ArrowLeft" && (rtl ? atEnd : atStart);
+    var leaveRight = key === "ArrowRight" && (rtl ? atStart : atEnd);
+    if ((key === "ArrowLeft" || key === "ArrowRight") && !leaveLeft && !leaveRight) return false;
+    var rows = Array.prototype.slice.call(grid.querySelectorAll("tr"));
+    var rowIndex = rows.indexOf(row);
+    var colIndex = cell.cellIndex;
+    var inCell = freqInputsIn(cell);
+    var slot = inCell.indexOf(input);
+    if (slot < 0) slot = 0;
+    var target = null;
+    var caretEnd = false;
+    if (key === "ArrowDown") {
+      caretEnd = false;
+      target = slot + 1 < inCell.length
+        ? inCell[slot + 1]
+        : freqInputAt(rows, rowIndex + 1, colIndex, 0, 1, 0);
+    } else if (key === "ArrowUp") {
+      caretEnd = true;
+      target = slot > 0
+        ? inCell[slot - 1]
+        : freqInputAt(rows, rowIndex - 1, colIndex, -1, -1, 0);
+    } else if (leaveLeft) {
+      caretEnd = true;
+      target = freqInputAt(rows, rowIndex, colIndex + 1, slot, 0, 1);
+    } else if (leaveRight) {
+      caretEnd = false;
+      target = freqInputAt(rows, rowIndex, colIndex - 1, slot, 0, -1);
+    }
+    if (!target || target === input) return false;
+    event.preventDefault();
+    focusFreqInput(target, caretEnd);
+    return true;
+  }
+
+  function submitFracEdit(edit) {
+    if (state.locked || !edit) return;
+    var typed = fracEditorValue(edit);
+    if (!typed) return;
+    var active = document.activeElement;
+    state.freqCellCursor = {
+      row: edit.getAttribute("data-row") || "",
+      value: edit.getAttribute("data-value") || "",
+      slot: active && active.getAttribute ? (active.getAttribute("data-slot") || "") : "",
+    };
+    requestStatistics({
+      intent: "check",
+      fill: { row: edit.getAttribute("data-row"), value: edit.getAttribute("data-value"), typed: typed },
+    }, applyFreqRemote);
+  }
+
   function submitFreqCell(input) {
     if (state.locked) return;
     if (!input) {
@@ -1269,7 +1622,13 @@
 
   function syncFreqEntry(view) {
     var board = !!(view && (view.input === "cells" || view.input === "build") && !state.locked);
-    if (freqAnswerEl) freqAnswerEl.classList.toggle("hidden", board || !isFreqTableMode());
+    var showMath = isFreqTableMode() && !board;
+    if (freqAnswerEl) freqAnswerEl.classList.add("hidden");
+    if (mathWrap && isFreqTableMode()) mathWrap.classList.toggle("hidden", !showMath);
+    if (mathKeysEl && isFreqTableMode()) {
+      mathKeysEl.classList.toggle("hidden", !showMath);
+      mathKeysEl.classList.toggle("is-frac-only", showMath);
+    }
     if (answerLabelEl && isFreqTableMode()) answerLabelEl.classList.toggle("hidden", board);
   }
 
@@ -1305,6 +1664,7 @@
       geoPartEl.appendChild(div);
     });
     renderFreqAsk(view);
+    if (isFreqTableMode()) renderPercentFields(view && view.fields);
   }
 
   function renderFreqAsk(view) {
@@ -1423,9 +1783,13 @@
       n: state.problem && state.problem.n,
       exerciseIndex: state.exerciseIndex,
       progress: state.freq || emptyFreqProgress(),
+      history: state.history || [],
     };
     if (payload.typed != null) body.typed = payload.typed;
     if (payload.fill) body.fill = payload.fill;
+    if (payload.work) body.work = payload.work;
+    if (payload.entries) body.entries = payload.entries;
+    if (payload.answers) body.answers = payload.answers;
     if (payload.columns) body.columns = payload.columns;
     else if (state.freqView && state.freqView.input === "build") body.columns = readBuildColumns();
     fetch(STATISTICS_URL, {
@@ -1473,6 +1837,15 @@
   function applyFreqRemote(remote) {
     var failed = !remote || remote.ok === false;
     var keepBoard = !!(failed && remote && remote.view && remote.view.input === "build");
+    if (failed && remote && remote.view && isFreqTableMode()) {
+      if (remote.progress) state.freq = remote.progress;
+      state.freqView = remote.view;
+      if (remote.shows && remote.shows.length) applyFreqLines(remote.part, remote.shows, remote.joinPrev);
+      renderFreqBoard();
+      renderFreqPart(remote.view);
+      renderPercentFields(remote.view.fields);
+      renderSteps();
+    }
     if (failed && !keepBoard) {
       if (isPercentMode() && remote && remote.view) {
         renderPercentFields(remote.view.fields);
@@ -1511,7 +1884,13 @@
         renderPercentFields(remote.view.fields);
         renderFreqPart(remote.view);
       } else {
+        if (state.freqDrafts && state.freqFocus) delete state.freqDrafts[state.freqFocus];
         state.freqView = remote.view;
+        if (state.freqFocus && remote.view.table && (remote.view.table.rows || []).some(function (row) {
+          return String(row.value) === String(state.freqFocus) && row.locked && !row.open;
+        })) {
+          state.freqCellCursor = { row: "freq", value: String(state.freqFocus) };
+        }
         renderFreqBoard();
         renderFreqPart(remote.view);
         syncFreqYesNo(remote.view);
@@ -1520,7 +1899,7 @@
     }
     renderSteps();
     if ((remote.shows && remote.shows.length) || (remote.lines && remote.lines.length)) {
-      if (isPercentMode()) mathField.clear();
+      if (isPercentMode() || isFreqTableMode()) mathField.clear();
       else if (freqAnswerEl) freqAnswerEl.value = "";
     }
     if (remote.status === "note") {
@@ -1529,7 +1908,7 @@
     }
     if (remote.status === "solved" || (remote.view && remote.view.solved)) {
       markSolved();
-      if (isPercentMode()) mathField.setDisabled(true);
+      if (isPercentMode() || isFreqTableMode()) mathField.setDisabled(true);
       else if (freqAnswerEl) freqAnswerEl.disabled = true;
       checkBtn.disabled = true;
       nextAfterSolveBtn.classList.remove("hidden");
@@ -1540,8 +1919,10 @@
     if (remote.status === "hint") prefix = "רמז.";
     showFeedback(remote.status !== "hint", "<strong>" + prefix + "</strong> " + escapeFreqHtml(remote.message || ""), remote.status === "hint" ? "tip" : "ok");
     if (remote.status !== "hint") {
-      if (isPercentMode()) mathField.focus();
-      else if (freqAnswerEl) freqAnswerEl.focus();
+      var tableHasFocus = freqTableEl && freqTableEl.contains(document.activeElement);
+      if (tableHasFocus) return;
+      if (isPercentMode() || (isFreqTableMode() && mathWrap && !mathWrap.classList.contains("hidden"))) mathField.focus();
+      else if (freqAnswerEl && !freqAnswerEl.classList.contains("hidden")) freqAnswerEl.focus();
     }
   }
 
@@ -1848,8 +2229,59 @@
     return rewriteLetterGeo(typed, L, "x");
   }
 
+  function geoEqKey(text) {
+    return String(text || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "");
+  }
+
+  function geoQuadChain() {
+    var t = geoDistUnkTask();
+    var st = t && state.geo && state.geo.distUnk && state.geo.distUnk[t.id];
+    var letter = geoEqLetter() || (st && st.letter) || "x";
+    var start = st && st.mixedStart ? String(st.mixedStart) : "";
+    var hist = [];
+    var armed = !start;
+    var i;
+    for (i = 0; i < (state.history || []).length; i++) {
+      var line = String(state.history[i] || "");
+      if (isGeoSectionHeader(line)) continue;
+      if (!/=/.test(line) || /√|sqrt/i.test(line)) continue;
+      var asX = rewriteLetterGeo(line, letter, "x");
+      if (!armed) {
+        if (geoEqKey(asX) === geoEqKey(start)) armed = true;
+        else continue;
+      }
+      hist.push(asX);
+    }
+    var last = "";
+    if (t && state.geo && state.geo.lastExpr && state.geo.lastExpr[t.id]) {
+      last = rewriteLetterGeo(state.geo.lastExpr[t.id], letter, "x");
+    }
+    if (start && (!hist.length || geoEqKey(hist[0]) !== geoEqKey(start))) hist.unshift(start);
+    if (last && !/√|sqrt/i.test(last) && (!hist.length || geoEqKey(hist[hist.length - 1]) !== geoEqKey(last))) {
+      hist.push(last);
+    }
+    if (!hist.length && last) hist = [last];
+    return { start: hist[0] || start || last, history: hist.length ? hist : [start || last] };
+  }
+
+  function geoLooksArrangedQuadratic(eq) {
+    var s = geoEqKey(eq);
+    if (!/=/.test(s) || /√|sqrt|\(|\)/.test(s)) return false;
+    var parts = s.split("=");
+    if (parts.length !== 2) return false;
+    var live = parts[1] === "0" ? parts[0] : parts[0] === "0" ? parts[1] : "";
+    if (!live || !/x\^2/i.test(live)) return false;
+    return (live.match(/x\^2/gi) || []).length === 1;
+  }
+
+  function geoLooksProductZero(eq) {
+    var s = geoEqKey(eq);
+    return /\([^()]*\)/.test(s) && /=0$/.test(s);
+  }
+
   function geoEqSolveActive() {
-    if (isGeoDistancePage()) return false;
     var t = geoDistUnkTask();
     if (!t) return false;
     var last = (state.geo && state.geo.lastExpr && state.geo.lastExpr[t.id]) || "";
@@ -1896,48 +2328,18 @@
     }
     if (solveWrap) solveWrap.classList.remove("is-system");
     setQuadInput(true);
-    var pack = state.problem.geo;
-    var res =
-      text && DoctematicaGeometry.applyDistUnknownAlgebra
-        ? DoctematicaGeometry.applyDistUnknownAlgebra(text, pack, state.geo)
-        : null;
-    if (res && res.ok) {
-      applyGeoResultState(res);
-      if (res.show) {
-        var histLine = res.show;
-        if (DoctematicaGeometry.capsHistoryLetters) {
-          histLine = DoctematicaGeometry.capsHistoryLetters(histLine);
-        }
-        if (state.history[state.history.length - 1] !== histLine) state.history.push(histLine);
-      }
-      renderSteps();
-      renderGeoPart();
-      renderGeoAskUi();
-      renderGeoScene(null);
-      mathField.clear();
-      mathField.setDisabled(false);
-      checkBtn.disabled = false;
-      updateSplitBtn();
-      updateFormulaBtn();
-      setModeUi();
-      var okMsg = res.message || "";
-      if (DoctematicaMath && DoctematicaMath.proseHTML) okMsg = DoctematicaMath.proseHTML(okMsg);
-      if (res.solved) {
-        markSolved();
-        mathField.setDisabled(true);
-        checkBtn.disabled = true;
-        nextAfterSolveBtn.classList.remove("hidden");
-        showFeedback(true, "<strong>כל הכבוד.</strong> " + okMsg);
-      } else {
-        showFeedback(true, "<strong>נכון.</strong> " + okMsg);
-        mathField.focus();
-      }
-      return true;
-    }
     renderSteps();
     updateSplitBtn();
     updateFormulaBtn();
     setModeUi();
+    if (!text) return true;
+    if (
+      !requestGeometryAction({ intent: "check", typed: text }, function (remote) {
+        finishGeoCheckResult(text, remote, true);
+      })
+    ) {
+      showBasicEqServerUnavailable();
+    }
     return true;
   }
 
@@ -1955,9 +2357,20 @@
   }
 
   function canSplitFactor() {
-    if (isFactorServerMode() || isHighFactorServerMode() || (isMixedServerMode() && mixedPath() === "factor")) {
-      return !!(state.factor && state.factor.canSplit && !state.locked);
+    if (state.locked) return false;
+    var ready = !!(state.factor && state.factor.canSplit);
+    if (
+      !ready &&
+      geoEqSolveActive() &&
+      (!mixedPath() || mixedPath() === "factor") &&
+      geoLooksProductZero(lastHistoryEq())
+    ) {
+      ready = true;
     }
+    if (!ready) return false;
+    if (isFactorServerMode() || isHighFactorServerMode()) return true;
+    if (isMixedServerMode() && mixedPath() === "factor") return true;
+    if (geoEqSolveActive() && (!mixedPath() || mixedPath() === "factor")) return true;
     return false;
   }
 
@@ -1971,7 +2384,8 @@
     if (state.locked || !state.problem) return false;
     if (!isMixedEqMode() && !geoEqSolveActive()) return false;
     if (mixedPath()) return false;
-    return !!state.offerFormula;
+    if (state.offerFormula) return true;
+    return geoEqSolveActive() && geoLooksArrangedQuadratic(lastHistoryEq());
   }
 
   function updateFormulaBtn() {
@@ -3041,7 +3455,15 @@
       showFeedback(false, "<strong>עוד לא.</strong> קודם הוציאו גורם משותף, למשל x(x−5)=0.");
       return;
     }
-    if (isHighFactorServerMode() || isFactorServerMode() || (isMixedServerMode() && mixedPath() === "factor")) {
+    if (
+      isHighFactorServerMode() ||
+      isFactorServerMode() ||
+      ((isMixedServerMode() || geoEqSolveActive()) && (mixedPath() === "factor" || geoEqSolveActive()))
+    ) {
+      if (geoEqSolveActive()) {
+        state.mixed = state.mixed || emptyMixedState();
+        state.mixed.path = "factor";
+      }
       var sendSplit = isHighFactorServerMode() ? requestHighPowerAction : requestQuadraticAction;
       sendSplit(
         {
@@ -3052,6 +3474,9 @@
         },
         function (res) {
           if (!res.ok) {
+            if (geoEqSolveActive() && state.mixed) state.mixed.path = null;
+            updateSplitBtn();
+            setModeUi();
             showFeedback(false, "<strong>עוד לא.</strong> " + (res.message || ""));
             return;
           }
@@ -3129,6 +3554,24 @@
     renderFactorGuide();
     var done = res.solvedAll || res.solved === true;
     if (done) {
+      if (geoDistUnkTask()) {
+        var rootBits = [];
+        if (state.factor && state.factor.trails) {
+          state.factor.trails.forEach(function (tr) {
+            (tr || []).forEach(function (line) {
+              var bit = String(line || "").trim();
+              if (/^[A-Za-z]\s*=/.test(bit.replace(/[−–—]/g, "-"))) rootBits.push(bit);
+            });
+          });
+        }
+        var rootAns = rootBits.join(", ");
+        if (shownTyped && rootAns.indexOf(shownTyped) < 0) rootAns = rootAns ? rootAns + ", " + shownTyped : shownTyped;
+        rootBits.forEach(function (bit) {
+          if (state.history[state.history.length - 1] !== bit) state.history.push(bit);
+        });
+        finishEqSolveForGeo(rootAns);
+        return true;
+      }
       markSolved();
       mathField.setDisabled(true);
       checkBtn.disabled = true;
@@ -3178,7 +3621,7 @@
       }
       return true;
     }
-    if (isFactorServerMode() || (isMixedServerMode() && mixedPath() === "factor")) {
+    if (isFactorServerMode() || ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "factor")) {
       if (equationsCheckBusy) return true;
       var prevF = lastHistoryEq();
       requestQuadraticAction(
@@ -3872,7 +4315,17 @@
     state.history.push(marker);
   }
 
+  function loneUnlabeledTask(task) {
+    var pack = state.problem && state.problem.geo;
+    if (!pack || !task || !DoctematicaGeometry.currentPartText) return false;
+    var part = DoctematicaGeometry.currentPartText(pack, state.geo);
+    if (!part || part.label) return false;
+    var ids = part.taskIds || [];
+    return ids.length <= 1;
+  }
+
   function ensureGeoTaskHeader(task) {
+    if (loneUnlabeledTask(task)) return;
     if (!task || !DoctematicaGeometry.taskStepLabel) return;
     var label = DoctematicaGeometry.taskStepLabel(task);
     if (!label) return;
@@ -3883,6 +4336,9 @@
 
   function ensureGeoFocusTaskHeader(pack, geo) {
     if (!pack || !DoctematicaGeometry.taskStepLabel) return;
+    var heading =
+      DoctematicaGeometry.partHeadingTask && DoctematicaGeometry.partHeadingTask(pack, geo || state.geo);
+    if (loneUnlabeledTask(heading)) return;
     if (
       DoctematicaGeometry.lineMatchPartActive &&
       DoctematicaGeometry.lineMatchPartActive(pack, geo || state.geo)
@@ -4823,8 +5279,8 @@
 
   function isFormulaWorkServerMode() {
     return (
-      !geoEqSolveActive() &&
-      (isFormulaServerMode() || (isMixedServerMode() && mixedPath() === "formula"))
+      isFormulaServerMode() ||
+      ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "formula")
     );
   }
 
@@ -4894,6 +5350,7 @@
       return;
     }
     if (res.solved) {
+      if (res.answer) mergeQuadView({ answer: res.answer, kind: res.kind });
       applyQuadResult(res);
       return;
     }
@@ -5100,7 +5557,7 @@
     }
     renderQuadGuide();
     renderSteps();
-    if (finishEqSolveForGeo(state.problem.quad && state.problem.quad.answer)) return;
+    if (finishEqSolveForGeo(ans || (state.problem.quad && state.problem.quad.answer))) return;
     markSolved();
     mathField.setDisabled(true);
     checkBtn.disabled = true;
@@ -5672,11 +6129,18 @@
       saveStats();
       renderStats();
     }
+    if (res && res.offerFormula != null) state.offerFormula = !!res.offerFormula;
+    if (res && res.canSplit != null) {
+      state.factor = state.factor || emptyFactorState();
+      state.factor.canSplit = !!res.canSplit;
+    }
     if (!res || !res.ok) {
       var badMsg = (res && res.message) || "";
       if (DoctematicaMath && DoctematicaMath.proseHTML) badMsg = DoctematicaMath.proseHTML(badMsg);
       else if (DoctematicaGeometry.formatPartHtml) badMsg = DoctematicaGeometry.formatPartHtml(badMsg);
       showFeedback(false, "<strong>עוד לא.</strong> " + badMsg);
+      updateSplitBtn();
+      updateFormulaBtn();
       return false;
     }
     if (res.task && res.task.id && !res.task.from) {
@@ -6117,6 +6581,7 @@
     state.history.push(shownTyped);
     renderSteps();
     if (res.solved) {
+      if (geoDistUnkTask() && finishEqSolveForGeo(shownTyped)) return;
       markSolved();
       mathField.setDisabled(true);
       checkBtn.disabled = true;
@@ -6138,7 +6603,7 @@
     }
     var shownTyped = String(typed || "").trim();
     typed = geoEngineTyped(shownTyped);
-    if (isSqrtServerMode() || (isMixedServerMode() && mixedPath() === "sqrt")) {
+    if (isSqrtServerMode() || ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "sqrt")) {
       if (equationsCheckBusy) return true;
       var prev = lastHistoryEq();
       requestQuadraticAction(
@@ -6193,7 +6658,7 @@
       return true;
     }
     if (requestBasicEqCheck(prevEq, typed, applyLinearVerdict)) return false;
-    if (isMixedServerMode()) {
+    if (isMixedServerMode() || (geoEqSolveActive() && mixedPath() === "linear")) {
       requestQuadraticAction(
         {
           intent: "check",
@@ -6238,7 +6703,7 @@
   }
 
   function enterMixedFormula() {
-    if (isMixedServerMode()) {
+    if (isMixedServerMode() || geoEqSolveActive()) {
       requestQuadraticAction(
         {
           intent: "formula-enter",
@@ -6257,7 +6722,7 @@
   }
 
   function enterMixedMd53() {
-    if (isMixedServerMode()) {
+    if (isMixedServerMode() || geoEqSolveActive()) {
       requestQuadraticAction(
         {
           intent: "formula-enter",
@@ -6633,7 +7098,7 @@
   }
 
   function sqrtHint() {
-    if (isSqrtServerMode() || (isMixedServerMode() && mixedPath() === "sqrt")) {
+    if (isSqrtServerMode() || ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "sqrt")) {
       var hintEq = lastHistoryEq();
       requestQuadraticAction(
         {
@@ -6651,7 +7116,7 @@
   }
 
   function sqrtOneStep() {
-    if (isSqrtServerMode() || (isMixedServerMode() && mixedPath() === "sqrt")) {
+    if (isSqrtServerMode() || ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "sqrt")) {
       var cur = lastHistoryEq();
       requestQuadraticAction(
         {
@@ -6696,7 +7161,7 @@
       }
       return;
     }
-    if (isFactorServerMode() || (isMixedServerMode() && mixedPath() === "factor")) {
+    if (isFactorServerMode() || ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "factor")) {
       requestQuadraticAction(
         {
           intent: "hint",
@@ -6744,7 +7209,7 @@
       }
       return;
     }
-    if (isFactorServerMode() || (isMixedServerMode() && mixedPath() === "factor")) {
+    if (isFactorServerMode() || ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "factor")) {
       requestQuadraticAction(
         {
           intent: "one-step",
@@ -7629,6 +8094,7 @@
     }
     updateSplitBtn();
     updateFormulaBtn();
+    if (mathKeysEl && !isFreqTableMode()) mathKeysEl.classList.remove("is-frac-only");
   }
 
   function markSolved() {
@@ -7769,6 +8235,8 @@
       state.freq = emptyFreqProgress();
       state.freqMarks = [];
       state.freqDrafts = {};
+      state.freqWorkDrafts = {};
+      state.freqCellCursor = null;
       state.freqFocus = null;
       clearGeoUi();
     } else if (isPercentMode()) {
@@ -7836,22 +8304,18 @@
     clearFreqUi();
     if (isFreqTableMode()) {
       promptEl.textContent = state.problem.stem || state.problem.prompt || "";
-      mathWrap.classList.add("hidden");
-      mathKeysEl.classList.add("hidden");
       checkBtn.classList.remove("hidden");
       answerLabelEl.classList.remove("hidden");
       answerLabelEl.textContent = "התשובה שלך";
-      if (freqAnswerEl) {
-        freqAnswerEl.classList.remove("hidden");
-        freqAnswerEl.disabled = false;
-        freqAnswerEl.value = "";
-      }
+      if (freqAnswerEl) freqAnswerEl.classList.add("hidden");
+      mathField.setDisabled(false);
+      mathField.clear();
       renderFreqBoard();
       renderFreqPart(state.freqView);
       syncFreqYesNo(state.freqView);
       syncFreqEntry(state.freqView);
       renderSteps();
-      if (freqAnswerEl) freqAnswerEl.focus();
+      if (mathWrap && !mathWrap.classList.contains("hidden")) mathField.focus();
       return;
     }
     if (isPercentMode()) {
@@ -7983,7 +8447,30 @@
   });
 
   if (freqTableEl) {
+    freqTableEl.addEventListener("change", function (event) {
+      var select = event.target;
+      if (!select || !select.classList || !select.classList.contains("freq-add-select")) return;
+      var rowName = select.value;
+      select.value = "";
+      if (!rowName || state.locked) return;
+      requestStatistics({ intent: "work", work: { action: "add", row: rowName } }, applyFreqRemote);
+    });
     freqTableEl.addEventListener("click", function (event) {
+      var removeRow = event.target && event.target.closest ? event.target.closest(".freq-remove-row") : null;
+      if (removeRow) {
+        if (state.locked) return;
+        var rowName = removeRow.getAttribute("data-row");
+        var confirmRemove = state.freqRemoveConfirm === rowName;
+        state.freqRemoveConfirm = "";
+        requestStatistics({
+          intent: "work",
+          work: { action: "remove", row: rowName, confirm: !!confirmRemove },
+        }, function (remote) {
+          if (remote && remote.confirm) state.freqRemoveConfirm = rowName;
+          applyFreqRemote(remote);
+        });
+        return;
+      }
       var addCol = event.target && event.target.closest ? event.target.closest(".freq-add-col") : null;
       var moveCol = event.target && event.target.closest ? event.target.closest(".freq-col-move") : null;
       var deleteCol = event.target && event.target.closest ? event.target.closest(".freq-col-delete") : null;
@@ -8023,18 +8510,42 @@
         rememberBuildColumns(readBuildColumns());
         return;
       }
-      if (!input || !input.classList || !input.classList.contains("freq-cell")) return;
+      if (!input || !input.classList) return;
+      if (input.classList.contains("freq-frac-slot")) {
+        var fracEdit = input.closest ? input.closest(".freq-frac-edit") : null;
+        if (!fracEdit) return;
+        state.freqWorkDrafts = state.freqWorkDrafts || {};
+        state.freqWorkDrafts[fracEdit.getAttribute("data-row") + ":" + fracEdit.getAttribute("data-value")] = fracEditorValue(fracEdit);
+        return;
+      }
+      if (input.classList.contains("freq-work-cell")) {
+        state.freqWorkDrafts = state.freqWorkDrafts || {};
+        state.freqWorkDrafts[input.getAttribute("data-row") + ":" + input.getAttribute("data-value")] = input.value;
+        return;
+      }
+      if (!input.classList.contains("freq-cell")) return;
       state.freqDrafts = state.freqDrafts || {};
       state.freqDrafts[input.getAttribute("data-value")] = input.value;
       state.freqFocus = input.getAttribute("data-value");
     });
     freqTableEl.addEventListener("keydown", function (event) {
+      if (moveFreqTableFocus(event)) return;
       if (event.key !== "Enter") return;
       var input = event.target;
       if (!input || !input.classList) return;
       if (input.classList.contains("freq-build-value") || input.classList.contains("freq-build-freq")) {
         event.preventDefault();
         submitBuildTable();
+        return;
+      }
+      if (input.classList.contains("freq-frac-slot")) {
+        event.preventDefault();
+        submitFracEdit(input.closest ? input.closest(".freq-frac-edit") : null);
+        return;
+      }
+      if (input.classList.contains("freq-work-cell")) {
+        event.preventDefault();
+        submitWorkCell(input);
         return;
       }
       if (!input.classList.contains("freq-cell")) return;
@@ -8048,6 +8559,18 @@
     if (state.locked || !state.problem) return;
 
     if (isFreqTableMode()) {
+      var workInput = document.activeElement;
+      if (workInput && workInput.classList && workInput.classList.contains("freq-frac-slot")) {
+        var fracEdit = workInput.closest ? workInput.closest(".freq-frac-edit") : null;
+        if (fracEdit && fracEdit.getAttribute("data-row")) {
+          submitFracEdit(fracEdit);
+          return;
+        }
+      }
+      if (workInput && workInput.classList && workInput.classList.contains("freq-work-cell") && String(workInput.value || "").trim()) {
+        submitWorkCell(workInput);
+        return;
+      }
       if (state.freqView && state.freqView.input === "cells") {
         submitFreqCell(freqCellToCheck());
         return;
@@ -8056,7 +8579,14 @@
         submitBuildTable();
         return;
       }
-      applyFreqTyped(freqAnswerEl ? freqAnswerEl.value : "");
+      var fieldAnswers = readPercentFields();
+      var hasField = Object.keys(fieldAnswers).some(function (key) { return String(fieldAnswers[key] || "").trim(); });
+      var typedFreq = mathField ? mathField.serialize() : "";
+      if (!String(typedFreq || "").trim() && hasField) {
+        requestStatistics({ intent: "check", answers: fieldAnswers }, applyFreqRemote);
+        return;
+      }
+      applyFreqTyped(typedFreq);
       return;
     }
 

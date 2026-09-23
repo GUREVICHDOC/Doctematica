@@ -151,14 +151,12 @@
       return;
     }
     if (node.type === "sqrt") {
-      if (isFracNode(node.rad) || isPowNode(node.rad)) this.collectSlots(node.rad, path.concat("rad"), out);
-      else out.push({ path: path.concat("rad") });
+      this.collectRadSlots(node.rad, path.concat("rad"), out);
       return;
     }
     if (node.type === "nroot") {
       out.push({ path: path.concat("index") });
-      if (isFracNode(node.rad) || isPowNode(node.rad)) this.collectSlots(node.rad, path.concat("rad"), out);
-      else out.push({ path: path.concat("rad") });
+      this.collectRadSlots(node.rad, path.concat("rad"), out);
       return;
     }
     if (node.type === "pow") {
@@ -182,6 +180,22 @@
       if (isFracNode(val)) self.collectSlots(val, next, out);
       else out.push({ path: next });
     });
+  };
+
+  /** Radicand: a string, one node, or a row of pieces so a power does not swallow the rest. */
+  MathField.prototype.collectRadSlots = function (rad, path, out) {
+    var self = this;
+    if (Array.isArray(rad)) {
+      rad.forEach(function (piece, i) {
+        self.collectRadSlots(piece, path.concat(String(i)), out);
+      });
+      return;
+    }
+    if (rad && typeof rad === "object") {
+      this.collectSlots(rad, path, out);
+      return;
+    }
+    out.push({ path: path });
   };
 
   MathField.prototype.slots = function () {
@@ -217,6 +231,13 @@
   }
 
   MathField.prototype.serializeSlot = function (val) {
+    if (Array.isArray(val)) {
+      var self = this;
+      var joined = "";
+      var i;
+      for (i = 0; i < val.length; i++) joined += self.serializeSlot(val[i]);
+      return joined;
+    }
     if (isFracNode(val)) {
       var n = this.serializeSlot(val.num);
       var d = this.serializeSlot(val.den);
@@ -520,6 +541,10 @@
     var grabbed = grabPowBase(left);
     var base = grabbed.base;
     var remLeft = grabbed.left;
+    if ((part.type === "sqrt" || part.type === "nroot") && path[0] === "rad") {
+      this.placePowInRad(part, path, remLeft, base, right);
+      return true;
+    }
     if (remLeft || right) base = remLeft + base + right;
     this.setAt(part, path, { type: "pow", base: base, exp: "2" });
     this.focusPath = path.concat("exp");
@@ -527,6 +552,73 @@
     this.render();
     this.focus();
     return true;
+  };
+
+  /** Power inside a root keeps the text before it, and a slot after it, under the same bar. */
+  MathField.prototype.placePowInRad = function (part, path, remLeft, base, right) {
+    var powNode = { type: "pow", base: base, exp: "2" };
+    var pieces = [];
+    if (remLeft) pieces.push(remLeft);
+    pieces.push(powNode);
+    pieces.push(right || "");
+    var powIndex;
+    var tailPath;
+    if (path.length === 1) {
+      part.rad = pieces;
+      powIndex = remLeft ? 1 : 0;
+      tailPath = ["rad", String(powIndex + 1)];
+    } else {
+      var idx = parseInt(path[path.length - 1], 10);
+      var arr = this.getAt(part, path.slice(0, -1));
+      if (Array.isArray(arr) && !isNaN(idx)) {
+        arr.splice.apply(arr, [idx, 1].concat(pieces));
+        powIndex = idx + (remLeft ? 1 : 0);
+        tailPath = path.slice(0, -1).concat([String(powIndex + 1)]);
+      } else {
+        this.setAt(part, path, powNode);
+        tailPath = path.concat("exp");
+      }
+    }
+    this.focusPath = tailPath;
+    this.caretPos = 0;
+    this.normalize();
+    this.render();
+    this.focus();
+  };
+
+  /**
+   * Arrow right at the end of an exponent must stay inside the root.
+   * A lone power as the whole radicand gets a following text slot.
+   */
+  MathField.prototype.keepRadTail = function (partIndex, path) {
+    if (!path.length || path[path.length - 1] !== "exp") return false;
+    var part = this.parts[partIndex];
+    if (!part || (part.type !== "sqrt" && part.type !== "nroot")) return false;
+    this.readInputs();
+    var powPath = path.slice(0, -1);
+    if (!isPowNode(this.getAt(part, powPath))) return false;
+    if (powPath.length === 1 && powPath[0] === "rad" && isPowNode(part.rad)) {
+      part.rad = [part.rad, ""];
+      this.focusPart = partIndex;
+      this.focusPath = ["rad", "1"];
+      this.caretPos = 0;
+      this.render();
+      this.focus();
+      return true;
+    }
+    if (powPath[0] === "rad" && Array.isArray(part.rad) && powPath.length === 2) {
+      var idx = parseInt(powPath[1], 10);
+      if (!isNaN(idx) && idx === part.rad.length - 1) {
+        part.rad.push("");
+        this.focusPart = partIndex;
+        this.focusPath = ["rad", String(idx + 1)];
+        this.caretPos = 0;
+        this.render();
+        this.focus();
+        return true;
+      }
+    }
+    return false;
   };
 
   MathField.prototype.insertChars = function (ch) {
@@ -762,7 +854,10 @@
     var atStart = start === 0 && end === 0;
     var atEnd = start === el.value.length && end === el.value.length;
     var last = path[path.length - 1];
-    if (event.key === "ArrowRight") {
+    if (event.key === "ArrowRight" && atEnd && this.keepRadTail(partIndex, path)) {
+      event.preventDefault();
+      return;
+    } else if (event.key === "ArrowRight") {
       if (this.moveSlot(1, false, atEnd)) event.preventDefault();
     } else if (event.key === "ArrowLeft") {
       if (this.moveSlot(-1, atStart, false)) event.preventDefault();
@@ -1034,7 +1129,17 @@
   };
 
   MathField.prototype.renderRadContent = function (rad, partIndex, path) {
+    if (Array.isArray(rad)) {
+      var run = document.createElement("span");
+      run.className = "ml-rad-run";
+      var self = this;
+      rad.forEach(function (piece, i) {
+        run.appendChild(self.renderRadContent(piece, partIndex, path.concat(String(i))));
+      });
+      return run;
+    }
     if (typeof rad === "string" || rad == null) {
+      if (path.length !== 1) return this.makeInput(partIndex, path, rad, "ml-slot");
       var asPow = tryParsePowText(rad);
       if (asPow) {
         var owner = this.parts[partIndex];

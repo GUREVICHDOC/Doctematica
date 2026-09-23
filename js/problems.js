@@ -48,6 +48,7 @@
     ],
     statistics: [
       { id: "freq-table", label: "טבלת שכיחויות" },
+      { id: "relative-freq", label: "שכיחות יחסית" },
     ],
   };
 

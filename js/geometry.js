@@ -2626,8 +2626,7 @@
       var g = Object.assign(parseLineSpec(raw), { showEq: true, _raw: raw, graphKey: item.key });
       var stored = intersectStoredEq(progress, item.key);
       if (stored) g.eqText = stored;
-      else if (raw && raw.eqText) g.eqText = raw.eqText;
-      else g.eqText = sortedLineEq(raw);
+      else g.eqText = graphEqLabel(raw);
       g.graphClass = idx === 0 ? "coord-line" : "coord-line coord-line-b";
       if (item.label) g.lineLabel = item.label;
       if (raw && raw.hideEq) {
@@ -3260,6 +3259,12 @@
     return activeLine(pack, progress) || (pack && pack.line) || null;
   }
 
+  function graphEqLabel(raw) {
+    if (!raw) return "";
+    if (raw.eqText) return String(raw.eqText);
+    return sortedLineEq(raw) || prettyLineEq(raw) || "";
+  }
+
   function graphLineSpec(pack, progress) {
     var raw = activeLine(pack, progress);
     if (!raw) return null;
@@ -3267,8 +3272,10 @@
     if (pack && pack.hideLineEq && !(progress && progress.lineEqDisplay)) showEq = false;
     var g = Object.assign(parseLineSpec(raw), { showEq: showEq, _raw: raw });
     if (raw && raw.dashed) g.graphClass = "coord-line coord-line-b is-dashed";
-    if (pack.hideLineEq && progress && progress.lineEqDisplay) g.eqText = progress.lineEqDisplay;
-    else if (raw.eqText) g.eqText = raw.eqText;
+    if (showEq) {
+      if (pack.hideLineEq && progress && progress.lineEqDisplay) g.eqText = progress.lineEqDisplay;
+      else g.eqText = graphEqLabel(raw);
+    }
     return g;
   }
 
@@ -3294,8 +3301,7 @@
           graphClass: raw.dashed ? "coord-line coord-line-b is-dashed" : "coord-line coord-line-b",
         });
         if (hide && revealed) g.eqText = progress.lineEqDisplay;
-        else if (raw.eqText) g.eqText = raw.eqText;
-        else g.eqText = sortedLineEq(raw);
+        else g.eqText = graphEqLabel(raw);
         return g;
       })
       .filter(Boolean);
@@ -6027,6 +6033,7 @@
           }
         });
       });
+      copy.coordText = coordLabel(copy).replace(/-/g, "−");
       return copy;
     }).filter(function (p) {
       if (!p.drawOnly) return true;
