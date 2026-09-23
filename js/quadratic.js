@@ -176,6 +176,14 @@
     return "x₁,₂=" + fracShow(String(-b) + "±√(" + inner + ")", 2 * a);
   }
 
+  // b² and 4ac computed, not yet combined: 121-72, then the next line is 49.
+  function discOpen(a, b, c) {
+    var sq = b * b;
+    var prod = 4 * a * c;
+    var prodPart = prod < 0 ? "(" + prod + ")" : String(prod);
+    return String(sq) + "-" + prodPart;
+  }
+
   function rootedLine(a, b, s) {
     return "x₁,₂=" + fracShow(String(-b) + "±" + s, 2 * a);
   }
@@ -195,7 +203,12 @@
   }
 
   function solutionSteps(a, b, c, D, s, kind, roots) {
-    var steps = ["a=" + a + ", b=" + b + ", c=" + c, plugLine(a, b, c), filledLine(a, b, D)];
+    var steps = [
+      "a=" + a + ", b=" + b + ", c=" + c,
+      plugLine(a, b, c),
+      filledLine(a, b, discOpen(a, b, c)),
+      filledLine(a, b, D),
+    ];
     if (kind === "none" || s == null) {
       if (kind === "none") steps.push("אין פתרון ממשי");
       return steps;
