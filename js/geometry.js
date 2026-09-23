@@ -1597,6 +1597,7 @@
     var A = global.DoctematicaAlgebra;
     var xv = intersectTypedXValue(typed, parsed, phit);
     if (xv != null && nearNum(xv, wantX)) {
+      if (exprStillOpen(lastEqStage(typed))) return null;
       var show = isSolvedXText(typed) ? prettyRearrangeStep(typed) : "x = " + fmtNum(wantX);
       return { show: show.indexOf("=") >= 0 ? show : "x = " + fmtNum(wantX) };
     }
@@ -7268,6 +7269,9 @@
     function acceptPlugOrComputedY(eqText) {
       var shown = String(eqText || "").replace(/[−–—]/g, "-");
       if (yEqGivesCoord(shown, phit.answerY)) return acceptYFound(shown);
+      if (/^y\s*=/i.test(shown) && exprStillOpen(shown.replace(/^y\s*=\s*/i, ""))) {
+        return acceptEq(showOpenAxisLine(shown, "y"), "נכון. עכשיו חשבו את y.");
+      }
       if (/^y\s*=/i.test(shown)) return acceptEq(shown, "נכון. עכשיו חשבו את y.");
       return acceptEq(shown, "נכון. עכשיו בודדו את y (כמו משוואה בנעלם אחד).");
     }
@@ -7422,6 +7426,17 @@
       }
     }
 
+    var openY = String(typed || "").replace(/[−–—]/g, "-").trim();
+    if (/^y\s*=/i.test(openY)) {
+      var openRhs = openY.replace(/^y\s*=\s*/i, "");
+      if (exprStillOpen(openRhs)) {
+        var openVal = evalMaybeExpr(openRhs);
+        if (openVal != null && nearNum(openVal, phit.answerY)) {
+          return acceptEq(showOpenAxisLine(openY, "y"), "נכון. עכשיו חשבו את y.");
+        }
+      }
+    }
+
     return null;
   }
 
@@ -7540,10 +7555,13 @@
 
     var skipXAns = parseConstAxisEq(typed);
     if (skipXAns && skipXAns.axis === "x" && nearNum(skipXAns.value, phit.answerX)) {
+      if (exprStillOpen(lastEqStage(typed))) {
+        return acceptEq(showOpenAxisLine(typed, "x"), "נכון. עכשיו חשבו את x.");
+      }
       maps.coords[phit.id].x = true;
       maps.coords[phit.id].y = true;
       maps.partial[phit.id] = true;
-      maps.lastExpr[phit.id] = "x = " + fmtNum(phit.answerX);
+      maps.lastExpr[phit.id] = showOpenAxisLine(typed, "x");
       return {
         ok: true,
         solved: false,
@@ -7562,6 +7580,12 @@
       .replace(/\s+/g, "")
       .match(/^(?:[A-Za-z]x|x_[A-Za-z])=(.+)$/i);
     if (taggedX) {
+      if (exprStillOpen(taggedX[1])) {
+        var openTag = evalArithLoose(taggedX[1]);
+        if (openTag != null && nearNum(openTag, phit.answerX)) {
+          return acceptEq(showOpenAxisLine("x = " + taggedX[1], "x"), "נכון. עכשיו חשבו את x.");
+        }
+      }
       var tv = parseNumberToken(taggedX[1]);
       if (tv == null) tv = evalArithLoose(taggedX[1]);
       if (tv != null && nearNum(tv, phit.answerX)) {
@@ -7601,6 +7625,12 @@
       else return { ok: false, message: res.message || "הצעד לא שקול למשוואה " + start + "." };
     }
     var pretty = prettyRearrangeStep(String(typed || "").replace(/[−–—]/g, "-"));
+    if (exprStillOpen(lastEqStage(typed)) && /^x\s*=/i.test(String(typed || ""))) {
+      var openXVal = evalMaybeExpr(lastEqStage(typed));
+      if (openXVal != null && nearNum(openXVal, phit.answerX)) {
+        return acceptEq(showOpenAxisLine(typed, "x"), "נכון. עכשיו חשבו את x.");
+      }
+    }
     if (res.solved || (A.isSolvedText && A.isSolvedText(typed))) {
       var sol = A.solutionOf ? A.solutionOf(res.equation || A.parseEquation(typed)) : phit.answerX;
       if (sol == null && res.equation) sol = res.equation.right && res.equation.right.b;
@@ -7775,7 +7805,7 @@
         mapsSkipY.coords[phit.id].x = true;
         mapsSkipY.coords[phit.id].y = true;
         mapsSkipY.partial[phit.id] = true;
-        mapsSkipY.lastExpr[phit.id] = "y = " + fmtNum(phit.answerY);
+        mapsSkipY.lastExpr[phit.id] = showOpenAxisLine(typed, "y");
         return {
           ok: true,
           solved: false,
@@ -7795,7 +7825,7 @@
       if (!mapsKnownY.coords[phit.id]) mapsKnownY.coords[phit.id] = { x: false, y: false };
       mapsKnownY.coords[phit.id].y = true;
       mapsKnownY.partial[phit.id] = true;
-      mapsKnownY.lastExpr[phit.id] = "y = " + fmtNum(phit.answerY);
+      mapsKnownY.lastExpr[phit.id] = showOpenAxisLine(typed, "y");
       return {
         ok: true,
         solved: false,
@@ -8050,6 +8080,29 @@
     }
     if (/^-?\d+(?:\.\d+)?(?:\/-?\d+)?$/.test(t)) return false;
     return /[+\-*/()]/.test(t.replace(/^-/, ""));
+  }
+
+  /** Keep a substitution the student wrote. Do not replace it with the number it equals. */
+  function showOpenAxisLine(typed, axis) {
+    var raw = String(typed || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/[×*]/g, "·")
+      .trim();
+    var m = raw.match(/^([xy])\s*=\s*(.+)$/i);
+    if (m) return m[1].toLowerCase() + " = " + m[2].replace(/\s+/g, " ").trim();
+    if (axis && exprStillOpen(raw)) return axis + " = " + raw.replace(/\s+/g, " ").trim();
+    return raw;
+  }
+
+  function openAxisHistoryLine(typed, parsed, axis) {
+    if (!parsed || parsed.kind !== "diff") return null;
+    var raw = String(typed || "").replace(/[−–—]/g, "-").trim();
+    var rhs = null;
+    var labeled = raw.match(/^[xyXY]\s*=\s*(.+)$/);
+    if (labeled) rhs = labeled[1];
+    else if (parsed.displayExpr && exprStillOpen(String(parsed.displayExpr))) rhs = String(parsed.displayExpr);
+    if (rhs == null || !exprStillOpen(rhs)) return null;
+    return showOpenAxisLine(labeled ? raw : (axis || "y") + " = " + rhs, axis || "y");
   }
 
   function onLinePlugReason() {
@@ -9193,6 +9246,27 @@
         midCoords[k] = { x: !!coordsMap[k].x, y: !!coordsMap[k].y };
       });
       if (!midCoords[phit.id]) midCoords[phit.id] = { x: false, y: false };
+      var openLine = openAxisHistoryLine(typed, parsed, axisFromTag);
+      if (openLine) {
+        var midExprOpen = {};
+        Object.keys(progress.lastExpr || {}).forEach(function (k) {
+          midExprOpen[k] = progress.lastExpr[k];
+        });
+        midExprOpen[phit.id] = openLine;
+        midPartial[phit.id] = true;
+        return {
+          ok: true,
+          solved: false,
+          done: midDone,
+          partial: midPartial,
+          coords: midCoords,
+          lastExpr: midExprOpen,
+          task: phit,
+          show: openLine,
+          rawStep: true,
+          message: "נכון. עכשיו חשבו את " + (axisFromTag === "y" ? "y" : "x") + ".",
+        };
+      }
       if (axisFromTag === "y") midCoords[phit.id].y = true;
       else midCoords[phit.id].x = true;
 
@@ -9211,7 +9285,7 @@
         } else {
           midShow = prevY ? appendDiffExpr(prevY, yBit) : "y = " + yBit;
         }
-        chain = !!prevY && !eqIsKnownAxisValue(prevY, "x");
+        chain = !!prevY && !eqIsKnownAxisValue(prevY, "x") && !exprStillOpen(lastEqStage(prevY));
       } else if (midLine && (axisFromTag === "x" || miss === "x")) {
         midShow = "x = " + fmtNum(want);
       } else {

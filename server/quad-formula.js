@@ -288,8 +288,14 @@ function handleFormulaOneStep(engine, body, wantOverride) {
   var fill = fillForPhase(Q, want, phase, body.root);
   var nextBody = Object.assign({}, body, { slots: Object.assign({}, slotsOf(body), fill), fill: fill });
   if (phase === "abc") {
-    nextBody.letter = "c";
-    nextBody.typed = String(want.c);
+    var abcLetter = String(body.letter || "a");
+    if (abcLetter !== "a" && abcLetter !== "b" && abcLetter !== "c") abcLetter = "a";
+    fill = {};
+    fill[abcLetter] = String(want[abcLetter]);
+    nextBody.letter = abcLetter;
+    nextBody.typed = String(want[abcLetter]);
+    nextBody.fill = fill;
+    nextBody.slots = Object.assign({}, slotsOf(body), fill);
   }
   if (phase === "count") nextBody.picked = want.kind;
   if (phase === "nosol") nextBody.typed = "אין פתרון ממשי";

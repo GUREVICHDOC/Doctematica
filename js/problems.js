@@ -49,6 +49,8 @@
     statistics: [
       { id: "freq-table", label: "טבלת שכיחויות" },
       { id: "relative-freq", label: "שכיחות יחסית" },
+      { id: "bar-chart", label: "דיאגרמת עמודות" },
+      { id: "pie-chart", label: "דיאגרמת עיגול" },
     ],
   };
 

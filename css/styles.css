@@ -854,6 +854,78 @@ code {
   max-width: 100%;
 }
 
+.bar-chart {
+  margin: 0 0 16px;
+  max-width: 640px;
+}
+
+.bar-chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.bar-grid {
+  stroke: rgba(20, 36, 26, 0.16);
+  stroke-width: 1;
+}
+
+.bar-axis {
+  stroke: #1c2b24;
+  stroke-width: 1.6;
+}
+
+.bar-col {
+  fill: #1f6b45;
+}
+
+.bar-tick,
+.bar-axis-title {
+  fill: #1c2b24;
+  font-family: Heebo, Assistant, "Segoe UI", sans-serif;
+}
+
+.bar-tick {
+  font-size: 13px;
+}
+
+.bar-axis-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.pie-chart {
+  margin: 0 auto 16px;
+  max-width: 420px;
+}
+
+.pie-chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.pie-slice {
+  stroke: #1f6b45;
+  stroke-width: 1.4;
+}
+
+.pie-slice-label,
+.pie-slice-value {
+  fill: #1c2b24;
+  font-family: Heebo, Assistant, "Segoe UI", sans-serif;
+  text-anchor: middle;
+}
+
+.pie-slice-label {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.pie-slice-value {
+  font-size: 13px;
+}
+
 .freq-fit {
   max-width: 100%;
   overflow: hidden;

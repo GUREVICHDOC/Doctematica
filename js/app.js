@@ -1117,15 +1117,146 @@
     });
   }
 
+  function renderBarChart(chart) {
+    var bars = (chart && chart.bars) || [];
+    if (!bars.length || !freqTableEl) return;
+    var yStep = Number(chart.yStep) || 1;
+    var yMax = Number(chart.yMax) || yStep;
+    if (!(yMax > 0)) yMax = yStep;
+    var plotW = Math.max(280, bars.length * 58);
+    var plotH = 210;
+    var left = 56;
+    var top = 14;
+    var bottom = 54;
+    var right = 16;
+    var width = left + plotW + right;
+    var height = top + plotH + bottom;
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+    svg.setAttribute("class", "bar-chart-svg");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", (chart.yLabel || "שכיחות") + " לפי " + (chart.xLabel || "ערך"));
+    function node(name, attrs, text) {
+      var el = document.createElementNS("http://www.w3.org/2000/svg", name);
+      Object.keys(attrs).forEach(function (key) { el.setAttribute(key, String(attrs[key])); });
+      if (text != null) el.textContent = text;
+      return el;
+    }
+    var y0 = top + plotH;
+    var steps = Math.max(1, Math.round(yMax / yStep));
+    var s;
+    for (s = 0; s <= steps; s++) {
+      var tick = s * yStep;
+      var y = y0 - (tick / yMax) * plotH;
+      if (chart.grid !== false) svg.appendChild(node("line", { x1: left, y1: y, x2: left + plotW, y2: y, class: "bar-grid" }));
+      svg.appendChild(node("text", { x: left - 8, y: y + 4, class: "bar-tick", "text-anchor": "end" }, String(tick)));
+    }
+    svg.appendChild(node("line", { x1: left, y1: top, x2: left, y2: y0, class: "bar-axis" }));
+    svg.appendChild(node("line", { x1: left, y1: y0, x2: left + plotW, y2: y0, class: "bar-axis" }));
+    var slot = plotW / bars.length;
+    bars.forEach(function (bar, index) {
+      var freq = Number(bar.freq) || 0;
+      var h = Math.max(0, Math.min(plotH, (freq / yMax) * plotH));
+      var bw = Math.min(34, slot * 0.58);
+      var x = left + index * slot + (slot - bw) / 2;
+      svg.appendChild(node("rect", { x: x, y: y0 - h, width: bw, height: h, class: "bar-col" }));
+      svg.appendChild(node("text", { x: x + bw / 2, y: y0 + 18, class: "bar-tick", "text-anchor": "middle" }, bar.value == null ? "" : String(bar.value)));
+    });
+    svg.appendChild(node("text", { x: left + plotW / 2, y: height - 12, class: "bar-axis-title", "text-anchor": "middle" }, chart.xLabel || ""));
+    svg.appendChild(node("text", {
+      x: 18,
+      y: top + plotH / 2,
+      class: "bar-axis-title",
+      "text-anchor": "middle",
+      transform: "rotate(-90 18 " + (top + plotH / 2) + ")",
+    }, chart.yLabel || ""));
+    var wrap = document.createElement("div");
+    wrap.className = "bar-chart";
+    wrap.setAttribute("dir", "ltr");
+    wrap.appendChild(svg);
+    freqTableEl.appendChild(wrap);
+  }
+
+  function renderPieChart(pie) {
+    var sectors = (pie && pie.sectors) || [];
+    if (!sectors.length || !freqTableEl) return;
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 320 320");
+    svg.setAttribute("class", "pie-chart-svg");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "דיאגרמת עיגול");
+    var cx = 160;
+    var cy = 160;
+    var radius = 118;
+    var cursor = 0;
+    var fills = ["#f4faf6", "#e3f1e8", "#f7fbf8", "#d7ebe0", "#eef6f1", "#cfe4d8"];
+    sectors.forEach(function (sector, index) {
+      var sweep = Number(sector.angle) || 0;
+      var start = cursor;
+      var end = cursor + sweep;
+      cursor = end;
+      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", pieSlicePath(cx, cy, radius, start, end));
+      path.setAttribute("class", "pie-slice");
+      path.setAttribute("fill", fills[index % fills.length]);
+      svg.appendChild(path);
+      var mid = (start + end) / 2;
+      var rad = (mid - 90) * Math.PI / 180;
+      var labelR = sweep < 32 ? radius * 0.72 : radius * 0.62;
+      var lx = cx + labelR * Math.cos(rad);
+      var ly = cy + labelR * Math.sin(rad);
+      var name = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      name.setAttribute("x", String(lx));
+      name.setAttribute("y", String(ly - 2));
+      name.setAttribute("class", "pie-slice-label");
+      name.textContent = sector.label || "";
+      svg.appendChild(name);
+      var value = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      value.setAttribute("x", String(lx));
+      value.setAttribute("y", String(ly + 16));
+      value.setAttribute("class", "pie-slice-value");
+      value.textContent = sector.text || "";
+      svg.appendChild(value);
+    });
+    var wrap = document.createElement("div");
+    wrap.className = "pie-chart";
+    wrap.setAttribute("dir", "ltr");
+    wrap.appendChild(svg);
+    freqTableEl.appendChild(wrap);
+  }
+
+  function pieSlicePath(cx, cy, radius, start, end) {
+    var span = end - start;
+    if (span >= 359.9) {
+      return "M " + cx + " " + (cy - radius) + " A " + radius + " " + radius + " 0 1 1 " + (cx - 0.01) + " " + (cy - radius) + " Z";
+    }
+    function point(angle) {
+      var rad = (angle - 90) * Math.PI / 180;
+      return [cx + radius * Math.cos(rad), cy + radius * Math.sin(rad)];
+    }
+    var a = point(start);
+    var b = point(end);
+    var large = span > 180 ? 1 : 0;
+    return "M " + cx + " " + cy + " L " + a[0] + " " + a[1] + " A " + radius + " " + radius + " 0 " + large + " 1 " + b[0] + " " + b[1] + " Z";
+  }
+
   function renderFreqBoard() {
     if (!freqTableEl) return;
     var problem = state.problem || {};
     var view = state.freqView || {};
-    var table = view.table || problem.table;
-    var data = view.data || problem.data || null;
+    var chart = view.chart || problem.chart || null;
+    var table = view.table || null;
+    if (!table && !chart) table = problem.table || null;
+    var data = view.data || (!chart ? problem.data : null) || null;
     var filling = !!(view.input === "cells" && !state.locked);
     freqTableEl.innerHTML = "";
-    if (!table && !(data && data.length)) return;
+    if (chart) renderBarChart(chart);
+    var pie = view.pie || problem.pie || null;
+    if (pie) renderPieChart(pie);
+    if (!table && !(data && data.length)) {
+      if (chart || pie) freqTableEl.classList.remove("hidden");
+      return;
+    }
     if (data && data.length) {
       var note = document.createElement("p");
       note.className = "freq-note";
@@ -1630,7 +1761,8 @@
 
   function syncFreqEntry(view) {
     var board = !!(view && (view.input === "cells" || view.input === "build") && !state.locked);
-    var showMath = isFreqTableMode() && !board;
+    var choice = !!(view && view.entry === "choice");
+    var showMath = isFreqTableMode() && !board && !choice;
     if (freqAnswerEl) freqAnswerEl.classList.add("hidden");
     if (mathWrap && isFreqTableMode()) mathWrap.classList.toggle("hidden", !showMath);
     if (mathKeysEl && isFreqTableMode()) {
@@ -1696,7 +1828,7 @@
   function syncFreqYesNo(view) {
     var show = !!(view && view.input === "yesno" && !state.locked);
     if (yesnoAskEl) yesnoAskEl.classList.toggle("hidden", !show);
-    if (yesnoQEl) yesnoQEl.textContent = show ? "אפשר גם לענות כן או לא מיד:" : "";
+    if (yesnoQEl) yesnoQEl.textContent = show ? (view.entry === "choice" ? "בחרו כן או לא." : "אפשר גם לענות כן או לא מיד:") : "";
   }
 
   function ensureFreqPartHeader(label) {
@@ -7153,12 +7285,13 @@
           factor: factorPayload(),
         },
         function (remote) {
-          if (remote.chooseFormula) {
+          if (remote.chooseFormula && !(remote.enter === "formula" || remote.fill || remote.nextLetter)) {
             showFeedback(true, remote.hint || remote.message || "", "tip");
             return;
           }
           if (remote.enter === "formula" || (remote.path === "formula" && !remote.step)) {
             beginMixedFormulaFromServer(remote);
+            if (remote.fill || remote.nextLetter || remote.nextPhase) applyQuadServerResult(remote);
             return;
           }
           if (remote.enter === "sqrt" || remote.path === "sqrt") {

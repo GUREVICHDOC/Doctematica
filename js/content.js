@@ -144,6 +144,55 @@
       }
       return percentProblem;
     }
+    if (level.mode === "freq-table" && ex.pie) {
+      return {
+        mode: "freq-table",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction || "",
+        prompt: ex.stem || "",
+        stem: ex.stem || "",
+        table: null,
+        chart: null,
+        pie: displayPie(ex.pie),
+        data: null,
+        parts: (ex.parts || []).map(function (part) {
+          return { label: part.label || "", text: part.text || "" };
+        }),
+        explain: "",
+      };
+    }
+    if (level.mode === "freq-table" && ex.chart) {
+      var picture = ex.chart;
+      return {
+        mode: "freq-table",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction || "",
+        prompt: ex.stem || "",
+        stem: ex.stem || "",
+        table: null,
+        chart: {
+          xLabel: picture.xLabel || "",
+          yLabel: picture.yLabel || "",
+          yStep: picture.yStep,
+          yMax: picture.yMax,
+          grid: picture.grid !== false,
+          bars: (picture.rows || []).map(function (row) {
+            return { value: row.value, freq: row.freq };
+          }),
+        },
+        data: null,
+        parts: (ex.parts || []).map(function (part) {
+          return { label: part.label || "", text: part.text || "" };
+        }),
+        explain: "",
+      };
+    }
     if (level.mode === "freq-table") {
       var table = ex.table || {};
       var variable = table.variable || {};
@@ -226,6 +275,60 @@
       explain: domain
         ? "קודם תחום הצבה, אחר כך בודדו את x בצעדים שקולים."
         : "בודדו את x בצעדים שקולים עד שמתקבלת משוואה מהצורה x = מספר.",
+    };
+  }
+
+  function displayPie(picture) {
+    var sectors = (picture && picture.sectors) || [];
+    var known = [];
+    sectors.forEach(function (sector) {
+      if (sector.percent != null && !sector.expr) known.push(Number(sector.percent));
+    });
+    var knownSum = known.reduce(function (sum, value) { return sum + value; }, 0);
+    var mean = known.length ? knownSum / known.length : 15;
+    function coeff(expr) {
+      var text = String(expr || "").replace(/\s+/g, "");
+      if (text === "x") return 1;
+      var match = /^(\d+(?:\.\d+)?)x$/i.exec(text);
+      return match ? Number(match[1]) : 1;
+    }
+    var symbolic = sectors.some(function (sector) { return !!sector.expr; });
+    var coeffSum = 0;
+    sectors.forEach(function (sector) {
+      if (sector.expr) coeffSum += coeff(sector.expr);
+    });
+    var solved = symbolic && coeffSum ? (100 - knownSum) / coeffSum : null;
+    function weightsFor(unit) {
+      return sectors.map(function (sector) {
+        if (!symbolic || (sector.percent != null && !sector.expr)) return Number(sector.percent);
+        return coeff(sector.expr) * unit;
+      });
+    }
+    var unit = mean;
+    var weights = weightsFor(unit);
+    var guard = 0;
+    while (symbolic && guard < 6) {
+      var total = weights.reduce(function (sum, value) { return sum + value; }, 0);
+      var close = false;
+      sectors.forEach(function (sector, index) {
+        if (!sector.expr) return;
+        var shown = weights[index] / total * 100;
+        if (Math.abs(shown - coeff(sector.expr) * solved) < 6) close = true;
+      });
+      if (!close) break;
+      unit += 11;
+      weights = weightsFor(unit);
+      guard += 1;
+    }
+    var totalWeight = weights.reduce(function (sum, value) { return sum + value; }, 0) || 1;
+    return {
+      sectors: sectors.map(function (sector, index) {
+        return {
+          label: sector.label || "",
+          text: sector.expr ? String(sector.expr) : String(sector.percent) + "%",
+          angle: weights[index] / totalWeight * 360,
+        };
+      }),
     };
   }
 

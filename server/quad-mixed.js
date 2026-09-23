@@ -288,13 +288,15 @@ function handleMixed(engine, body) {
     var nAct = Q.nextMixedStep(lastEq(body), pack) || {};
     var lastNow = lastEq(body);
     if (nAct.path === "formula" && !nAct.eq) {
-      return {
-        ok: true,
-        chooseFormula: true,
-        hint: String(nAct.hint || ""),
-        message: String((nAct.hint || nAct.explain) || ""),
-        step: null,
-      };
+      var formStep = handleFormula(
+        engine,
+        Object.assign({}, body, { intent: "one-step", phase: "abc", letter: "a" }),
+        pack.quad
+      );
+      formStep.path = "formula";
+      formStep.enter = "formula";
+      formStep.view = Object.assign({}, formulaView(pack) || {}, formStep.view || {});
+      return formStep;
     }
     if (nAct.path && nAct.eq) {
       var nxt = Q.checkMixedTyped(lastNow, nAct.eq, pack);

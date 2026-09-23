@@ -40,7 +40,7 @@ function main() {
     checks.push(result);
   }
 
-  add(levels.length === 46 ? { ok: true, id: "level-count" } : fail("level-count", String(levels.length)));
+  add(levels.length === 48 ? { ok: true, id: "level-count" } : fail("level-count", String(levels.length)));
 
   levels.forEach(function (level) {
     var list = level.exercises || [];
@@ -67,7 +67,7 @@ function main() {
     });
   });
 
-  add(exercises === 713 ? { ok: true, id: "exercise-count" } : fail("exercise-count", String(exercises)));
+  add(exercises === 721 ? { ok: true, id: "exercise-count" } : fail("exercise-count", String(exercises)));
 
   var opened = studentDto.openProblem(engine, "level-02", 0);
   add(

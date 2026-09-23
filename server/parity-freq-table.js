@@ -34,7 +34,7 @@ function main() {
   var topics = engine.DoctematicaProblems.topics.map(function (topic) { return topic.id; });
   add(topics.indexOf("statistics") >= 0 ? { ok: true, id: "topic-listed" } : fail("topic-listed", topics.join(",")));
   var subs = engine.DoctematicaProblems.subtopics.statistics || [];
-  add(subs.length === 2 && subs[0].id === "freq-table" && subs[0].label === "טבלת שכיחויות" && subs[1].id === "relative-freq"
+  add(subs.length === 4 && subs[0].id === "freq-table" && subs[0].label === "טבלת שכיחויות" && subs[1].id === "relative-freq" && subs[2].id === "bar-chart" && subs[2].label === "דיאגרמת עמודות" && subs[3].id === "pie-chart" && subs[3].label === "דיאגרמת עיגול"
     ? { ok: true, id: "subtopic-listed" }
     : fail("subtopic-listed", JSON.stringify(subs)));
   add(topics.indexOf("equations") >= 0 && topics.indexOf("analytic") >= 0

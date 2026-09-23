@@ -97,6 +97,8 @@ function slimProblem(problem) {
     out.stem = problem.stem || "";
     out.prompt = problem.stem || problem.prompt || "";
     out.table = problem.table || null;
+    if (problem.chart) out.chart = problem.chart;
+    if (problem.pie) out.pie = problem.pie;
     if (problem.data) out.data = problem.data;
     out.parts = (problem.parts || []).map(function (part) {
       return { label: part.label || "", text: part.text || "" };

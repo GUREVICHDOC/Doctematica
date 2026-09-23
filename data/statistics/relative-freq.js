@@ -335,6 +335,36 @@
             tasks: [{ id: "fewer", kind: "relative", where: { on: "variable", op: "lt", value: 2 }, forms: ["percent"] }],
           },
         ]),
+        ex2(4, "בטבלה שלפניך מתוארת התפלגות מספר האיחורים של תלמידים בכיתה מסוימת במשך שנה. השכיחות היחסית של התלמידים שאיחרו 7 פעמים היא 0.425.", {
+          variable: { label: "מספר האיחורים" },
+          frequency: { label: "מספר התלמידים" },
+          givenRelative: { value: 7, decimal: 0.425 },
+          rows: [
+            { value: 4, freq: 2 },
+            { value: 5, freq: 1 },
+            { value: 6, freq: 6 },
+            { value: 7, freq: "x" },
+            { value: 8, freq: 6 },
+            { value: 9, freq: 5 },
+            { value: 10, freq: 3 },
+          ],
+        }, [
+          {
+            label: "א",
+            text: "מצאו את x ואת מספר התלמידים שנבדקו.",
+            tasks: [{ id: "both", kind: "freqBalance", goal: "both" }],
+          },
+          {
+            label: "ב",
+            text: "התלמידים שאיחרו 9 פעמים השתפרו, ובמהלך שנה נוספת לא איחרו כלל. לתלמיד שאיחר לפחות 9 פעמים במהלך השנה מורידים ציון בתלמידות. חשבו את השכיחות היחסית של התלמידים שהורידו להם ציון בתלמידות.",
+            tasks: [{
+              id: "moved",
+              kind: "relative",
+              where: { on: "variable", op: "gte", value: 9 },
+              transfer: { from: 9, to: 0, count: 5 },
+            }],
+          },
+        ]),
       ],
     },
   ]);

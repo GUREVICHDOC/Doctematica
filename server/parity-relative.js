@@ -398,7 +398,7 @@ function main() {
     : fail("unknown-solution", full.join(" | ")));
 
   var level2 = (engine.DoctematicaCurriculum.levels || []).filter(function (item) { return item.id === "stat-rel-2"; })[0];
-  add(level2 && level2.exercises.length === 3 && level2.exercises[0].id === "stat-rel-2-ex-a001" && level2.exercises[2].parts.length === 4
+  add(level2 && level2.exercises.length === 4 && level2.exercises[0].id === "stat-rel-2-ex-a001" && level2.exercises[2].parts.length === 4 && level2.exercises[3].id === "stat-rel-2-ex-a004"
     ? { ok: true, id: "rel2-count" }
     : fail("rel2-count", String(level2 && level2.exercises && level2.exercises.length)));
 
@@ -543,7 +543,7 @@ function main() {
     ? { ok: true, id: "rel2-symbol-clash" }
     : fail("rel2-symbol-clash", yThenA.message));
 
-  ["2/5=10/(20+x)", "10/(x+20)=2/5", "2/5=10/(2+8+x+10)"].forEach(function (typed) {
+  ["2/5=10/(20+x)", "10/(x+20)=2/5", "2/5=10/(2+8+x+10)", "(10)/(20+x)=2/5", "(2)/(5)=(10)/(x+20)"].forEach(function (typed) {
     var expr = askAt(engine, "stat-rel-2", 0, typed);
     add(expr.ok && expr.progress.solve.equation && expr.progress.solve.missing == null
       ? { ok: true, id: "rel2-expr-" + typed }
@@ -561,9 +561,9 @@ function main() {
     viaX = askAt(engine, "stat-rel-2", 0, "", viaX.progress, "step");
   }
   var plugged = askAt(engine, "stat-rel-2", 0, "", viaX.progress, "step");
-  add(viaX.progress.solve.missing === 5 && !viaX.progress.solve.equation && String(plugged.shows[0] || "").indexOf("20") >= 0 && String(plugged.shows[0] || "").indexOf("x") >= 0
+  add(viaX.progress.solve.missing === 5 && !viaX.progress.solve.equation && plugged.shows[0] === "20 + 5 = 25" && plugged.progress.solve.total === 25 && String(plugged.shows[0]).indexOf("N") < 0
     ? { ok: true, id: "rel2-x-then-total" }
-    : fail("rel2-x-then-total", JSON.stringify(viaX.progress.solve) + " | " + JSON.stringify(plugged.shows)));
+    : fail("rel2-x-then-total", JSON.stringify(viaX.progress.solve) + " | " + JSON.stringify(plugged.shows) + " " + JSON.stringify(plugged.progress && plugged.progress.solve)));
 
   var fullEq = askAt(engine, "stat-rel-2", 0, "2+8+x+10=25", skipN.progress);
   var fullNext = askAt(engine, "stat-rel-2", 0, "", fullEq.progress, "step");
@@ -593,6 +593,86 @@ function main() {
   add(sumHint.message.indexOf("סכום כל השכיחויות") >= 0 && sumHint.message.indexOf("20") < 0 && sumHint.message.indexOf("5") < 0
     ? { ok: true, id: "rel2-hint-sum" }
     : fail("rel2-hint-sum", sumHint.message));
+
+  var openLate = askAt(engine, "stat-rel-2", 3, "", {}, "hint");
+  add(openLate.view && openLate.view.fields && openLate.view.fields.length === 2 && openLate.view.fields[0].label === "x" && openLate.message.indexOf("שכיחות יחסית") >= 0 && JSON.stringify(openLate.view).indexOf("\"17\"") < 0
+    ? { ok: true, id: "rel2-late-fields" }
+    : fail("rel2-late-fields", JSON.stringify(openLate.view && openLate.view.fields) + " " + openLate.message));
+  var lateY = askAt(engine, "stat-rel-2", 3, "x/y=0.425");
+  var lateYStep = askAt(engine, "stat-rel-2", 3, "", lateY.progress, "step");
+  add(lateY.ok && lateY.progress.solve.totalSymbol === "y" && String(lateYStep.shows[0] || "").indexOf("y") >= 0 && String(lateYStep.shows[0] || "").indexOf("N") < 0
+    ? { ok: true, id: "rel2-late-letter" }
+    : fail("rel2-late-letter", JSON.stringify(lateY.progress && lateY.progress.solve) + " | " + JSON.stringify(lateYStep.shows) + " " + lateY.message));
+  var lateExpr = askAt(engine, "stat-rel-2", 3, "0.425=x/(x+23)");
+  var lateExprStep = askAt(engine, "stat-rel-2", 3, "", lateExpr.progress, "step");
+  add(lateExpr.ok && lateExpr.progress.solve.equation && String(lateExprStep.shows[0] || "").indexOf("x") >= 0 && String(lateExprStep.shows[0] || "").indexOf("N") < 0
+    ? { ok: true, id: "rel2-late-expr" }
+    : fail("rel2-late-expr", JSON.stringify(lateExpr.progress && lateExpr.progress.solve) + " | " + JSON.stringify(lateExprStep.shows) + " " + lateExpr.message));
+  var lateSwap = askAt(engine, "stat-rel-2", 3, "x/(23+x)=0.425");
+  add(lateSwap.ok ? { ok: true, id: "rel2-late-expr-swap" } : fail("rel2-late-expr-swap", lateSwap.message));
+  ["(x)/(23+x)=0.425", "0.425=(x)/(23+x)", "(x)/(3+5+6+x+6+1+2)=0.425", "x/(2+1+6+x+6+5+3)=0.425"].forEach(function (typed) {
+    var wrapped = askAt(engine, "stat-rel-2", 3, typed);
+    var wrappedStep = askAt(engine, "stat-rel-2", 3, "", wrapped.progress, "step");
+    var wrappedHint = askAt(engine, "stat-rel-2", 3, "", wrapped.progress, "hint");
+    var stepText = String(wrappedStep.shows && wrappedStep.shows[0] || "");
+    add(wrapped.ok && wrapped.progress.solve.equation && wrapped.progress.solve.missing == null && stepText.indexOf("0.425") >= 0 && stepText.indexOf("N") < 0 && wrappedHint.message.indexOf("מכנה") >= 0
+      ? { ok: true, id: "rel2-late-wrapped-" + typed }
+      : fail("rel2-late-wrapped-" + typed, wrapped.message + " | " + stepText + " | " + wrappedHint.message));
+  });
+  var lateOwned = askAt(engine, "stat-rel-2", 3, "x/x=0.425");
+  add(!lateOwned.ok && lateOwned.message.indexOf("כבר") >= 0 ? { ok: true, id: "rel2-late-owned" } : fail("rel2-late-owned", lateOwned.message));
+  var latePercent = askAt(engine, "stat-rel-2", 3, "x/N=42.5");
+  add(!latePercent.ok && latePercent.message.indexOf("0.425") >= 0 ? { ok: true, id: "rel2-late-decimal" } : fail("rel2-late-decimal", latePercent.message));
+  var lateWalk = askAt(engine, "stat-rel-2", 3, "x/(x+23)=0.425");
+  var lateGuard = 0;
+  while (lateWalk.progress.solve.missing == null && lateGuard < 10) {
+    lateGuard += 1;
+    lateWalk = askAt(engine, "stat-rel-2", 3, "", lateWalk.progress, "step");
+  }
+  add(lateWalk.progress.solve.missing === 17 && lateWalk.progress.solve.total == null
+    ? { ok: true, id: "rel2-late-equation" }
+    : fail("rel2-late-equation", JSON.stringify(lateWalk.progress && lateWalk.progress.solve)));
+  var lateTotalHint = askAt(engine, "stat-rel-2", 3, "", lateWalk.progress, "hint");
+  var lateTotal = askAt(engine, "stat-rel-2", 3, "", lateWalk.progress, "step");
+  add(lateTotal.shows[0] === "23 + 17 = 40" && lateTotal.progress.solve.missing === 17 && lateTotal.progress.solve.total === 40 && lateTotal.view && lateTotal.view.part && lateTotal.view.part.label === "ב" && lateTotalHint.message.indexOf("17") < 0 && lateTotalHint.message.indexOf("40") < 0 && lateTotalHint.message.indexOf("23") < 0
+    ? { ok: true, id: "rel2-late-after-x" }
+    : fail("rel2-late-after-x", JSON.stringify(lateTotal.shows) + " | " + JSON.stringify(lateTotal.progress && lateTotal.progress.solve) + " | " + lateTotalHint.message + " | " + JSON.stringify(lateTotal.view && lateTotal.view.part)));
+  var latePair = askAt(engine, "stat-rel-2", 3, "", {}, "check", [], { answers: { missing: "17", total: "40" } });
+  add(latePair.ok && latePair.view && latePair.view.part && latePair.view.part.label === "ב" && latePair.progress.solve.missing === 17 && latePair.progress.solve.total === 40
+    ? { ok: true, id: "rel2-late-pair" }
+    : fail("rel2-late-pair", JSON.stringify(latePair.view && latePair.view.part) + " " + JSON.stringify(latePair.progress && latePair.progress.solve) + " " + latePair.message));
+  var lateHalf = askAt(engine, "stat-rel-2", 3, "", {}, "check", [], { answers: { missing: "17", total: "30" } });
+  add(!lateHalf.ok && lateHalf.progress.solve.missing === 17 && lateHalf.progress.solve.total == null && lateHalf.view.fields[0].locked && !lateHalf.view.fields[1].locked
+    ? { ok: true, id: "rel2-late-lock" }
+    : fail("rel2-late-lock", JSON.stringify(lateHalf.view && lateHalf.view.fields) + " " + JSON.stringify(lateHalf.progress && lateHalf.progress.solve) + " " + lateHalf.message));
+  var moved = askAt(engine, "stat-rel-2", 3, "", latePair.progress, "step");
+  var moved2 = askAt(engine, "stat-rel-2", 3, "", moved.progress, "step");
+  add(moved.shows[0] === "5 − 5 = 0" && moved2.shows[0] === "0 + 5 = 5" && moved2.progress.solve.total === 40
+    ? { ok: true, id: "rel2-late-transfer" }
+    : fail("rel2-late-transfer", JSON.stringify(moved.shows) + " | " + JSON.stringify(moved2.shows)));
+  var movedHint = askAt(engine, "stat-rel-2", 3, "", latePair.progress, "hint");
+  add(movedHint.message.indexOf("יצאו") >= 0 && movedHint.message.indexOf("3/40") < 0
+    ? { ok: true, id: "rel2-late-transfer-hint" }
+    : fail("rel2-late-transfer-hint", movedHint.message));
+  var afterMove = askAt(engine, "stat-rel-2", 3, "", moved2.progress, "hint");
+  add(afterMove.message.indexOf("השכיחויות") >= 0
+    ? { ok: true, id: "rel2-late-after-hint" }
+    : fail("rel2-late-after-hint", afterMove.message));
+  var oldDist = askAt(engine, "stat-rel-2", 3, "8/40", latePair.progress);
+  add(!oldDist.ok && oldDist.message.indexOf("לפני המעבר") >= 0 ? { ok: true, id: "rel2-late-old" } : fail("rel2-late-old", oldDist.message));
+  var wrongWay = askAt(engine, "stat-rel-2", 3, "5+5", latePair.progress);
+  add(!wrongWay.ok && wrongWay.message.indexOf("יצאו") >= 0 ? { ok: true, id: "rel2-late-wrong-way" } : fail("rel2-late-wrong-way", wrongWay.message));
+  var grew = askAt(engine, "stat-rel-2", 3, "45", latePair.progress);
+  add(!grew.ok && grew.message.indexOf("לא השתנה") >= 0 ? { ok: true, id: "rel2-late-total" } : fail("rel2-late-total", grew.message));
+  var directMove = askAt(engine, "stat-rel-2", 3, "3/40", latePair.progress);
+  add(directMove.ok && directMove.view && directMove.view.solved
+    ? { ok: true, id: "rel2-late-direct" }
+    : fail("rel2-late-direct", JSON.stringify(directMove.view && directMove.view.part) + " " + directMove.message));
+  var continueMove = askAt(engine, "stat-rel-2", 3, "5-5", latePair.progress);
+  var continueStep = askAt(engine, "stat-rel-2", 3, "", continueMove.progress, "step");
+  add(continueMove.ok && continueStep.shows[0] === "0 + 5 = 5"
+    ? { ok: true, id: "rel2-late-continue" }
+    : fail("rel2-late-continue", JSON.stringify(continueStep.shows) + " " + continueMove.message));
 
   var failed = checks.filter(function (item) { return !item.ok; });
   console.log("parity-relative: passed " + (checks.length - failed.length) + ", failed " + failed.length);

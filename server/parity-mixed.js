@@ -306,11 +306,11 @@ async function run(engine) {
   ];
   var choose = handleMixed(engine, { intent: "one-step", start: arrangedStart, history: arrangedHist });
   count += 1;
-  if (!choose || !choose.chooseFormula || choose.enter || choose.path || choose.step) {
+  if (!choose || !choose.ok || choose.enter !== "formula" || choose.nextLetter !== "b" || !choose.fill || choose.fill.a == null) {
     mismatches.push({
-      id: "arranged-one-step-offers-choice",
+      id: "arranged-one-step-starts-formula",
       local: choose,
-      server: { expect: "chooseFormula, no enter and no step" },
+      server: { expect: "enter formula and fill a, next letter b" },
     });
   }
   var Qh = require("./quadratic").createQuadraticHandler(engine);
@@ -339,11 +339,11 @@ async function run(engine) {
     history: arrangedHist,
   });
   count += 1;
-  if (!offered || !offered.offerFormula || offered.enter || offered.path) {
+  if (!offered || offered.enter !== "formula" || offered.nextLetter !== "b") {
     mismatches.push({
       id: "arranged-one-step-offerFormula",
       local: offered,
-      server: { expect: "offerFormula without entering formula" },
+      server: { expect: "one-step enters formula at a" },
     });
   }
 

@@ -29,8 +29,14 @@ function compact(text) {
     .replace(/\s+/g, "");
 }
 
+function tidyFraction(text) {
+  return String(text || "").replace(/\(([A-Za-z]|\d+(?:\.\d+)?)\)\/(\([^()]*\)|[A-Za-z]|\d+(?:\.\d+)?)/g, function (_m, num, den) {
+    return num + "/" + den;
+  });
+}
+
 function shown(text) {
-  return compact(text).replace(/\*/g, "·").replace(/=/g, " = ");
+  return tidyFraction(compact(text)).replace(/\*/g, "·").replace(/=/g, " = ");
 }
 
 function emptySolve() {
@@ -45,6 +51,7 @@ function emptySolve() {
     eqCurrent: "",
     eqAbout: "",
     phase: "",
+    shift: { fromNext: null, toNext: null, part: false },
   };
 }
 
@@ -61,7 +68,17 @@ function clone(raw) {
   base.eqCurrent = raw.eqCurrent || "";
   base.eqAbout = raw.eqAbout === "total" ? "total" : "";
   base.phase = raw.phase || "";
+  base.shift = shiftOf(raw.shift);
   return base;
+}
+
+function shiftOf(raw) {
+  raw = raw || {};
+  return {
+    fromNext: raw.fromNext == null || raw.fromNext === "" ? null : Number(raw.fromNext),
+    toNext: raw.toNext == null || raw.toNext === "" ? null : Number(raw.toNext),
+    part: !!raw.part,
+  };
 }
 
 function symbolOf(expr) {
@@ -78,7 +95,19 @@ function ownershipMessage(letter) {
 }
 
 function goalOf(task) {
-  return task && task.goal === "missing" ? "missing" : "total";
+  if (task && task.goal === "missing") return "missing";
+  if (task && task.goal === "both") return "both";
+  return "total";
+}
+
+function decimalFraction(value) {
+  var text = String(value);
+  if (!/^\d+\.\d+$/.test(text)) return null;
+  var places = text.split(".")[1].length;
+  var den = Math.pow(10, places);
+  var num = Math.round(Number(text) * den);
+  var g = gcd(num, den);
+  return { num: num / g, den: den / g, text: text };
 }
 
 function truth(compiled) {
@@ -92,49 +121,79 @@ function truth(compiled) {
   var values = [];
   rows.forEach(function (row) {
     if (row.num != null) values.push(row.num);
+    var matchesSpec = String(row.value) === String(spec.value) || row.key === String(spec.value);
     if (row.givenExpr) {
       missingRow = missingRow || row;
+      if (matchesSpec) anchor = row;
       return;
     }
     if (row.freq == null || !isFinite(Number(row.freq))) return;
     known += Number(row.freq);
     knownFreqs.push(Number(row.freq));
-    if (String(row.value) === String(spec.value) || row.key === String(spec.value)) anchor = row;
+    if (matchesSpec) anchor = row;
   });
-  if (!anchor || anchor.freq == null || !missingRow) return null;
-  var f = Number(anchor.freq);
-  var num;
-  var den;
-  var percent = null;
-  var asPercent = spec.percent != null && spec.percent !== "";
-  if (asPercent) {
-    percent = Number(spec.percent);
-    num = percent;
-    den = 100;
+  if (!anchor || !missingRow) return null;
+  var ratioBits = ratioBitsOf(spec);
+  if (!ratioBits) return null;
+  var numeratorIsMissing = !!anchor.givenExpr;
+  var f;
+  var total;
+  var missing;
+  if (numeratorIsMissing) {
+    if (ratioBits.num >= ratioBits.den) return null;
+    missing = (ratioBits.num * known) / (ratioBits.den - ratioBits.num);
+    if (!isFinite(missing)) return null;
+    f = missing;
+    total = missing + known;
   } else {
-    num = Number(spec.num);
-    den = Number(spec.den);
-    percent = (num / den) * 100;
+    if (anchor.freq == null) return null;
+    f = Number(anchor.freq);
+    total = Percent.targetOf({ part: f, percent: ratioBits.percent, unknown: "all" });
+    if (!isFinite(total)) return null;
+    missing = total - known;
   }
-  if (!den) return null;
-  var total = Percent.targetOf({ part: f, percent: percent, unknown: "all" });
-  if (!isFinite(total)) return null;
   return {
     f: f,
     value: anchor.num != null ? anchor.num : anchor.value,
-    num: num,
-    den: den,
-    percent: percent,
-    asPercent: asPercent,
-    ratio: num / den,
+    num: ratioBits.num,
+    den: ratioBits.den,
+    percent: ratioBits.percent,
+    asPercent: ratioBits.asPercent,
+    asDecimal: ratioBits.asDecimal,
+    decimalText: ratioBits.decimalText || "",
+    numeratorIsMissing: numeratorIsMissing,
+    ratio: ratioBits.num / ratioBits.den,
     known: known,
     knownFreqs: knownFreqs,
     values: values,
     total: total,
-    missing: total - known,
+    missing: missing,
     missingRow: missingRow,
     missingSymbol: symbolOf(missingRow.givenExpr),
   };
+}
+
+function ratioBitsOf(spec) {
+  if (spec.percent != null && spec.percent !== "") {
+    var percent = Number(spec.percent);
+    return { num: percent, den: 100, percent: percent, asPercent: true, asDecimal: false, decimalText: "" };
+  }
+  if (spec.decimal != null && spec.decimal !== "") {
+    var bits = decimalFraction(spec.decimal);
+    if (!bits) return null;
+    return {
+      num: bits.num,
+      den: bits.den,
+      percent: (bits.num / bits.den) * 100,
+      asPercent: false,
+      asDecimal: true,
+      decimalText: bits.text,
+    };
+  }
+  var den = Number(spec.den);
+  var num = Number(spec.num);
+  if (!den) return null;
+  return { num: num, den: den, percent: (num / den) * 100, asPercent: false, asDecimal: false, decimalText: "" };
 }
 
 function materialize(compiled) {
@@ -155,6 +214,7 @@ function sanitize(compiled, raw) {
   if (/^[A-Za-z]$/.test(raw.totalSymbol) && raw.totalSymbol !== info.missingSymbol) out.totalSymbol = raw.totalSymbol;
   if (typeof raw.totalExpr === "string") out.totalExpr = raw.totalExpr.slice(0, 80);
   if (raw.eqAbout === "total") out.eqAbout = "total";
+  if (raw.shift) out.shift = shiftOf(raw.shift);
   if (raw.expressed) out.expressed = true;
   if (raw.rational && raw.missing == null) out.rational = true;
   if (typeof raw.equation === "string" && raw.missing == null) out.equation = raw.equation.slice(0, 200);
@@ -175,12 +235,21 @@ function pending(compiled, progress) {
 }
 
 function ratioText(info) {
+  if (info.asDecimal && info.decimalText) return info.decimalText;
   if (info.asPercent) return format(info.percent) + "/100";
   return format(info.num) + "/" + format(info.den);
 }
 
 function siteLines(info, symbol) {
   symbol = symbol || "N";
+  if (info.numeratorIsMissing) {
+    var ratio = ratioText(info);
+    return {
+      proportion: info.missingSymbol + "/" + symbol + " = " + ratio,
+      isolate: info.missingSymbol + "/(" + info.missingSymbol + "+" + format(info.known) + ") = " + ratio,
+      value: symbol + " = " + format(info.total),
+    };
+  }
   if (info.asPercent) {
     var ex = { part: info.f, percent: info.percent, unknown: "all" };
     return {
@@ -262,7 +331,7 @@ function parseLinearSum(expr, symbol) {
 function fractionSide(side) {
   var slash = mainSlash(side);
   if (slash <= 0) return null;
-  return { num: side.slice(0, slash), den: unwrap(side.slice(slash + 1)) };
+  return { num: unwrap(side.slice(0, slash)), den: unwrap(side.slice(slash + 1)) };
 }
 
 function knownExpr(compiled) {
@@ -368,6 +437,13 @@ function diagnose(text, info) {
   if (!same(info.num, info.den) && new RegExp("^" + f + "/[A-Za-z]=" + format(info.den) + "/" + format(info.num) + "$").test(t)) {
     return "השבר הנתון הפוך. השכיחות היחסית היא " + format(info.num) + "/" + format(info.den) + ".";
   }
+  if (info.asDecimal && info.decimalText) {
+    var percentText = format(info.percent);
+    var decimalSides = t.split("=");
+    if (decimalSides.length === 2 && (decimalSides[0] === percentText || decimalSides[1] === percentText)) {
+      return info.decimalText + " היא שכיחות יחסית עשרונית, לא " + percentText + ".";
+    }
+  }
   var sides = t.split("=");
   if (sides.length === 2 && t.indexOf("x") < 0 && t.indexOf("N") < 0) {
     var left = addends(sides[0]);
@@ -424,6 +500,29 @@ function expressedSum(text, info) {
   return { letter: letter, expr: expr };
 }
 
+function readMissingProportion(text, info) {
+  if (!info.numeratorIsMissing) return null;
+  var sides = compact(text).split("=");
+  if (sides.length !== 2) return null;
+  var left = fractionSide(sides[0]);
+  var right = fractionSide(sides[1]);
+  var freqSide = null;
+  var sym = info.missingSymbol;
+  function missingNumerator(side) {
+    return side && (side.num === sym || same(Number(side.num), info.missing));
+  }
+  if (missingNumerator(left) && ratioMatches(sides[1], info)) freqSide = left;
+  else if (missingNumerator(right) && ratioMatches(sides[0], info)) freqSide = right;
+  if (!freqSide) return null;
+  var den = freqSide.den;
+  var numeric = freqSide.num !== sym;
+  if (den === sym) return { kind: "owned", letter: sym };
+  if (/^[A-Za-z]$/.test(den)) return { kind: "letter", letter: den, numeric: numeric };
+  var sum = parseLinearSum(den, sym);
+  if (sum && same(sum.a, 1) && same(sum.b, info.known)) return { kind: "expr", den: den };
+  return null;
+}
+
 function readProportion(text, info) {
   var sides = compact(text).split("=");
   if (sides.length !== 2) return null;
@@ -474,13 +573,21 @@ function fromEngine(s, text) {
   return String(text);
 }
 
+function numericToken(text) {
+  var t = unwrap(String(text || ""));
+  if (/^\d+(?:\.\d+)?$/.test(t)) return Number(t);
+  return null;
+}
+
 function ratioMatches(piece, info) {
   var text = String(piece || "");
   if (/%$/.test(text)) return same(Number(text.slice(0, -1)) / 100, info.ratio);
-  if (text.indexOf("/") >= 0) {
-    var bits = text.split("/");
-    if (bits.length !== 2 || !Number(bits[1])) return false;
-    return same(Number(bits[0]) / Number(bits[1]), info.ratio);
+  var slash = mainSlash(text);
+  if (slash > 0) {
+    var num = numericToken(text.slice(0, slash));
+    var den = numericToken(text.slice(slash + 1));
+    if (num == null || !den) return false;
+    return same(num / den, info.ratio);
   }
   if (/^\d+(?:\.\d+)?$/.test(text)) return same(Number(text), info.ratio);
   return false;
@@ -507,22 +614,24 @@ function finishFound(s, task, info, which) {
     s.eqCurrent = "";
     s.rational = false;
     if (goal === "missing") s.total = s.total == null ? info.total : s.total;
+    var missingDone = goal === "missing" || (goal === "both" && s.total != null);
     return {
       ok: true,
-      done: goal === "missing",
+      done: missingDone,
       solve: s,
       shows: [info.missingSymbol + " = " + format(info.missing)],
-      message: goal === "missing" ? "" : "אפשר להמשיך.",
+      message: missingDone ? "" : "אפשר להמשיך.",
     };
   }
   s.total = info.total;
   if (s.phase !== "sum" && s.phase !== "subtract") s.phase = "total";
+  var totalDone = goal === "total" || (goal === "both" && s.missing != null);
   return {
     ok: true,
-    done: goal === "total",
+    done: totalDone,
     solve: s,
     shows: [totalName(s) + " = " + format(info.total)],
-    message: goal === "total" ? "" : "זה מספר התצפיות הכולל. סכום כל השכיחויות בטבלה שווה לו.",
+    message: totalDone ? "" : "זה מספר התצפיות הכולל. סכום כל השכיחויות בטבלה שווה לו.",
   };
 }
 
@@ -563,6 +672,25 @@ function check(engine, compiled, task, typed, progress) {
     s.expressed = true;
     s.totalSymbol = expressed.letter;
     s.totalExpr = expressed.expr;
+    return { ok: true, done: false, solve: s, shows: [shown(text)], message: "אפשר להמשיך." };
+  }
+  var missingProp = readMissingProportion(text, info);
+  if (missingProp && missingProp.kind === "owned") {
+    return { ok: false, message: ownershipMessage(missingProp.letter), confident: true };
+  }
+  if (missingProp && missingProp.kind === "expr") {
+    s.expressed = true;
+    s.rational = true;
+    s.equation = shown(text);
+    s.eqCurrent = s.equation;
+    s.eqAbout = "";
+    return { ok: true, done: false, solve: s, shows: [s.equation], message: "אפשר להמשיך." };
+  }
+  if (missingProp && missingProp.kind === "letter" && missingProp.numeric !== true) {
+    var namedClash = symbolClash(s, missingProp.letter);
+    if (namedClash) return { ok: false, message: namedClash, confident: true };
+    s.totalSymbol = missingProp.letter;
+    s.phase = "proportion";
     return { ok: true, done: false, solve: s, shows: [shown(text)], message: "אפשר להמשיך." };
   }
   var proportion = readProportion(text, info);
@@ -749,8 +877,12 @@ function hint(engine, compiled, task, progress) {
   if (s.expressed && !s.equation && s.total == null) {
     return "הציבו את הביטוי של " + totalName(s) + " בקשר: שכיחות חלקי הסך הכול שווה לשכיחות היחסית.";
   }
+  if (s.missing != null && s.total == null) {
+    return "הנעלם כבר נמצא. חברו אותו לסכום השכיחויות הידועות כדי למצוא את המספר הכולל.";
+  }
   if (s.total == null) {
     if (s.phase === "proportion" || s.phase === "isolate" || s.phase === "expr") return "שכיחות חלקי סך הכול שווה לשכיחות היחסית.";
+    if (info.numeratorIsMissing) return "שכיחות יחסית היא השכיחות של הקבוצה חלקי מספר התלמידים הכולל.";
     var label = compiled.variableLabel || "הערך";
     return "השתמשו בשכיחות של " + label + " " + format(info.value) + " ובשכיחות היחסית הנתונה.";
   }
@@ -800,24 +932,38 @@ function step(engine, compiled, task, progress) {
   }
   if (s.expressed && !s.equation && s.total == null && s.missing == null) {
     var expr = s.totalExpr || (info.missingSymbol + "+" + format(info.known));
-    var prop = format(info.f) + "/(" + expr + ") = " + ratioText(info);
+    var numerator = info.numeratorIsMissing ? info.missingSymbol : format(info.f);
+    var prop = numerator + "/(" + expr + ") = " + ratioText(info);
     s.equation = prop;
     s.eqCurrent = prop;
     s.rational = true;
     return { done: false, solve: s, shows: [prop], message: "" };
   }
   if (s.missing != null && s.total == null && goalOf(task) !== "missing") {
-    var name = totalName(s);
-    if (s.phase !== "plug") {
-      s.phase = "plug";
-      return { done: false, solve: s, shows: [name + " = " + format(info.known) + " + " + info.missingSymbol], message: "" };
-    }
+    var plugged = format(info.known) + " + " + format(info.missing) + " = " + format(info.total);
+    if (s.totalSymbol) plugged = s.totalSymbol + " = " + plugged;
     s.total = info.total;
     s.phase = "total";
-    return { done: goalOf(task) === "total", solve: s, shows: [name + " = " + format(info.total)], message: "" };
+    return {
+      done: goalOf(task) === "total" || (goalOf(task) === "both" && s.missing != null),
+      solve: s,
+      shows: [plugged],
+      message: "",
+    };
   }
   if (s.total == null && s.missing == null) {
     var lines = siteLines(info, totalName(s));
+    if (info.numeratorIsMissing && s.totalSymbol && s.phase === "proportion" && !s.expressed && !s.equation) {
+      s.expressed = true;
+      s.totalExpr = info.missingSymbol + "+" + format(info.known);
+      return { done: false, solve: s, shows: [s.totalSymbol + " = " + info.missingSymbol + " + " + format(info.known)], message: "" };
+    }
+    if (info.numeratorIsMissing && s.phase === "proportion" && !s.equation) {
+      s.equation = lines.isolate;
+      s.eqCurrent = lines.isolate;
+      s.rational = true;
+      return { done: false, solve: s, shows: [lines.isolate], message: "" };
+    }
     if (s.phase !== "proportion" && s.phase !== "isolate" && s.phase !== "expr") {
       s.phase = "proportion";
       return { done: false, solve: s, shows: [lines.proportion], message: "" };
@@ -828,7 +974,7 @@ function step(engine, compiled, task, progress) {
     }
     s.total = info.total;
     s.phase = "total";
-    return { done: goalOf(task) === "total", solve: s, shows: [lines.value], message: "" };
+    return { done: goalOf(task) === "total" || (goalOf(task) === "both" && s.missing != null), solve: s, shows: [lines.value], message: "" };
   }
   if (s.missing == null) {
     if (s.phase === "sum") {
@@ -850,6 +996,41 @@ function step(engine, compiled, task, progress) {
   return finishFound(s, task, info, "total");
 }
 
+function acceptPair(compiled, task, answers, progress) {
+  var info = truth(compiled);
+  if (!info || goalOf(task) !== "both") return null;
+  var s = clone(progress && progress.solve);
+  var shows = [];
+  var wrong = "";
+  function take(id, value, which) {
+    var text = String((answers && answers[id]) || "").trim().replace(/\s+/g, "");
+    if (!text) return;
+    var n = Number(text);
+    if (which === "missing" && same(n, info.missing)) {
+      s.missing = info.missing;
+      shows.push(info.missingSymbol + " = " + format(info.missing));
+      return;
+    }
+    if (which === "total" && same(n, info.total)) {
+      s.total = info.total;
+      if (s.phase !== "sum" && s.phase !== "subtract") s.phase = "total";
+      shows.push(totalName(s) + " = " + format(info.total));
+      return;
+    }
+    if (!wrong) {
+      wrong = which === "missing"
+        ? "הערך של " + info.missingSymbol + " אינו נכון."
+        : "מספר התלמידים אינו נכון.";
+    }
+  }
+  take("missing", null, "missing");
+  take("total", null, "total");
+  if (!shows.length && !wrong) return null;
+  var done = s.missing != null && s.total != null;
+  if (wrong) return { ok: false, done: false, solve: s, shows: shows, message: wrong };
+  return { ok: true, done: done, solve: s, shows: shows, message: done ? "" : "השדה הנכון נעול." };
+}
+
 module.exports = {
   truth: truth,
   materialize: materialize,
@@ -858,5 +1039,6 @@ module.exports = {
   check: check,
   hint: hint,
   step: step,
+  acceptPair: acceptPair,
   emptySolve: emptySolve,
 };
