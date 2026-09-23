@@ -20,8 +20,9 @@ function main() {
     ? { ok: true, id: "topic-order" }
     : fail("topic-order", topics.join(",")));
   var subs = engine.DoctematicaProblems.subtopics.percents || [];
-  add(subs.length === 2 && subs[0].id === "find-part" && subs[0].label === "מציאת כמות עבור אחוז"
+  add(subs.length === 3 && subs[0].id === "find-part" && subs[0].label === "מציאת כמות עבור אחוז"
     && subs[1].id === "find-whole" && subs[1].label === "מציאת הכמות היסודית"
+    && subs[2].id === "find-percent" && subs[2].label === "מציאת האחוז"
     ? { ok: true, id: "subtopic" }
     : fail("subtopic", JSON.stringify(subs)));
 
@@ -659,6 +660,18 @@ function main() {
   add(expressStep.ok && expressStep.shows[0] === "(70/100)·x" && !expressStep.view.solved ? { ok: true, id: "express-site-step" } : fail("express-site-step", JSON.stringify(expressStep)));
   var expressNext = askWhole(0, "", {}, {}, "step", ["(70/100)·x"]);
   add(expressNext.ok && expressNext.joinPrev && expressNext.shows[0] === "0.7x" ? { ok: true, id: "express-site-simplify" } : fail("express-site-simplify", JSON.stringify(expressNext)));
+  var expressContinue = askWhole(0, "=0.7x", {}, { step: "expr" }, "check", ["(70/100)·x"]);
+  add(expressContinue.ok && expressContinue.view.solved && expressContinue.joinPrev && expressContinue.shows[0] === "0.7x"
+    ? { ok: true, id: "express-continue-equals" }
+    : fail("express-continue-equals", JSON.stringify(expressContinue)));
+  var expressContinueBare = askWhole(0, "=0.7x");
+  add(expressContinueBare.ok && expressContinueBare.view.solved && !expressContinueBare.joinPrev && expressContinueBare.shows[0] === "0.7x"
+    ? { ok: true, id: "express-leading-equals" }
+    : fail("express-leading-equals", JSON.stringify(expressContinueBare)));
+  var expressContinueBad = askWhole(2, "=0.9x", {}, { step: "expr" }, "check", ["(9/100)·x"]);
+  add(!expressContinueBad.ok && expressContinueBad.message.indexOf("0.09") >= 0
+    ? { ok: true, id: "express-continue-bad" }
+    : fail("express-continue-bad", expressContinueBad.message));
   var salaryProp = askWhole(6, "45/100=3600/x");
   add(salaryProp.ok && !salaryProp.view.solved ? { ok: true, id: "whole-proportion" } : fail("whole-proportion", JSON.stringify(salaryProp)));
   var salaryCross = askWhole(6, "45x=360000");
@@ -711,6 +724,129 @@ function main() {
   add(classOpen.view.part && classOpen.view.part.label === "א" && !standaloneNum(JSON.stringify(classOpen), "35") && !standaloneNum(JSON.stringify(classOpen), "0.6")
     ? { ok: true, id: "class-open" }
     : fail("class-open", JSON.stringify(classOpen.view)));
+
+  function askPercent(index, typed, answers, progress, intent, history) {
+    return percent.handle(engine, {
+      intent: intent || "check",
+      levelId: "pct-percent-1",
+      exerciseIndex: index,
+      typed: typed || "",
+      answers: answers || {},
+      history: history || [],
+      progress: progress || {},
+    });
+  }
+  var percentLevel = (engine.DoctematicaCurriculum.levels || []).filter(function (level) { return level.id === "pct-percent-1"; })[0];
+  add(percentLevel && percentLevel.exercises.length === 12 && percentLevel.subtopic === "find-percent"
+    && percentLevel.exercises[0].parts == null && percentLevel.exercises[9].parts.length === 2
+    ? { ok: true, id: "percent-count" }
+    : fail("percent-count", String(percentLevel && percentLevel.exercises.length)));
+  add(askPercent(0, "25%").view.solved && askPercent(1, "40").view.solved && askPercent(2, "45%").view.solved
+    && askPercent(3, "6").view.solved && askPercent(4, "32.5%").view.solved && askPercent(5, "5%").view.solved
+    ? { ok: true, id: "percent-direct" }
+    : fail("percent-direct", ""));
+  var ratioPath = askPercent(0, "(6/24)*100");
+  add(ratioPath.ok && !ratioPath.view.solved && ratioPath.progress.step === "expr"
+    ? { ok: true, id: "percent-ratio-expr" }
+    : fail("percent-ratio-expr", JSON.stringify(ratioPath)));
+  var ratioDone = askPercent(0, "", {}, {}, "step", ["(6/24)·100"]);
+  add(ratioDone.ok && ratioDone.view.solved && ratioDone.joinPrev && ratioDone.shows[0] === "25"
+    ? { ok: true, id: "percent-ratio-step" }
+    : fail("percent-ratio-step", JSON.stringify(ratioDone)));
+  add(askPercent(0, "1/4=x/100").ok && askPercent(0, "x/100=6/24").ok
+    ? { ok: true, id: "percent-equivalent" }
+    : fail("percent-equivalent", ""));
+  var partSwap = askPercent(0, "24/6=x/100");
+  add(!partSwap.ok && partSwap.message.indexOf("החלק") >= 0 && partSwap.message.indexOf("6/24") < 0
+    ? { ok: true, id: "percent-swap-part" }
+    : fail("percent-swap-part", partSwap.message));
+  var baseSwap = askPercent(0, "6/24=100/x");
+  add(!baseSwap.ok && baseSwap.message.indexOf("100") >= 0 && baseSwap.message.indexOf("25") < 0
+    ? { ok: true, id: "percent-swap-base" }
+    : fail("percent-swap-base", baseSwap.message));
+  var manySwap = askPercent(0, "24/6=100/x");
+  add(!manySwap.ok && manySwap.message.indexOf("מקומות הלא נכונים") >= 0 && manySwap.message.indexOf("25") < 0
+    ? { ok: true, id: "percent-swap-many" }
+    : fail("percent-swap-many", manySwap.message));
+  var calcSlip = askPercent(0, "24x=500", {}, {}, "check", ["6/24 = x/100", "24x = 6·100"]);
+  add(!calcSlip.ok && calcSlip.message.indexOf("טעות בחישוב") >= 0 && calcSlip.message.indexOf("6·100") >= 0 && calcSlip.message.indexOf("600") < 0
+    ? { ok: true, id: "percent-calc" }
+    : fail("percent-calc", calcSlip.message));
+  add(askPercent(0, "", {}, {}, "hint").message.indexOf("חלק") >= 0 && askPercent(0, "", {}, {}, "hint").message.indexOf("25") < 0
+    ? { ok: true, id: "percent-hint-start" }
+    : fail("percent-hint-start", ""));
+  add(askPercent(0, "", {}, {}, "hint", ["6/24 = x/100"]).message.indexOf("אלכסון") >= 0
+    ? { ok: true, id: "percent-hint-cross" }
+    : fail("percent-hint-cross", ""));
+  add(askPercent(0, "", {}, {}, "hint", ["24x = 6·100"]).message.indexOf("כפל") >= 0 && askPercent(0, "", {}, {}, "hint", ["24x = 600"]).message.indexOf("בודדו") >= 0
+    ? { ok: true, id: "percent-hint-follow" }
+    : fail("percent-hint-follow", ""));
+  add(askPercent(0, "", {}, {}, "hint", ["(6/24)·100"]).message.indexOf("הביטוי") >= 0
+    ? { ok: true, id: "percent-hint-expr" }
+    : fail("percent-hint-expr", ""));
+  var percentSol = askPercent(0, "", {}, {}, "solution");
+  var percentLines = (percentSol.lines || []).map(function (line) { return line.show; });
+  add(percentSol.view.solved && percentLines.join(" | ") === "6/24 = x/100 | 24x = 6·100 | 24x = 600 | x = 600/24 | x = 25 | 25%"
+    ? { ok: true, id: "percent-solution" }
+    : fail("percent-solution", percentLines.join(" | ")));
+  add(askPercent(0, "", {}, {}, "step").shows[0] === "6/24 = x/100"
+    && askPercent(0, "", {}, {}, "step", ["6/24 = x/100"]).shows[0] === "24x = 6·100"
+    && askPercent(0, "", {}, {}, "step", ["6/24 = x/100", "24x = 6·100"]).shows[0] === "24x = 600"
+    ? { ok: true, id: "percent-steps" }
+    : fail("percent-steps", ""));
+  add(askPercent(6, "62.5%").view.solved && askPercent(7, "25%").view.solved
+    ? { ok: true, id: "percent-word-direct" }
+    : fail("percent-word-direct", ""));
+  var brothersFields = askPercent(8, "", { f1: "60", f2: "40" });
+  add(brothersFields.view.solved ? { ok: true, id: "percent-brothers-fields" } : fail("percent-brothers-fields", JSON.stringify(brothersFields)));
+  var brothersSwapped = askPercent(8, "", { f1: "40", f2: "60" });
+  add(!brothersSwapped.ok && brothersSwapped.message.indexOf("החלפת") >= 0
+    ? { ok: true, id: "percent-brothers-swap" }
+    : fail("percent-brothers-swap", brothersSwapped.message));
+  var brothersSol = askPercent(8, "", {}, {}, "solution");
+  var brothersLines = (brothersSol.lines || []).map(function (line) { return line.show; });
+  add(brothersSol.view.solved && brothersLines[brothersLines.length - 2] === "60%" && brothersLines[brothersLines.length - 1] === "100% - 60% = 40%"
+    ? { ok: true, id: "percent-brothers-solution" }
+    : fail("percent-brothers-solution", brothersLines.join(" | ")));
+  var hospitalPart = askPercent(9, "80-52");
+  add(hospitalPart.ok && !hospitalPart.view.solved && hospitalPart.view.part.label === "א"
+    ? { ok: true, id: "percent-hospital-diff" }
+    : fail("percent-hospital-diff", JSON.stringify(hospitalPart)));
+  var hospitalJoin = askPercent(9, "=28", {}, { step: "expr" }, "check", ["80 - 52"]);
+  add(hospitalJoin.ok && hospitalJoin.joinPrev && hospitalJoin.shows[0] === "28" && hospitalJoin.view.part.label === "ב"
+    ? { ok: true, id: "percent-hospital-join" }
+    : fail("percent-hospital-join", JSON.stringify(hospitalJoin)));
+  add(askPercent(9, "28/80=x/100", {}, { part: 1 }).ok && askPercent(9, "35%", {}, { part: 1 }).view.solved
+    ? { ok: true, id: "percent-hospital-b" }
+    : fail("percent-hospital-b", ""));
+  add(askPercent(9, "100%-65%=35%", {}, { part: 1 }).view.solved
+    ? { ok: true, id: "percent-hospital-complement" }
+    : fail("percent-hospital-complement", ""));
+  var hospitalSol = askPercent(9, "", {}, {}, "solution");
+  var hospitalLines = (hospitalSol.lines || []).map(function (line) { return (line.part ? line.part + ":" : "") + line.show; });
+  add(hospitalSol.view.solved && hospitalLines[0] === "א:80 - 52" && hospitalLines.indexOf("ב:28/80 = x/100") >= 0 && hospitalLines[hospitalLines.length - 1] === "ב:35%"
+    ? { ok: true, id: "percent-hospital-solution" }
+    : fail("percent-hospital-solution", hospitalLines.join(" | ")));
+  add(askPercent(10, "80%").view.solved && askPercent(10, "100%-20%=80%").view.solved && askPercent(10, "(160/200)*100").ok
+    ? { ok: true, id: "percent-rejected" }
+    : fail("percent-rejected", ""));
+  var rejectedSol = askPercent(10, "", {}, {}, "solution");
+  var rejectedLines = (rejectedSol.lines || []).map(function (line) { return line.show; });
+  add(rejectedLines[0] === "40 + 160" && rejectedLines[2] === "160/200 = x/100" && rejectedLines[rejectedLines.length - 1] === "80%"
+    ? { ok: true, id: "percent-rejected-solution" }
+    : fail("percent-rejected-solution", rejectedLines.join(" | ")));
+  add(askPercent(11, "70%").view.solved && askPercent(11, "100-30=70").view.solved
+    ? { ok: true, id: "percent-saved" }
+    : fail("percent-saved", ""));
+  var savedSol = askPercent(11, "", {}, {}, "solution");
+  var savedLines = (savedSol.lines || []).map(function (line) { return line.show; });
+  add(savedLines[0] === "3000 - 900" && savedLines[2] === "2100/3000 = x/100" && savedLines[savedLines.length - 1] === "70%"
+    ? { ok: true, id: "percent-saved-solution" }
+    : fail("percent-saved-solution", savedLines.join(" | ")));
+  var percentOpen = studentDto.openProblem(engine, "pct-percent-1", 0);
+  add(!standaloneNum(JSON.stringify(percentOpen), "25") && percentOpen.problem.prompt.indexOf("6") >= 0
+    ? { ok: true, id: "percent-open" }
+    : fail("percent-open", JSON.stringify(percentOpen.problem && percentOpen.problem.prompt)));
 
   var failed = checks.filter(function (item) { return !item.ok; });
   console.log("parity-percent: passed " + (checks.length - failed.length) + ", failed " + failed.length);

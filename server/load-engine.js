@@ -44,6 +44,7 @@ var ENGINE_SCRIPTS = [
   "data/statistics/freq-table.js",
   "data/percents/find-part.js",
   "data/percents/find-whole.js",
+  "data/percents/find-percent.js",
   "data/checks.js",
   "js/content.js",
   "js/problems.js",
