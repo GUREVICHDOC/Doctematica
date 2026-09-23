@@ -426,7 +426,7 @@ function main() {
     ? { ok: true, id: "rel2-skip-n" }
     : fail("rel2-skip-n", JSON.stringify(skipN.view && skipN.view.part) + " " + JSON.stringify(skipN.progress && skipN.progress.solve)));
   var afterN = askAt(engine, "stat-rel-2", 0, "", skipN.progress, "step");
-  add(afterN.shows[0] === "10 + 8 + 2" && afterN.shows[0].indexOf("10/N") < 0
+  add(afterN.shows[0] === "2 + 8 + x + 10 = 25" && afterN.shows[0].indexOf("10/N") < 0
     ? { ok: true, id: "rel2-after-n-no-prop" }
     : fail("rel2-after-n-no-prop", JSON.stringify(afterN.shows)));
   var skipX = askAt(engine, "stat-rel-2", 0, "5", skipN.progress);
@@ -449,7 +449,7 @@ function main() {
     ? { ok: true, id: "rel2-expressed-continues" }
     : fail("rel2-expressed-continues", JSON.stringify(expressedStep.shows) + " " + expressedStep.message));
   var bridge = askAt(engine, "stat-rel-2", 0, "", expressedStep.progress, "step");
-  add(bridge.shows[0] === "2·(x+20) = 10·5"
+  add(bridge.ok && /2\s*\(\s*x\s*\+\s*20\s*\)/.test(String(bridge.shows[0] || "").replace(/·/g, ""))
     ? { ok: true, id: "rel2-bridge" }
     : fail("rel2-bridge", JSON.stringify(bridge.shows)));
   var taught = askAt(engine, "stat-rel-2", 0, "", bridge.progress, "step");
@@ -469,7 +469,7 @@ function main() {
   var badNumerator = askAt(engine, "stat-rel-2", 0, "7/N=2/5");
   add(!badNumerator.ok && badNumerator.message.indexOf("השכיחות") >= 0 ? { ok: true, id: "rel2-value-numerator" } : fail("rel2-value-numerator", badNumerator.message));
   var badDen = askAt(engine, "stat-rel-2", 0, "10/x=2/5");
-  add(!badDen.ok && badDen.message.indexOf("המכנה") >= 0 ? { ok: true, id: "rel2-x-denominator" } : fail("rel2-x-denominator", badDen.message));
+  add(!badDen.ok && badDen.message.indexOf("x") >= 0 && badDen.message.indexOf("כבר") >= 0 ? { ok: true, id: "rel2-x-denominator" } : fail("rel2-x-denominator", badDen.message));
   var flipped = askAt(engine, "stat-rel-2", 0, "N/10=2/5");
   add(!flipped.ok && flipped.message.indexOf("לא להפך") >= 0 ? { ok: true, id: "rel2-inverted-ratio" } : fail("rel2-inverted-ratio", flipped.message));
   var flippedFrac = askAt(engine, "stat-rel-2", 0, "10/N=5/2");
@@ -513,6 +513,86 @@ function main() {
     : fail("rel2-condition-direct", JSON.stringify(directPct.view && directPct.view.part) + " " + directPct.message));
   var complement = askAt(engine, "stat-rel-2", 2, "17/20", { done: { n: true, x: true, more: true }, got: { more: { percent: "50%" } }, solve: { total: 20, missing: 7 } });
   add(complement.ok ? { ok: true, id: "rel2-complement" } : fail("rel2-complement", complement.message));
+
+  ["y", "a", "t", "n"].forEach(function (letter) {
+    var named = askAt(engine, "stat-rel-2", 0, "2/5=10/" + letter);
+    var namedOk = named.ok && named.progress.solve.totalSymbol === letter && named.progress.solve.total == null;
+    add(namedOk ? { ok: true, id: "rel2-letter-" + letter } : fail("rel2-letter-" + letter, JSON.stringify(named.progress && named.progress.solve) + " " + named.message));
+  });
+  var yStep = askAt(engine, "stat-rel-2", 0, "", askAt(engine, "stat-rel-2", 0, "2/5=10/y").progress, "step");
+  add(yStep.ok && String(yStep.shows[0] || "").indexOf("y") >= 0 && String(yStep.shows[0] || "").indexOf("N") < 0
+    ? { ok: true, id: "rel2-letter-continues" }
+    : fail("rel2-letter-continues", JSON.stringify(yStep.shows)));
+  var yValue = askAt(engine, "stat-rel-2", 0, "y=25", askAt(engine, "stat-rel-2", 0, "10/y=2/5").progress);
+  add(yValue.ok && yValue.progress.solve.total === 25 && yValue.progress.solve.totalSymbol === "y" && String(yValue.shows[0] || "").indexOf("y") >= 0
+    ? { ok: true, id: "rel2-letter-value" }
+    : fail("rel2-letter-value", JSON.stringify(yValue.shows) + " " + JSON.stringify(yValue.progress && yValue.progress.solve) + " " + yValue.message));
+  var bareTotal = askAt(engine, "stat-rel-2", 0, "25");
+  add(bareTotal.ok && bareTotal.progress.solve.total === 25 && !bareTotal.progress.solve.totalSymbol
+    ? { ok: true, id: "rel2-total-without-symbol" }
+    : fail("rel2-total-without-symbol", JSON.stringify(bareTotal.progress && bareTotal.progress.solve)));
+
+  ["10/x=2/5", "x=25", "2*x=50"].forEach(function (typed) {
+    var owned = askAt(engine, "stat-rel-2", 0, typed);
+    add(!owned.ok && owned.message.indexOf("x") >= 0 && owned.message.indexOf("כבר") >= 0
+      ? { ok: true, id: "rel2-owned-" + typed }
+      : fail("rel2-owned-" + typed, owned.message));
+  });
+  var yThenA = askAt(engine, "stat-rel-2", 0, "10/a=2/5", askAt(engine, "stat-rel-2", 0, "10/y=2/5").progress);
+  add(!yThenA.ok && yThenA.message.indexOf("y") >= 0 && yThenA.message.indexOf("כבר") >= 0
+    ? { ok: true, id: "rel2-symbol-clash" }
+    : fail("rel2-symbol-clash", yThenA.message));
+
+  ["2/5=10/(20+x)", "10/(x+20)=2/5", "2/5=10/(2+8+x+10)"].forEach(function (typed) {
+    var expr = askAt(engine, "stat-rel-2", 0, typed);
+    add(expr.ok && expr.progress.solve.equation && expr.progress.solve.missing == null
+      ? { ok: true, id: "rel2-expr-" + typed }
+      : fail("rel2-expr-" + typed, JSON.stringify(expr.progress && expr.progress.solve) + " " + expr.message));
+  });
+  var exprStep = askAt(engine, "stat-rel-2", 0, "", askAt(engine, "stat-rel-2", 0, "2/5=10/(20+x)").progress, "step");
+  add(exprStep.ok && String(exprStep.shows[0] || "").indexOf("x") >= 0 && String(exprStep.shows[0] || "").indexOf("N") < 0
+    ? { ok: true, id: "rel2-expr-continues" }
+    : fail("rel2-expr-continues", JSON.stringify(exprStep.shows)));
+
+  var viaX = askAt(engine, "stat-rel-2", 0, "2/5=10/(20+x)");
+  var viaGuard = 0;
+  while (viaX.progress.solve.missing == null && viaGuard < 12) {
+    viaGuard += 1;
+    viaX = askAt(engine, "stat-rel-2", 0, "", viaX.progress, "step");
+  }
+  var plugged = askAt(engine, "stat-rel-2", 0, "", viaX.progress, "step");
+  add(viaX.progress.solve.missing === 5 && !viaX.progress.solve.equation && String(plugged.shows[0] || "").indexOf("20") >= 0 && String(plugged.shows[0] || "").indexOf("x") >= 0
+    ? { ok: true, id: "rel2-x-then-total" }
+    : fail("rel2-x-then-total", JSON.stringify(viaX.progress.solve) + " | " + JSON.stringify(plugged.shows)));
+
+  var fullEq = askAt(engine, "stat-rel-2", 0, "2+8+x+10=25", skipN.progress);
+  var fullNext = askAt(engine, "stat-rel-2", 0, "", fullEq.progress, "step");
+  add(fullEq.ok && fullNext.ok && String(fullNext.shows[0] || "") !== "2 + 8 + x + 10 = 25"
+    ? { ok: true, id: "rel2-full-sum-equation" }
+    : fail("rel2-full-sum-equation", JSON.stringify(fullEq.progress && fullEq.progress.solve) + " | " + JSON.stringify(fullNext.shows) + " " + fullEq.message));
+  var combined = askAt(engine, "stat-rel-2", 0, "x+20=25", skipN.progress);
+  var combinedNext = askAt(engine, "stat-rel-2", 0, "", combined.progress, "step");
+  add(combined.ok && String(combinedNext.shows[0] || "").indexOf("2 + 8 + x + 10") < 0
+    ? { ok: true, id: "rel2-combined-equation" }
+    : fail("rel2-combined-equation", JSON.stringify(combinedNext.shows) + " " + combined.message));
+  var knownOnly = askAt(engine, "stat-rel-2", 0, "2+8+10", skipN.progress);
+  var subtractNext = askAt(engine, "stat-rel-2", 0, "", knownOnly.progress, "step");
+  add(knownOnly.ok && subtractNext.shows[0] === "x = 25 - 20"
+    ? { ok: true, id: "rel2-subtract-path" }
+    : fail("rel2-subtract-path", JSON.stringify(subtractNext.shows) + " " + knownOnly.message));
+  var diff = askAt(engine, "stat-rel-2", 0, "25-20=5", skipN.progress);
+  add(diff.ok && diff.progress.solve.missing === 5
+    ? { ok: true, id: "rel2-subtract-result" }
+    : fail("rel2-subtract-result", JSON.stringify(diff.progress && diff.progress.solve) + " " + diff.message));
+
+  var startHint = askAt(engine, "stat-rel-2", 0, "", {}, "hint");
+  add(startHint.message.indexOf("הציון 7") >= 0 && startHint.message.indexOf("ובשכיחות היחסית הנתונה") >= 0
+    ? { ok: true, id: "rel2-hint-start" }
+    : fail("rel2-hint-start", startHint.message));
+  var sumHint = askAt(engine, "stat-rel-2", 0, "", skipN.progress, "hint");
+  add(sumHint.message.indexOf("סכום כל השכיחויות") >= 0 && sumHint.message.indexOf("20") < 0 && sumHint.message.indexOf("5") < 0
+    ? { ok: true, id: "rel2-hint-sum" }
+    : fail("rel2-hint-sum", sumHint.message));
 
   var failed = checks.filter(function (item) { return !item.ok; });
   console.log("parity-relative: passed " + (checks.length - failed.length) + ", failed " + failed.length);

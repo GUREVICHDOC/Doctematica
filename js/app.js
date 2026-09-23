@@ -8303,7 +8303,11 @@
     modelEl.innerHTML = "";
     clearFreqUi();
     if (isFreqTableMode()) {
-      promptEl.textContent = state.problem.stem || state.problem.prompt || "";
+      var freqStem = state.problem.stem || state.problem.prompt || "";
+      promptEl.innerHTML =
+        window.DoctematicaMath && DoctematicaMath.proseHTML
+          ? DoctematicaMath.proseHTML(freqStem)
+          : freqStem;
       checkBtn.classList.remove("hidden");
       answerLabelEl.classList.remove("hidden");
       answerLabelEl.textContent = "התשובה שלך";
