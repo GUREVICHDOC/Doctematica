@@ -178,11 +178,24 @@ function handleSqrtSolution(engine, body) {
   };
 }
 
-function mixedOfferFormula(engine, body) {
+function mixedOfferFormula(engine, body, mixed) {
   var Q = engine.DoctematicaQuadratic;
   if (!Q || typeof Q.isAbcOrder !== "function" || typeof Q.parseABC !== "function") return false;
+  if (mixed && mixed.enter) return false;
+  if (mixed && mixed.chooseFormula) return true;
   var hist = body && Array.isArray(body.history) ? body.history : [];
   var last = hist.length ? String(hist[hist.length - 1] || "") : String((body && body.start) || "");
+  if (mixed && mixed.ok && mixed.step) last = String(mixed.step);
+  else if (
+    mixed &&
+    mixed.ok &&
+    body &&
+    String(body.intent || "") === "check" &&
+    body.typed != null &&
+    String(body.typed).trim()
+  ) {
+    last = String(body.typed);
+  }
   try {
     if (!Q.isAbcOrder(last)) return false;
     var parsed = Q.parseABC(last);
@@ -217,7 +230,7 @@ function createQuadraticHandler(engine) {
     if (subtopic === "mixed") {
       var mixed = handleMixed(engine, body);
       if (mixed && typeof mixed === "object") {
-        mixed.offerFormula = mixedOfferFormula(engine, body);
+        mixed.offerFormula = mixedOfferFormula(engine, body, mixed);
       }
       return mixed;
     }

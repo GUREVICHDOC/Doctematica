@@ -296,6 +296,57 @@ async function run(engine) {
   var sqrtAct = Q.nextMixedStep(sqrtStart, Q.analyzeMixedStart(sqrtStart));
   expectStep("sqrt-still-moves-before-combine", sqrtAct, "5x^2-4x^2=84-20");
 
+  var arrangedStart = "(x+4)(x+7)=70";
+  var arrangedHist = [
+    arrangedStart,
+    "x^2+7x+4x+28=70",
+    "x^2+11x+28=70",
+    "x^2+11x+28-70=0",
+    "x^2+11x-42=0",
+  ];
+  var choose = handleMixed(engine, { intent: "one-step", start: arrangedStart, history: arrangedHist });
+  count += 1;
+  if (!choose || !choose.chooseFormula || choose.enter || choose.path || choose.step) {
+    mismatches.push({
+      id: "arranged-one-step-offers-choice",
+      local: choose,
+      server: { expect: "chooseFormula, no enter and no step" },
+    });
+  }
+  var Qh = require("./quadratic").createQuadraticHandler(engine);
+  var arrived = Qh.handle({
+    topic: "quadratic",
+    subtopic: "mixed",
+    intent: "check",
+    start: arrangedStart,
+    history: arrangedHist.slice(0, 4),
+    previous: arrangedHist[3],
+    typed: arrangedHist[4],
+  });
+  count += 1;
+  if (!arrived || !arrived.ok || !arrived.offerFormula || arrived.enter) {
+    mismatches.push({
+      id: "arranged-check-offers-buttons",
+      local: arrived,
+      server: { expect: "ok, offerFormula, no enter" },
+    });
+  }
+  var offered = Qh.handle({
+    topic: "quadratic",
+    subtopic: "mixed",
+    intent: "one-step",
+    start: arrangedStart,
+    history: arrangedHist,
+  });
+  count += 1;
+  if (!offered || !offered.offerFormula || offered.enter || offered.path) {
+    mismatches.push({
+      id: "arranged-one-step-offerFormula",
+      local: offered,
+      server: { expect: "offerFormula without entering formula" },
+    });
+  }
+
   return { count: count, mismatches: mismatches };
 }
 
@@ -320,7 +371,7 @@ function walkMixed(engine, start) {
     if (/זו אותה משוואה|תו לא מוכר|undefined/.test(msg)) {
       return { ok: false, id: start, fail: msg, last: last, path: path };
     }
-    if (res && (res.path === "formula" || res.enter === "formula") && !res.step) {
+    if (res && (res.chooseFormula || ((res.path === "formula" || res.enter === "formula") && !res.step))) {
       var ent = handle(engine, { intent: "formula-enter", start: start, history: hist });
       if (!ent.ok) return { ok: false, id: start, fail: "formula-enter: " + ent.message, last: last };
       var abc = handle(engine, { intent: "one-step", start: start, history: hist, phase: "abc" });

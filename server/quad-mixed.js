@@ -288,7 +288,13 @@ function handleMixed(engine, body) {
     var nAct = Q.nextMixedStep(lastEq(body), pack) || {};
     var lastNow = lastEq(body);
     if (nAct.path === "formula" && !nAct.eq) {
-      return mixedEnter("formula", nAct, pack);
+      return {
+        ok: true,
+        chooseFormula: true,
+        hint: String(nAct.hint || ""),
+        message: String((nAct.hint || nAct.explain) || ""),
+        step: null,
+      };
     }
     if (nAct.path && nAct.eq) {
       var nxt = Q.checkMixedTyped(lastNow, nAct.eq, pack);

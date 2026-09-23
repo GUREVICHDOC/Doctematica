@@ -19,6 +19,11 @@ function mixedEnter(engine, start, hist) {
   while (guard < 20) {
     guard += 1;
     var res = handleMixed(engine, { intent: "one-step", start: start, history: history });
+    if (res.chooseFormula) {
+      var chosen = handleMixed(engine, { intent: "formula-enter", start: start, history: history });
+      if (!chosen.ok) return fail("choose-formula:" + start, (chosen.message || "") + " last=" + history[history.length - 1]);
+      return { ok: true, history: history, res: chosen, via: "formula" };
+    }
     if (res.enter === "formula" || (res.path === "formula" && !res.step)) {
       return { ok: true, history: history, res: res, via: "formula" };
     }

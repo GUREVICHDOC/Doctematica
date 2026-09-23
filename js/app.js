@@ -3965,10 +3965,12 @@
       if (hideMath) answerRowEl.classList.add("hidden");
       else answerRowEl.classList.remove("hidden");
     }
+    if (formulaWorkActive()) hideMath = true;
     if (mathKeysEl) {
       if (hideMath) mathKeysEl.classList.add("hidden");
       else mathKeysEl.classList.remove("hidden");
     }
+    if (formulaWorkActive() && mathWrap) mathWrap.classList.add("hidden");
   }
 
   function renderSteps() {
@@ -6225,6 +6227,8 @@
     renderSteps();
     updateFormulaBtn();
     setModeUi();
+    var formulaSlot = quadGuideEl && quadGuideEl.querySelector("input.q-slot:not([disabled])");
+    if (formulaSlot) formulaSlot.focus();
     showFeedback(
       true,
       "<strong>" + (state.mixed.md53 ? "md53" : "נוסחת שורשים") + ".</strong> " + (res.message || res.hint || ""),
@@ -6456,6 +6460,10 @@
           factor: factorPayload(),
         },
         function (remote) {
+          if (remote.chooseFormula) {
+            showFeedback(true, remote.hint || remote.message || "", "tip");
+            return;
+          }
           if (remote.enter === "formula" || (remote.path === "formula" && !remote.step)) {
             beginMixedFormulaFromServer(remote);
             return;
