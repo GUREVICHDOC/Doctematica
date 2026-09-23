@@ -380,7 +380,42 @@ function badDecimal(ex, text, value) {
   return null;
 }
 
+function formatDecimal(n) {
+  if (!isFinite(n)) return "";
+  if (Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
+  return n.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function formatFactor(percent) {
+  return formatDecimal(Number(percent) / 100);
+}
+
+function factorValue(percent) {
+  return Number(percent) / 100;
+}
+
 function mistake(ex, text, value) {
+  if (unknownOf(ex) === "all" && ex.part != null && ex.percent != null) {
+    var wholePart = Number(ex.part);
+    var wholePercent = Number(ex.percent);
+    if (sameNum(value, wholePercent * wholePart)) {
+      return "האחוז הוכפל כמספר רגיל. " + formatValue(wholePercent) + "% הם " + formatFactor(wholePercent) + ", לא " + formatValue(wholePercent) + ".";
+    }
+    if (wholePercent && sameNum(value, wholePart / wholePercent)) {
+      return "חילקתם באחוז כמספר רגיל. " + formatValue(wholePercent) + "% הם " + formatFactor(wholePercent) + ", לא " + formatValue(wholePercent) + ".";
+    }
+    var badFactors = [wholePercent / 10, wholePercent / 1000, wholePercent / 10000];
+    var wholeLiterals = literalsOf(text);
+    var bi;
+    for (bi = 0; bi < badFactors.length; bi++) {
+      var badFactor = badFactors[bi];
+      if (!isFinite(badFactor) || sameNum(badFactor, wholePercent / 100)) continue;
+      var badAppears = wholeLiterals.some(function (n) { return sameNum(n, badFactor); });
+      if (badAppears && badFactor && sameNum(value, wholePart / badFactor)) {
+        return "ההמרה לעשרוני אינה במקום הנכון. " + formatValue(wholePercent) + "% הם " + formatFactor(wholePercent) + ", לא " + formatDecimal(badFactor) + ".";
+      }
+    }
+  }
   if (ex.percent != null && ex.all != null && sameNum(value, Number(ex.percent) * Number(ex.all))) {
     return "האחוז הוכפל כמספר רגיל. " + formatValue(ex.percent) + "% הם " + formatValue(ex.percent / 100) + ", לא " + formatValue(ex.percent) + ".";
   }
@@ -433,7 +468,7 @@ function assessTyped(ex, typed) {
     if (solved != null && sameNum(solved, target)) {
       var rhsBare = bareNumber(parts[1]);
       var lhsBareX = parts[0] === "x" || parts[0] === "+x";
-      if (rhsBare || (left.a && !right.a && bareNumber(parts[1]))) {
+      if (lhsBareX && rhsBare) {
         return { ok: true, done: true, step: "done", shows: [displayTyped(text)], message: "" };
       }
       if (lhsBareX && !rhsBare) {
@@ -467,12 +502,14 @@ function isMulti(ex) {
 
 function groupList(ex) {
   if (!isMulti(ex)) {
+    var singleAll = Number(ex.all);
     return [{
       id: "part",
       label: "",
       percent: Number(ex.percent),
-      amount: (Number(ex.all) * Number(ex.percent)) / 100,
+      amount: isFinite(singleAll) ? (singleAll * Number(ex.percent)) / 100 : null,
       given: true,
+      amountGiven: null,
     }];
   }
   var sumGiven = 0;
@@ -483,12 +520,28 @@ function groupList(ex) {
       sumGiven += Number(g.percent);
       givenCount += 1;
     }
-    return { id: g.id, label: g.label || "", percent: given ? Number(g.percent) : null, given: given };
+    var amountGiven = g.amount != null && g.amount !== "" ? Number(g.amount) : null;
+    return {
+      id: g.id,
+      label: g.label || "",
+      percent: given ? Number(g.percent) : null,
+      given: given,
+      amountGiven: amountGiven,
+    };
   });
   var missing = groups.filter(function (g) { return g.percent == null; });
   if (missing.length === 1 && givenCount >= 1) missing[0].percent = 100 - sumGiven;
+  var whole = Number(ex.all);
+  if (!isFinite(whole)) {
+    var anchors = groups.filter(function (g) {
+      return g.amountGiven != null && g.percent != null && g.percent !== 0;
+    });
+    if (anchors.length === 1) whole = (anchors[0].amountGiven * 100) / anchors[0].percent;
+  }
   groups.forEach(function (g) {
-    g.amount = (Number(ex.all) * Number(g.percent)) / 100;
+    if (g.amountGiven != null) g.amount = g.amountGiven;
+    else if (isFinite(whole) && g.percent != null) g.amount = (whole * Number(g.percent)) / 100;
+    else g.amount = null;
   });
   return groups;
 }
@@ -995,6 +1048,19 @@ function answerFields(ex) {
       var group = null;
       var i;
       for (i = 0; i < groups.length; i++) if (groups[i].id === field.group) group = groups[i];
+      if (field.kind === "all") {
+        var spec = wholeSpec(ex);
+        return {
+          id: field.id,
+          label: field.label || "",
+          unit: field.unit || "",
+          kind: "amount",
+          group: field.group || "",
+          given: false,
+          name: field.label || "השלם",
+          value: spec ? targetOf(spec) : null,
+        };
+      }
       var kind = field.kind === "percent" ? "percent" : "amount";
       return {
         id: field.id,
@@ -1437,7 +1503,259 @@ function nextMultiLine(ex, progress, history) {
   return { line: formatValue(other.amount), step: "done", done: true, joinPrev: step === "subtract" };
 }
 
+function isExpress(ex) {
+  return !!(ex && ex.express);
+}
+
+function anchorSpec(ex) {
+  if (!isMulti(ex)) return null;
+  var groups = groupList(ex);
+  var anchors = groups.filter(function (g) {
+    return g.amountGiven != null && g.percent != null && g.percent !== 0;
+  });
+  if (anchors.length !== 1) return null;
+  return { unknown: "all", percent: anchors[0].percent, part: anchors[0].amountGiven };
+}
+
+function wholeSpec(ex) {
+  if (!ex) return null;
+  var asks = unknownOf(ex) === "all" || (ex.fields || []).some(function (field) { return field.kind === "all"; });
+  if (!asks) return null;
+  if (!isMulti(ex) && ex.part != null && ex.part !== "" && ex.percent != null) {
+    return { unknown: "all", percent: Number(ex.percent), part: Number(ex.part) };
+  }
+  return anchorSpec(ex);
+}
+
+function asksWhole(ex) {
+  return !!wholeSpec(ex);
+}
+
+function coefficientMatches(lin, percent) {
+  return !!(lin && !lin.bad && !lin.b && lin.a && sameNum(lin.a, factorValue(percent)));
+}
+
+function isSimplifiedProduct(ex, text) {
+  var norm = normalize(text);
+  if (!norm || norm.indexOf("/") >= 0 || norm.indexOf("=") >= 0) return false;
+  return coefficientMatches(parseLinear(norm), ex.percent);
+}
+
+function expressMistake(ex, text) {
+  var lin = parseLinear(splitEq(normalize(text))[0]);
+  var percent = Number(ex.percent);
+  var factor = factorValue(percent);
+  if (lin && !lin.bad && !lin.b && sameNum(lin.a, percent)) {
+    return "האחוז הוכפל כמספר רגיל. " + formatValue(percent) + "% הם " + formatFactor(percent) + ", לא " + formatValue(percent) + ".";
+  }
+  var bad = [percent / 10, percent / 1000, percent / 10000];
+  var i;
+  if (lin && !lin.bad && !lin.b && lin.a) {
+    for (i = 0; i < bad.length; i++) {
+      if (sameNum(lin.a, bad[i]) && !sameNum(bad[i], factor)) {
+        return "ההמרה לעשרוני אינה במקום הנכון. " + formatValue(percent) + "% הם " + formatFactor(percent) + ", לא " + formatDecimal(bad[i]) + ".";
+      }
+    }
+  }
+  if (lin && !lin.bad && !lin.a && sameNum(lin.b, factor)) return "חסר הכפל ב-x.";
+  return "זה לא שקול לחישוב המבוקש.";
+}
+
+function assessExpress(ex, typed) {
+  var text = normalize(typed);
+  if (!text) return { ok: false, message: "כתבו תשובה." };
+  var parts = splitEq(text);
+  if (parts.length > 2) return { ok: false, message: "זה לא שקול לחישוב המבוקש." };
+  if (parts.length === 2) {
+    var left = parseLinear(parts[0]);
+    var right = parseLinear(parts[1]);
+    if (coefficientMatches(left, ex.percent) && coefficientMatches(right, ex.percent)) {
+      var simplified = isSimplifiedProduct(ex, parts[0]) || isSimplifiedProduct(ex, parts[1]);
+      return {
+        ok: true,
+        done: simplified,
+        step: simplified ? "done" : "expr",
+        shows: [displayTyped(text)],
+        message: "",
+      };
+    }
+    return { ok: false, message: expressMistake(ex, text) };
+  }
+  if (coefficientMatches(parseLinear(text), ex.percent)) {
+    var finalForm = isSimplifiedProduct(ex, text);
+    return {
+      ok: true,
+      done: finalForm,
+      step: finalForm ? "done" : "expr",
+      shows: [displayTyped(text)],
+      message: "",
+    };
+  }
+  return { ok: false, message: expressMistake(ex, text) };
+}
+
+function expressProductLine(ex) {
+  return "(" + formatValue(ex.percent) + "/100)·x";
+}
+
+function expressSimpleLine(ex) {
+  return formatFactor(ex.percent) + "x";
+}
+
+function nextExpress(ex, history) {
+  var sawSimple = false;
+  var sawProduct = false;
+  (history || []).forEach(function (line) {
+    var judged = assessExpress(ex, line);
+    if (!judged.ok) return;
+    if (judged.done) sawSimple = true;
+    else sawProduct = true;
+  });
+  if (sawSimple) return null;
+  if (sawProduct) {
+    return {
+      line: expressSimpleLine(ex),
+      step: "done",
+      done: true,
+      joinPrev: true,
+      hint: "פשטו את המקדם למספר עשרוני.",
+    };
+  }
+  return {
+    line: expressProductLine(ex),
+    step: "expr",
+    done: false,
+    joinPrev: false,
+    hint: "רשמו את האחוז חלקי 100, כפול x.",
+  };
+}
+
+function productSetupLine(spec) {
+  return "(" + formatValue(spec.percent) + "/100)·x = " + formatValue(spec.part);
+}
+
+function decimalSetupLine(spec) {
+  return formatFactor(spec.percent) + "x = " + formatValue(spec.part);
+}
+
+function isDecimalSetup(spec, text) {
+  var norm = normalize(text);
+  if (norm.indexOf("/") >= 0 || norm.indexOf("=") < 0) return false;
+  var sides = splitEq(norm);
+  if (sides.length !== 2) return false;
+  var left = parseLinear(sides[0]);
+  var right = parseLinear(sides[1]);
+  if (!left || !right) return false;
+  var factor = factorValue(spec.percent);
+  var coef = left.a || right.a;
+  var constant = !left.a ? left.b : (!right.a ? right.b : null);
+  return sameNum(coef, factor) && constant != null && sameNum(constant, Number(spec.part));
+}
+
+function readWholeHistory(spec, history) {
+  var state = { solved: false, open: "", simplified: false, product: false };
+  (history || []).forEach(function (line) {
+    var expressed = assessExpress({ percent: spec.percent }, line);
+    if (expressed.ok && expressed.done) state.simplified = true;
+    else if (expressed.ok) state.product = true;
+    var judged = assessTyped(spec, line);
+    if (!judged.ok) return;
+    if (judged.done) {
+      state.solved = true;
+      state.open = "";
+      return;
+    }
+    if (judged.step === "proportion") state.open = "proportion";
+    else if (judged.step === "isolate") state.open = "isolate";
+    else if (isDecimalSetup(spec, line)) state.open = "decimal";
+    else if (normalize(line).indexOf("/") >= 0) state.open = "product";
+    else state.open = "equation";
+  });
+  return state;
+}
+
+function nextFindWhole(ex, history) {
+  var spec = wholeSpec(ex);
+  if (!spec) return null;
+  var state = readWholeHistory(spec, history || []);
+  if (state.solved) return null;
+  if (state.open === "proportion") {
+    return {
+      line: isolateLine(spec),
+      step: "isolate",
+      done: false,
+      joinPrev: false,
+      hint: "בודדו את x. אצלנו x = (החלק כפול 100) חלקי האחוז.",
+    };
+  }
+  if (state.open === "isolate" || state.open === "decimal" || state.open === "equation") {
+    return {
+      line: valueLine(spec),
+      step: "done",
+      done: true,
+      joinPrev: false,
+      hint: "פתרו את המשוואה ומצאו את x.",
+    };
+  }
+  if (state.open === "product" || state.product || state.simplified) {
+    return {
+      line: decimalSetupLine(spec),
+      step: "decimal",
+      done: false,
+      joinPrev: false,
+      hint: state.simplified ? "השוו את הביטוי שמצאתם אל החלק הנתון." : "פשטו את השבר למספר עשרוני.",
+    };
+  }
+  return {
+    line: productSetupLine(spec),
+    step: "product",
+    done: false,
+    joinPrev: false,
+    hint: "רשמו שהחלק הנתון הוא האחוז מתוך x: האחוז חלקי 100, כפול x, שווה לחלק.",
+  };
+}
+
+function historyDone(ex, history, kind) {
+  return (history || []).some(function (line) {
+    if (kind === "express") {
+      var expressed = assessExpress(ex, line);
+      return expressed.ok && expressed.done;
+    }
+    var spec = wholeSpec(ex);
+    if (!spec) return false;
+    var judged = assessTyped(spec, line);
+    return judged.ok && judged.done;
+  });
+}
+
+function assessCurrent(ex, typed) {
+  if (isExpress(ex)) return assessExpress(ex, typed);
+  if (asksWhole(ex)) {
+    var whole = assessTyped(wholeSpec(ex), typed);
+    if (whole.ok) return whole;
+    if (isMulti(ex)) {
+      var groupedWhole = assessGroups(ex, typed);
+      if (groupedWhole.ok) return groupedWhole;
+    }
+    return whole;
+  }
+  if (isRelated(ex)) return assessRelated(ex, typed);
+  if (isMulti(ex)) {
+    var grouped = assessGroups(ex, typed);
+    if (grouped.ok) return grouped;
+    var anchor = anchorSpec(ex);
+    if (anchor) {
+      var ahead = assessTyped(anchor, typed);
+      if (ahead.ok) return ahead;
+    }
+    return grouped;
+  }
+  return assessTyped(ex, typed);
+}
+
 function nextSiteLine(ex, progress, history) {
+  if (isExpress(ex)) return nextExpress(ex, history || []);
+  if (asksWhole(ex)) return nextFindWhole(ex, history || []);
   if (isRelated(ex)) return nextRelated(ex, history || []);
   if (isMulti(ex)) return nextMultiLine(ex, progress, history);
   var step = progress.step || "";
@@ -1450,6 +1768,16 @@ function nextSiteLine(ex, progress, history) {
 
 function hintFor(ex, progress, history) {
   var step = progress.step || "";
+  if (isExpress(ex)) {
+    var expressStep = nextExpress(ex, history || []);
+    if (!expressStep) return "רשמו את הביטוי המצומצם.";
+    return expressStep.hint;
+  }
+  if (asksWhole(ex)) {
+    var wholeStep = nextFindWhole(ex, history || []);
+    if (!wholeStep) return "רשמו את התשובה.";
+    return wholeStep.hint;
+  }
   if (isRelated(ex)) {
     var related = nextRelated(ex, history || []);
     if (!related) return "רשמו את התשובה בשדה.";
@@ -1508,6 +1836,11 @@ function scopePart(ex, progress) {
     if (Object.prototype.hasOwnProperty.call(ex, key) && key !== "parts") scoped[key] = ex[key];
   }
   scoped.fields = part.fields || [];
+  scoped.express = !!part.express;
+  if (part.express) scoped.unknown = "part";
+  else if (part.unknown) scoped.unknown = part.unknown;
+  if (part.part != null && part.part !== "") scoped.part = part.part;
+  if (part.percent != null && part.percent !== "") scoped.percent = part.percent;
   return scoped;
 }
 
@@ -1519,6 +1852,8 @@ function partLabelAt(ex, progress) {
 
 function partSatisfied(ex, progress, history) {
   var scoped = scopePart(ex, progress);
+  if (isExpress(scoped)) return historyDone(scoped, history, "express");
+  if (asksWhole(scoped)) return historyDone(scoped, history, "whole");
   if (isRelated(scoped)) return relatedDone(scoped, history || []);
   if (isMulti(scoped)) return allAskedKnown(scoped, deriveState(scoped, history || []));
   return false;
@@ -1667,7 +2002,7 @@ function handle(engine, body) {
       guard += 1;
       var solutionLabel = partLabelAt(ex, progress);
       var solutionScope = scopePart(ex, progress);
-      var solutionPast = history.length || isRelated(solutionScope) || hasParts(ex) ? solutionHistory : null;
+      var solutionPast = history.length || isRelated(solutionScope) || hasParts(ex) || isExpress(solutionScope) || asksWhole(solutionScope) ? solutionHistory : null;
       var line = nextSiteLine(solutionScope, progress, solutionPast);
       if (!line) break;
       var repeated = solutionHistory.some(function (prev) {
@@ -1707,12 +2042,12 @@ function handle(engine, body) {
       return next.concat(shows || []);
     }
     if (typed) {
-      var work = isRelated(scoped) ? assessRelated(scoped, typed) : assessGroups(scoped, typed);
+      var work = assessCurrent(scoped, typed);
       if (!work.ok) {
         return { ok: false, message: work.message, progress: progress, view: viewOf(ex, progress, body.answers) };
       }
       if (isMulti(scoped) && work.found && work.group) progress.found[work.group.id] = true;
-      var workShows = (work.result && work.result.shows) || [];
+      var workShows = (work.result && work.result.shows) || work.shows || [];
       if (judged.solved) {
         progress.done = true;
         progress.step = "done";
@@ -1753,17 +2088,20 @@ function handle(engine, body) {
       answers: body.answers,
     });
   }
-  var result = assessTyped(ex, body.typed);
+  var result = assessCurrent(scoped, body.typed);
   if (!result.ok) {
     return { ok: false, message: result.message || "עוד לא.", progress: progress, view: viewOf(ex, progress) };
   }
+  var singleLabel = partLabelAt(ex, progress);
   var joinPrev = !!result.joinPrev && (progress.step === "expr" || progress.step === "isolate");
   advanceStep(progress, result);
+  releasePart(ex, progress, history.concat(result.shows || []));
   return respond(ex, progress, {
     status: progress.done ? "solved" : "step",
     message: progress.done ? "" : "אפשר להמשיך.",
     shows: result.shows || [],
     joinPrev: joinPrev,
+    part: singleLabel,
   });
 }
 

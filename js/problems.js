@@ -43,6 +43,7 @@
     ],
     percents: [
       { id: "find-part", label: "מציאת כמות עבור אחוז" },
+      { id: "find-whole", label: "מציאת הכמות היסודית" },
     ],
     statistics: [
       { id: "freq-table", label: "טבלת שכיחויות" },

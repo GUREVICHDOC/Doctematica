@@ -43,6 +43,7 @@ var ENGINE_SCRIPTS = [
   "data/curriculum-geo.js",
   "data/statistics/freq-table.js",
   "data/percents/find-part.js",
+  "data/percents/find-whole.js",
   "data/checks.js",
   "js/content.js",
   "js/problems.js",

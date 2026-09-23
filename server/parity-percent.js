@@ -20,7 +20,8 @@ function main() {
     ? { ok: true, id: "topic-order" }
     : fail("topic-order", topics.join(",")));
   var subs = engine.DoctematicaProblems.subtopics.percents || [];
-  add(subs.length === 1 && subs[0].id === "find-part" && subs[0].label === "מציאת כמות עבור אחוז"
+  add(subs.length === 2 && subs[0].id === "find-part" && subs[0].label === "מציאת כמות עבור אחוז"
+    && subs[1].id === "find-whole" && subs[1].label === "מציאת הכמות היסודית"
     ? { ok: true, id: "subtopic" }
     : fail("subtopic", JSON.stringify(subs)));
 
@@ -623,6 +624,93 @@ function main() {
   add(chainStep.ok && chainStep.shows[0] === "152 + 38 = 190" && chainStep.shows[0].indexOf("125") < 0
     ? { ok: true, id: "chain-step-follows-student" }
     : fail("chain-step-follows-student", JSON.stringify(chainStep)));
+
+  function askWhole(index, typed, answers, progress, intent, history) {
+    return percent.handle(engine, {
+      intent: intent || "check",
+      levelId: "pct-whole-1",
+      exerciseIndex: index,
+      typed: typed || "",
+      answers: answers || {},
+      history: history || [],
+      progress: progress || {},
+    });
+  }
+  var wholeLevel = (engine.DoctematicaCurriculum.levels || []).filter(function (level) { return level.id === "pct-whole-1"; })[0];
+  add(wholeLevel && wholeLevel.exercises.length === 10 && wholeLevel.subtopic === "find-whole" && wholeLevel.title === "רמה 1"
+    ? { ok: true, id: "whole-count" }
+    : fail("whole-count", String(wholeLevel && wholeLevel.exercises.length)));
+  add(wholeLevel.exercises[0].parts == null && wholeLevel.exercises[4].parts.length === 2 && wholeLevel.exercises[8].parts.length === 2 && wholeLevel.exercises[9].parts.length === 2
+    ? { ok: true, id: "whole-part-shape" }
+    : fail("whole-part-shape", ""));
+  var direct = askWhole(0, "0.7x");
+  add(direct.ok && direct.view.solved ? { ok: true, id: "express-direct" } : fail("express-direct", JSON.stringify(direct)));
+  var fraction = askWhole(0, "(70/100)*x");
+  add(fraction.ok && !fraction.view.solved ? { ok: true, id: "express-fraction-step" } : fail("express-fraction-step", JSON.stringify(fraction)));
+  add(askWhole(1, "0.15x").view.solved && askWhole(2, "0.09x").view.solved && askWhole(3, "1.6x").view.solved
+    ? { ok: true, id: "express-factors" }
+    : fail("express-factors", ""));
+  add(askWhole(3, "160/100*x").ok && !askWhole(3, "160/100*x").view.solved ? { ok: true, id: "express-over-100" } : fail("express-over-100", ""));
+  var plain = askWhole(0, "70x");
+  add(!plain.ok && plain.message.indexOf("0.7") >= 0 && plain.message.indexOf("70") >= 0 ? { ok: true, id: "express-plain" } : fail("express-plain", plain.message));
+  var badPlace = askWhole(2, "0.9x");
+  add(!badPlace.ok && badPlace.message.indexOf("0.09") >= 0 && badPlace.message.indexOf("0.9") >= 0 ? { ok: true, id: "express-decimal" } : fail("express-decimal", badPlace.message));
+  var expressStep = askWhole(0, "", {}, {}, "step", []);
+  add(expressStep.ok && expressStep.shows[0] === "(70/100)·x" && !expressStep.view.solved ? { ok: true, id: "express-site-step" } : fail("express-site-step", JSON.stringify(expressStep)));
+  var expressNext = askWhole(0, "", {}, {}, "step", ["(70/100)·x"]);
+  add(expressNext.ok && expressNext.joinPrev && expressNext.shows[0] === "0.7x" ? { ok: true, id: "express-site-simplify" } : fail("express-site-simplify", JSON.stringify(expressNext)));
+  var salaryProp = askWhole(6, "45/100=3600/x");
+  add(salaryProp.ok && !salaryProp.view.solved ? { ok: true, id: "whole-proportion" } : fail("whole-proportion", JSON.stringify(salaryProp)));
+  var salaryCross = askWhole(6, "45x=360000");
+  add(salaryCross.ok && !salaryCross.view.solved ? { ok: true, id: "whole-cross" } : fail("whole-cross", JSON.stringify(salaryCross)));
+  var salaryEq = askWhole(6, "(45/100)*x=3600");
+  add(salaryEq.ok && !salaryEq.view.solved ? { ok: true, id: "whole-product" } : fail("whole-product", JSON.stringify(salaryEq)));
+  var salaryDec = askWhole(6, "0.45x=3600");
+  add(salaryDec.ok && !salaryDec.view.solved ? { ok: true, id: "whole-decimal" } : fail("whole-decimal", JSON.stringify(salaryDec)));
+  add(askWhole(6, "x=8000").view.solved && askWhole(7, "x=150").view.solved ? { ok: true, id: "whole-values" } : fail("whole-values", ""));
+  var salarySwap = askWhole(6, "45/100=x/3600");
+  add(!salarySwap.ok && salarySwap.message.indexOf("החלפת") >= 0 && salarySwap.message.indexOf("8000") < 0
+    ? { ok: true, id: "whole-placement" }
+    : fail("whole-placement", salarySwap.message));
+  var salaryGuide = askWhole(6, "", {}, {}, "step", []);
+  add(salaryGuide.shows[0] === "(45/100)·x = 3600" ? { ok: true, id: "whole-site-start" } : fail("whole-site-start", JSON.stringify(salaryGuide)));
+  var salaryAfter = askWhole(6, "", {}, {}, "step", ["(45/100)·x = 3600"]);
+  add(salaryAfter.shows[0] === "0.45x = 3600" ? { ok: true, id: "whole-site-decimal" } : fail("whole-site-decimal", JSON.stringify(salaryAfter)));
+  var salaryFromProp = askWhole(6, "", {}, {}, "step", ["45/100 = 3600/x"]);
+  add(salaryFromProp.shows[0] === "x = (3600·100)/45" ? { ok: true, id: "whole-site-from-proportion" } : fail("whole-site-from-proportion", JSON.stringify(salaryFromProp)));
+  var classNext = askWhole(4, "", {}, { part: 1 }, "step", ["(60/100)·x = 0.6x"]);
+  add(classNext.ok && classNext.shows[0] === "0.6x = 21" && classNext.view.part && classNext.view.part.label === "ב"
+    ? { ok: true, id: "class-continues" }
+    : fail("class-continues", JSON.stringify(classNext)));
+  add(askWhole(4, "x=35", {}, { part: 1 }).view.solved ? { ok: true, id: "class-solved" } : fail("class-solved", ""));
+  add(askWhole(5, "0.3x=6", {}, { part: 1 }).ok && askWhole(5, "x=20", {}, { part: 1 }).view.solved ? { ok: true, id: "flower-solved" } : fail("flower-solved", ""));
+  var partnersPct = askWhole(8, "", { "f-percent": "45%" });
+  add(partnersPct.ok && !partnersPct.view.solved && partnersPct.view.part && partnersPct.view.part.label === "ב"
+    ? { ok: true, id: "profit-percent-part" }
+    : fail("profit-percent-part", JSON.stringify(partnersPct)));
+  var partnersAlt = askWhole(8, "900/0.45=2000", {}, { part: 1 });
+  add(partnersAlt.ok ? { ok: true, id: "profit-divide" } : fail("profit-divide", JSON.stringify(partnersAlt)));
+  var partnersProp = askWhole(8, "45/100=900/x", {}, { part: 1 });
+  add(partnersProp.ok ? { ok: true, id: "profit-proportion" } : fail("profit-proportion", JSON.stringify(partnersProp)));
+  add(askWhole(8, "", { "f-all": "2000" }, { part: 1 }).view.solved ? { ok: true, id: "profit-total" } : fail("profit-total", ""));
+  add(askWhole(9, "45+25=70").ok && askWhole(9, "100-70=30").ok ? { ok: true, id: "brothers-percent-paths" } : fail("brothers-percent-paths", ""));
+  add(askWhole(9, "", { "f-percent": "30%" }).view.part.label === "ב" ? { ok: true, id: "brothers-percent-field" } : fail("brothers-percent-field", ""));
+  add(askWhole(9, "0.3x=3000", {}, { part: 1 }).ok && askWhole(9, "", { "f-all": "10000" }, { part: 1 }).view.solved
+    ? { ok: true, id: "brothers-total" }
+    : fail("brothers-total", ""));
+  var brothersStep = askWhole(9, "", {}, { part: 1 }, "step", ["100% - 45% - 25% = 30%"]);
+  add(brothersStep.shows[0] === "(30/100)·x = 3000" && brothersStep.shows[0].indexOf("100% - 45%") < 0
+    ? { ok: true, id: "brothers-step-skips-percent" }
+    : fail("brothers-step-skips-percent", JSON.stringify(brothersStep)));
+  var wholeOpen = studentDto.openProblem(engine, "pct-whole-1", 6);
+  var wholeRaw = JSON.stringify(wholeOpen);
+  add(!standaloneNum(wholeRaw, "8000") && !standaloneNum(wholeRaw, "0.45") && wholeOpen.view.part == null
+    ? { ok: true, id: "whole-open" }
+    : fail("whole-open", wholeRaw));
+  var classOpen = studentDto.openProblem(engine, "pct-whole-1", 4);
+  add(classOpen.view.part && classOpen.view.part.label === "א" && !standaloneNum(JSON.stringify(classOpen), "35") && !standaloneNum(JSON.stringify(classOpen), "0.6")
+    ? { ok: true, id: "class-open" }
+    : fail("class-open", JSON.stringify(classOpen.view)));
 
   var failed = checks.filter(function (item) { return !item.ok; });
   console.log("parity-percent: passed " + (checks.length - failed.length) + ", failed " + failed.length);
