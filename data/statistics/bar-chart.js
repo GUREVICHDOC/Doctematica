@@ -150,6 +150,37 @@
             tasks: [{ id: "raise", kind: "relative", where: { on: "variable", op: "gte", value: 5 } }],
           },
         ]),
+        ex(5, "בעונת המשחקים נערכו משחקי כדורגל. לפניכם דיאגרמת עמודות המתארת את מספר השערים שהובקעו במשחקים.", chart("מספר השערים", "מספר המשחקים", 1, 12, [
+          { value: 0, freq: 6 },
+          { value: 1, freq: 8 },
+          { value: 2, freq: 12 },
+          { value: 3, freq: 11 },
+          { value: 4, freq: 7 },
+          { value: 5, freq: 3 },
+          { value: 6, freq: 2 },
+          { value: 7, freq: 1 },
+        ]), [
+          {
+            label: "א",
+            text: "בכמה משחקים הובקעו 4 שערים?",
+            tasks: [{ id: "four", kind: "lookup", value: 4 }],
+          },
+          {
+            label: "ב",
+            text: "תארו את הנתונים המופיעים בדיאגרמת העמודות באמצעות טבלת שכיחויות.",
+            tasks: [{ id: "table", kind: "fillFreq" }],
+          },
+          {
+            label: "ג",
+            text: "מהו מספר משחקי הכדורגל שהיו בעונה זו? באיזה ייצוג נוח יותר להסיק את המידע?",
+            tasks: [{ id: "games", kind: "total" }],
+          },
+          {
+            label: "ד",
+            text: "תארו את הנתונים באמצעות טבלת שכיחויות יחסיות.",
+            tasks: [{ id: "rel", kind: "fillRelative", forms: ["fraction"] }],
+          },
+        ]),
       ],
     },
   ]);

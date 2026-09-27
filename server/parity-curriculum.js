@@ -67,7 +67,7 @@ function main() {
     });
   });
 
-  add(exercises === 721 ? { ok: true, id: "exercise-count" } : fail("exercise-count", String(exercises)));
+  add(exercises === 722 ? { ok: true, id: "exercise-count" } : fail("exercise-count", String(exercises)));
 
   var opened = studentDto.openProblem(engine, "level-02", 0);
   add(

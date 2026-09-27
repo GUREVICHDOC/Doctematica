@@ -566,6 +566,11 @@ function chartReadMiss(compiled, row, n) {
   if (row.num != null && sameNum(n, row.num) && !sameNum(row.num, row.freq)) {
     return "כתבתם את הערך שבציר האופקי. צריך את גובה העמודה.";
   }
+  var neighbor = (compiled.rows || []).some(function (other) {
+    return other !== row && other.num != null && row.num != null && Math.abs(other.num - row.num) === 1
+      && sameNum(n, other.freq) && !sameNum(other.freq, row.freq);
+  });
+  if (neighbor) return "זה הגובה של עמודה סמוכה. בדקו את העמודה של הערך המבוקש.";
   if (sameNum(Math.abs(n - row.freq), 1)) {
     return "הגובה לא מדויק. בדקו שוב את הסקאלה — ייתכן שפספסתם יחידה אחת.";
   }
@@ -3177,6 +3182,11 @@ function hintForTask(compiled, task, progress, engine) {
     if (!read.state.total && !workHasRelative(progress)) {
       return "כדי להשלים שכיחות יחסית, חברו קודם את כל השכיחויות.";
     }
+    if (compiled && compiled.chartSource && read.state.total) {
+      var goal = compiled.chart && compiled.chart.xLabel ? compiled.chart.xLabel : "ערך";
+      var games = compiled.chart && compiled.chart.yLabel ? compiled.chart.yLabel : "השכיחות";
+      return "לכל " + goal + ", חלקו את " + games + " המתאים במספר הכולל שכבר מצאתם.";
+    }
     return "השלימו את תאי השורות שהשאלה מבקשת. בשבר כתבו שכיחות חלקי מספר התצפיות, בלי לצמצם.";
   }
   var phase = progress.phase[task.id] || "";
@@ -3198,7 +3208,7 @@ function hintForTask(compiled, task, progress, engine) {
   }
   if (task.kind === "compareRelative") return compareHint(compiled, task, progress);
   if (task.kind === "lookup") {
-    if (compiled && compiled.chartSource) return "מצאו את הערך בציר האופקי ובדקו לאיזה גובה מגיעה העמודה שלו.";
+    if (compiled && compiled.chartSource) return "מצאו בציר האופקי את הערך המבוקש ובדקו לאיזה גובה מגיעה העמודה.";
     return "מצאו בטבלה את הערך המבוקש, וקראו את השכיחות שמתאימה לו.";
   }
   if (task.kind === "mode" && task.of === "frequency") {
@@ -3218,9 +3228,12 @@ function hintForTask(compiled, task, progress, engine) {
   }
   if (task.kind === "fillFreq") {
     if (compiled && compiled.chartSource) {
-      return progress.filled && Object.keys(progress.filled).length
-        ? "המשיכו לקרוא את גובה העמודות שהתא שלהן עוד פתוח."
-        : "לכל ערך, קראו את גובה העמודה שלו וכתבו את המספר בתא השכיחות.";
+      if (progress.filled && Object.keys(progress.filled).length) {
+        return "המשיכו לקרוא את גובה העמודות שהתא שלהן עוד פתוח.";
+      }
+      var xName = compiled.chart && compiled.chart.xLabel ? compiled.chart.xLabel : "ערך";
+      var yName = compiled.chart && compiled.chart.yLabel ? compiled.chart.yLabel : "שכיחות";
+      return "כל עמודה מתארת זוג של " + xName + " ו" + yName + ". העבירו את הנתונים לטבלה.";
     }
     if (nextOpenRow(compiled, progress) && progress.filled && Object.keys(progress.filled).length) {
       return "המשיכו לספור ברשימה את הערכים שהתא שלהם עוד פתוח.";
@@ -3268,6 +3281,10 @@ function hintForTask(compiled, task, progress, engine) {
     return compiled && compiled.chartSource ? "חברו את גובהי העמודות המתאימות." : "חברו את השכיחויות שמצאתם.";
   }
   if (task.kind === "total") {
+    if (compiled && compiled.chartSource && chartTableVisible(compiled, { parts: [] }, progress)) {
+      var counted = compiled.chart && compiled.chart.yLabel ? compiled.chart.yLabel : "השכיחויות";
+      return "המספר הכולל מתקבל מחיבור " + counted + " בכל הקבוצות.";
+    }
     return compiled && compiled.chartSource
       ? "גובה כל עמודה מייצג שכיחות. חברו את השכיחויות של כל העמודות."
       : "חברו את כל השכיחויות שבטבלה.";

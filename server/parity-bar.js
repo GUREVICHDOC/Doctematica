@@ -30,7 +30,7 @@ function main() {
   function add(result) { checks.push(result); }
 
   var level = (engine.DoctematicaCurriculum.levels || []).filter(function (item) { return item.id === "stat-bar-1"; })[0];
-  add(level && level.subtopic === "bar-chart" && level.exercises.length === 4 && level.exercises[3].id === "stat-bar-1-ex-a004"
+  add(level && level.subtopic === "bar-chart" && level.exercises.length === 5 && level.exercises[3].id === "stat-bar-1-ex-a004" && level.exercises[4].id === "stat-bar-1-ex-a005"
     ? { ok: true, id: "bar-count" }
     : fail("bar-count", JSON.stringify(level && level.exercises && level.exercises.map(function (ex) { return ex.id; }))));
 
@@ -90,7 +90,7 @@ function main() {
     ? { ok: true, id: "bar-missed-column" }
     : fail("bar-missed-column", missed.message));
   var totalHint = ask(0, "", filling, "hint");
-  add(totalHint.message.indexOf("גובה") >= 0 && totalHint.message.indexOf("23") < 0
+  add(totalHint.message.indexOf("חיבור") >= 0 && totalHint.message.indexOf("23") < 0
     ? { ok: true, id: "bar-total-hint" }
     : fail("bar-total-hint", totalHint.message));
 
@@ -199,6 +199,63 @@ function main() {
   add(!no.ok
     ? { ok: true, id: "bar-compare-no" }
     : fail("bar-compare-no", no.message));
+
+  var goals = ask(4, "7");
+  add(goals.ok && goals.progress.done.four && goals.view.part.label === "ב"
+    ? { ok: true, id: "goals-lookup" }
+    : fail("goals-lookup", goals.message + " " + JSON.stringify(goals.view && goals.view.part)));
+  var goalsAxis = ask(4, "4");
+  var goalsNeighbor = ask(4, "11");
+  add(!goalsAxis.ok && goalsAxis.message.indexOf("ציר האופקי") >= 0 && !goalsNeighbor.ok && goalsNeighbor.message.indexOf("סמוכה") >= 0
+    ? { ok: true, id: "goals-read-miss" }
+    : fail("goals-read-miss", goalsAxis.message + " | " + goalsNeighbor.message));
+  var goalsHint = ask(4, "", {}, "hint");
+  add(goalsHint.message.indexOf("גובה") >= 0 && goalsHint.message.indexOf("7") < 0
+    ? { ok: true, id: "goals-hint" }
+    : fail("goals-hint", goalsHint.message));
+  var goalsFill = ask(4, "", goals.progress, "check", { fill: { value: 4, typed: "7" } });
+  add(goalsFill.ok && goalsFill.view.table && goalsFill.view.table.rows.some(function (row) { return String(row.value) === "4" && row.locked && String(row.freq) === "7"; })
+    ? { ok: true, id: "goals-fill-cell" }
+    : fail("goals-fill-cell", goalsFill.message));
+  var swappedCell = ask(4, "", goals.progress, "check", { fill: { value: 4, typed: "4" } });
+  add(!swappedCell.ok && swappedCell.message.indexOf("גובה") >= 0
+    ? { ok: true, id: "goals-swap-axis" }
+    : fail("goals-swap-axis", swappedCell.message));
+  var filledGoals = { done: { four: true, table: true }, filled: { 0: 6, 1: 8, 2: 12, 3: 11, 4: 7, 5: 3, 6: 2, 7: 1 } };
+  var goalsTotal = ask(4, "50", filledGoals);
+  add(goalsTotal.ok && goalsTotal.progress.solve.total === 50 && goalsTotal.view.part.label === "ד"
+    ? { ok: true, id: "goals-total" }
+    : fail("goals-total", goalsTotal.message + " " + JSON.stringify(goalsTotal.view && goalsTotal.view.part)));
+  var goalsValueSum = ask(4, "28", filledGoals);
+  add(!goalsValueSum.ok && goalsValueSum.message.indexOf("ציר האופקי") >= 0
+    ? { ok: true, id: "goals-sum-goals" }
+    : fail("goals-sum-goals", goalsValueSum.message));
+  var goalsStep = ask(4, "", filledGoals, "step");
+  add(goalsStep.shows[0].indexOf("6 + 8 + 12") >= 0 && goalsStep.progress.solve.total == null
+    ? { ok: true, id: "goals-total-step" }
+    : fail("goals-total-step", JSON.stringify(goalsStep.shows)));
+  var relStep = ask(4, "", goalsTotal.progress, "step");
+  add(relStep.shows[0] === "6/50" && relStep.progress.solve.total === 50 && relStep.shows[0].indexOf("6 + 8") < 0
+    ? { ok: true, id: "goals-relative-reuses-total" }
+    : fail("goals-relative-reuses-total", JSON.stringify(relStep.shows) + " " + JSON.stringify(relStep.progress && relStep.progress.solve)));
+  var relHint = ask(4, "", goalsTotal.progress, "hint");
+  add(relHint.message.indexOf("כבר מצאתם") >= 0 && relHint.message.indexOf("50") < 0 && relHint.message.indexOf("6/50") < 0
+    ? { ok: true, id: "goals-relative-hint" }
+    : fail("goals-relative-hint", relHint.message));
+  var inverted = ask(4, "", goalsTotal.progress, "check", { fill: { row: "relativeFraction", value: "4", typed: "50/7" } });
+  add(!inverted.ok && inverted.message.indexOf("מכנה") >= 0
+    ? { ok: true, id: "goals-inverted" }
+    : fail("goals-inverted", inverted.message));
+  var ownDen = ask(4, "", goalsTotal.progress, "check", { fill: { row: "relativeFraction", value: "4", typed: "7/7" } });
+  add(!ownDen.ok && ownDen.message.indexOf("מכנה") >= 0
+    ? { ok: true, id: "goals-own-denominator" }
+    : fail("goals-own-denominator", ownDen.message));
+  var reduced = ask(4, "", goalsTotal.progress, "check", { fill: { row: "relativeFraction", value: "2", typed: "6/25" } });
+  add(reduced.ok && reduced.view.work && reduced.view.work.rows.some(function (row) {
+    return row.cells.some(function (cell) { return String(cell.value) === "2" && cell.locked && cell.text === "6/25"; });
+  })
+    ? { ok: true, id: "goals-equivalent-fraction" }
+    : fail("goals-equivalent-fraction", reduced.message + " " + JSON.stringify(reduced.view && reduced.view.work)));
 
   var failed = checks.filter(function (item) { return !item.ok; });
   console.log("parity-bar: passed " + (checks.length - failed.length) + ", failed " + failed.length);
