@@ -46,6 +46,12 @@
       { id: "find-whole", label: "מציאת הכמות היסודית" },
       { id: "find-percent", label: "מציאת האחוז" },
     ],
+    "systems-sub": [
+      { id: "sub", label: "שיטת ההצבה" },
+      { id: "elim", label: "שיטת השוואת מקדמים" },
+      { id: "arrange", label: "משוואות לא מסודרות" },
+      { id: "quad", label: "מערכת משוואות ריבועיות" },
+    ],
     statistics: [
       { id: "freq-table", label: "טבלת שכיחויות" },
       { id: "relative-freq", label: "שכיחות יחסית" },

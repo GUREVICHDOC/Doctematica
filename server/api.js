@@ -8,6 +8,9 @@ var createEquationsHandler = require("./equations").createEquationsHandler;
 var createQuadraticHandler = require("./quadratic").createQuadraticHandler;
 var createHighPowerHandler = require("./high-power").createHighPowerHandler;
 var createSystemsHandler = require("./systems").createSystemsHandler;
+var createQuadSystemsHandler = require("./systems-quad").createQuadSystemsHandler;
+var createElimHandler = require("./systems-elim").createElimHandler;
+var createArrangeHandler = require("./systems-arrange").createArrangeHandler;
 var createGeometryHandler = require("./geometry").createGeometryHandler;
 var createStatisticsHandler = require("./statistics").createStatisticsHandler;
 var percentEngine = require("./percent");
@@ -40,6 +43,9 @@ var equations = createEquationsHandler(engine);
 var quadratic = createQuadraticHandler(engine);
 var highPower = createHighPowerHandler(engine);
 var systems = createSystemsHandler(engine);
+var quadSystems = createQuadSystemsHandler(engine);
+var elim = createElimHandler(engine);
+var arrange = createArrangeHandler(engine);
 var geometry = createGeometryHandler(engine);
 var statistics = createStatisticsHandler(engine);
 
@@ -342,6 +348,9 @@ function handleRequest(req, res) {
   }
   if (req.method === "POST" && pathname === "/api/systems") {
     handleMathPost(req, res, function (body) {
+      if (body && String(body.topic || "") === "systems-elim") return elim.handle(body);
+      if (body && String(body.topic || "") === "systems-arrange") return arrange.handle(body);
+      if (body && String(body.topic || "") === "systems-quad") return quadSystems.handle(body);
       return systems.handle(body);
     });
     return;

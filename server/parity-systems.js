@@ -66,7 +66,7 @@ function main() {
       remote &&
       remote.ok &&
       remote.kind === local.kind &&
-      (local.kind !== "unique" || (remote.answer && remote.answer.indexOf("x =") !== -1));
+      (local.kind !== "unique" || remote.answer === Sys.formatPairs([{ x: local.x, y: local.y }]));
     add(ok ? { ok: true, id: "solvePair:" + ex.n } : fail("solvePair:" + ex.n, JSON.stringify({ local: local, remote: remote })));
   });
 
@@ -226,7 +226,7 @@ function main() {
     typed: "x=2",
   });
   add(
-    xRemote.ok && xRemote.solved && xRemote.kind === "unique"
+    xRemote.ok && xRemote.phase === "final_pair" && !xRemote.solved && xRemote.kind === "unique"
       ? { ok: true, id: "second-value-done" }
       : fail("second-value-done", JSON.stringify(xRemote))
   );

@@ -1221,7 +1221,7 @@
   }
 
   function applyLeadingMul(body, mul) {
-    if (mul === 1 || mul === "1") return body;
+    if (mul === 1 || mul === "1") return unwrapOuterParens(body);
     if (typeof mul === "string" && !/^\d+$/.test(mul)) {
       return applyExprMul(body, mul);
     }
@@ -1251,7 +1251,7 @@
     var rawMul = String(mulDisp == null ? "1" : mulDisp)
       .replace(/[−–—]/g, "-")
       .replace(/\s+/g, "");
-    if (!rawMul || rawMul === "1") return body;
+    if (!rawMul || rawMul === "1") return unwrapOuterParens(body);
     var b = String(body || "");
     if (b === "0" || near0(parseFloat(b))) return "0";
 
@@ -1277,7 +1277,7 @@
     if (/^\d+(?:\.\d+)?$/.test(b)) {
       var n = parseFloat(b) * coef;
       var w = wrapAlg(alg);
-      if (Math.abs(n - 1) < EPS) return w.charAt(0) === "(" ? w : w;
+      if (Math.abs(n - 1) < EPS) return unwrapOuterParens(w);
       if (Math.abs(n + 1) < EPS) return "-" + w;
       if (w.charAt(0) === "(" || /^[a-z]/i.test(w)) return fmt(n) + w;
       return fmt(n) + "(" + w + ")";
@@ -1293,9 +1293,23 @@
     return left + wrapAlg(alg);
   }
 
+  function hasTopLevelAdd(expr) {
+    var s = String(expr || "").replace(/\s+/g, "");
+    var depth = 0;
+    var i;
+    for (i = 0; i < s.length; i++) {
+      var c = s.charAt(i);
+      if (c === "(") depth += 1;
+      else if (c === ")") depth -= 1;
+      else if (depth === 0 && i > 0 && (c === "+" || c === "-")) return true;
+    }
+    return false;
+  }
+
   function applySign(sign, cleared) {
     if (sign !== "-") return cleared;
     if (cleared.charAt(0) === "-") return cleared.slice(1);
+    if (hasTopLevelAdd(cleared)) return "-(" + cleared + ")";
     return "-" + cleared;
   }
 
@@ -1405,7 +1419,18 @@
     return joinPrettyParts(bits);
   }
 
+  function rewriteTermLcdByMul(term, lcd) {
+    var info = splitTermDenExpr(term);
+    var den = info.numeric > 0 ? info.numeric : 1;
+    if (!(lcd > 0) || lcd % den !== 0) return term;
+    var num = applyLeadingMul(info.body, lcd / den);
+    if (num === "0" || num === 0) return "0";
+    if (info.sign === "-" && String(num).charAt(0) !== "-" && String(num).charAt(0) !== "−") num = "-" + num;
+    return num + "/" + lcd;
+  }
+
   function rewriteTermLcd(term, lcd, decimals) {
+    if (/y/i.test(String(term || ""))) return rewriteTermLcdByMul(term, lcd);
     var cf = parseCompoundFrac(term);
     if (cf) {
       var signed = (cf.sign === "-" ? -1 : 1) * cf.k * (lcd / cf.den);
@@ -1730,6 +1755,14 @@
       terms: termsN,
       dens: dens,
     };
+  }
+
+  function numericDenomStep(eqText) {
+    var one = oneSidedDenomClearStep(eqText, []);
+    if (one) return one;
+    var lcd = lcdStep(eqText, []);
+    if (lcd) return lcd;
+    return dropDenomsStep(eqText, []);
   }
 
   function lcdStep(eqText, decimals) {
@@ -2654,6 +2687,7 @@
     stripLeadingPlus: stripLeadingPlus,
     fullPath: fullPath,
     analyzeLcdNeed: analyzeLcdNeed,
+    numericDenomStep: numericDenomStep,
     checkLcdValue: checkLcdValue,
     checkLcdMultiplier: checkLcdMultiplier,
     rewriteEqWithLcd: rewriteEqWithLcd,

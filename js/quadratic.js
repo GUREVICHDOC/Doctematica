@@ -3680,6 +3680,27 @@
     return nearNum(q.a, k * p.a) && nearNum(q.b, k * p.b) && nearNum(q.c, k * p.c);
   }
 
+  function integerQuotient(fromEq, toEq) {
+    var p = parseABC(fromEq);
+    var q = parseABC(toEq);
+    if (!p || !q) return null;
+    var k = null;
+    if (!near0(q.a)) k = p.a / q.a;
+    else if (!near0(q.b)) k = p.b / q.b;
+    else if (!near0(q.c)) k = p.c / q.c;
+    else return null;
+    if (!isFinite(k) || !isIntNum(k) || nearNum(k, 0)) return null;
+    if (!nearNum(p.a, k * q.a) || !nearNum(p.b, k * q.b) || !nearNum(p.c, k * q.c)) return null;
+    return Math.round(k);
+  }
+
+  function reduceExplain(k) {
+    var n = Math.round(k);
+    if (n === -1) return "כופלים את שני האגפים ב־(−1).";
+    if (n < 0) return "מחלקים את שני האגפים ב־(" + n + ").";
+    return "מחלקים את שני האגפים ב־" + n + ".";
+  }
+
   function canonicalABC(a, b, c) {
     var i;
     var A = a;
@@ -4043,6 +4064,17 @@
       }
       moved = bothSidesLive(combinedBody) ? moveAllToLeft(combinedBody) : combinedBody;
       if (normFactorText(moved) !== normFactorText(combinedBody)) steps.push(moved);
+      var summed = formatPolyEq(raw.a, raw.b, raw.c);
+      var reduceBy = integerQuotient(summed, standard);
+      if (
+        reduceBy != null &&
+        !nearNum(reduceBy, 1) &&
+        hasUncombined(moved) &&
+        normFactorText(summed) !== normFactorText(moved) &&
+        normFactorText(summed) !== normFactorText(standard)
+      ) {
+        steps.push(summed);
+      }
       if (
         normFactorText(standard) !== normFactorText(moved) &&
         normFactorText(standard) !== normFactorText(start) &&
@@ -4327,10 +4359,38 @@
       };
     }
     if (hasUncombined(eqText)) {
+      var summedNow = pack.unreduced;
+      var combineScale = integerQuotient(summedNow, pack.standard);
+      if (
+        summedNow &&
+        combineScale != null &&
+        !nearNum(combineScale, 1) &&
+        normFactorText(summedNow) !== normFactorText(eqText) &&
+        normFactorText(summedNow) !== normFactorText(pack.standard)
+      ) {
+        return {
+          eq: summedNow,
+          hint: mixedHintFor(pack, eqText),
+          explain: "אוספים איברים דומים.",
+        };
+      }
       return {
         eq: pack.standard,
         hint: mixedHintFor(pack, eqText),
         explain: "אוספים איברים דומים.",
+      };
+    }
+    var reduceScale = integerQuotient(eqText, pack.standard);
+    if (
+      reduceScale != null &&
+      !nearNum(reduceScale, 1) &&
+      isStandardZero(eqText) &&
+      normFactorText(eqText) !== normFactorText(pack.standard)
+    ) {
+      return {
+        eq: pack.standard,
+        hint: mixedHintFor(pack, eqText),
+        explain: reduceExplain(reduceScale),
       };
     }
     if (!isStandardZero(eqText)) {

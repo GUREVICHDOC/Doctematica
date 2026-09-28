@@ -196,7 +196,7 @@ function solveExercise(engine, handler, ex) {
   });
   var guard = 0;
   var saw = [];
-  while (guard < 40) {
+  while (guard < 60) {
     guard += 1;
     if (!view || view.ok === false) return fail("flow:" + ex.n, JSON.stringify(view));
     saw.push(view.phase + (view.needSub ? ":sub" : ""));
@@ -210,6 +210,21 @@ function solveExercise(engine, handler, ex) {
       if (!view.applied || !view.choice) return fail("flow-apply:" + ex.n, JSON.stringify(view));
       ctx.choices = ctx.choices.concat([view.choice]);
       if (view.startEq) ctx.history = ctx.history.concat([view.startEq]);
+      continue;
+    }
+    if (view.phase === "final_pair") {
+      var pairText = engine.DoctematicaSystems.formatPairs([{ x: view.known.x, y: view.known.y }]);
+      view = handler.handle({
+        topic: "systems-sub",
+        intent: "check",
+        eq1: ex.eq1,
+        eq2: ex.eq2,
+        history: ctx.history,
+        choices: ctx.choices,
+        typed: pairText,
+      });
+      if (!view.ok) return fail("flow-pair:" + ex.n, pairText + " → " + (view.message || ""));
+      ctx.history = ctx.history.concat([pairText]);
       continue;
     }
     if (String(view.phase).indexOf("work") === 0) {
@@ -300,8 +315,128 @@ function main() {
   var src = fs.readFileSync(path.join(__dirname, "../js/app.js"), "utf8");
   add(/equationsCheckBusy = false;\s*onResult/.test(src) ? { ok: true, id: "busy-before-callback" } : fail("busy-before-callback", "busy flag"));
   add(!/function handleSystemSubmit[\s\S]{0,400}checkWorkStep/.test(src) ? { ok: true, id: "submit-server" } : fail("submit-server", "local submit"));
-  add(!/intent: "hint"/.test(fs.readFileSync(path.join(__dirname, "systems.js"), "utf8").split("if (intent ===")[1] || "") ? { ok: true, id: "no-hint-handler" } : fail("no-hint-handler", "hint added"));
-  add(!/intent: "one-step"/.test(fs.readFileSync(path.join(__dirname, "systems.js"), "utf8")) ? { ok: true, id: "no-onestep-handler" } : fail("no-onestep-handler", "one-step added"));
+  var teachSrc = fs.readFileSync(path.join(__dirname, "systems.js"), "utf8");
+  add(/intent === "hint"/.test(teachSrc) ? { ok: true, id: "hint-handler" } : fail("hint-handler", "missing"));
+  add(/intent === "one-step"/.test(teachSrc) ? { ok: true, id: "onestep-handler" } : fail("onestep-handler", "missing"));
+  add(/performTeach\(engine, body\)/.test(teachSrc) ? { ok: true, id: "solution-uses-onestep" } : fail("solution-uses-onestep", "solution drifted"));
+
+  function unfoldTeach(eq1, eq2, history, choices) {
+    history = (history || []).slice();
+    choices = (choices || []).slice();
+    var eqs = [];
+    var guard = 0;
+    var last = null;
+    while (guard < 48) {
+      guard += 1;
+      var remote = handler.handle({
+        topic: "systems-sub",
+        intent: "one-step",
+        eq1: eq1,
+        eq2: eq2,
+        history: history,
+        choices: choices,
+      });
+      if (!remote || remote.ok === false) return { ok: false, detail: (remote && remote.message) || "one-step", eq: remote && remote.eq };
+      if (!remote.step) break;
+      if (remote.choice) choices = choices.concat([remote.choice]);
+      if (remote.startEq) {
+        eqs.push(remote.startEq);
+        history = history.concat([remote.startEq]);
+      }
+      eqs.push(remote.step);
+      history = history.concat([remote.step]);
+      last = remote;
+      if (remote.solved) break;
+    }
+    return { ok: true, eqs: eqs, last: last, history: history, choices: choices };
+  }
+
+  function solutionEqs(eq1, eq2, history, choices) {
+    var remote = handler.handle({
+      topic: "systems-sub",
+      intent: "solution",
+      eq1: eq1,
+      eq2: eq2,
+      history: history || [],
+      choices: choices || [],
+    });
+    return {
+      ok: !!(remote && remote.ok),
+      eqs: (remote.steps || []).map(function (s) {
+        return s.eq;
+      }),
+      kind: remote && remote.kind,
+      remote: remote,
+    };
+  }
+
+  exercises.forEach(function (ex) {
+    var walked = unfoldTeach(ex.eq1, ex.eq2);
+    var sol = engine.DoctematicaSystems.solvePair(ex.eq1, ex.eq2);
+    var full = solutionEqs(ex.eq1, ex.eq2);
+    var same = JSON.stringify(walked.eqs) === JSON.stringify(full.eqs);
+    var kindOk = walked.ok && walked.last && walked.last.kind === sol.kind && full.kind === sol.kind;
+    var numsOk =
+      sol.kind !== "unique" ||
+      (walked.last &&
+        Math.abs(walked.last.known.x - sol.x) < 1e-6 &&
+        Math.abs(walked.last.known.y - sol.y) < 1e-6);
+    add(walked.ok && kindOk && numsOk && same ? { ok: true, id: "teach:" + ex.n } : fail("teach:" + ex.n, JSON.stringify({ kindOk: kindOk, numsOk: numsOk, same: same, msg: walked.detail, eq: walked.eq })));
+  });
+
+  var bare = unfoldTeach("5x+4y=18", "x+3y=8");
+  add(bare.ok && bare.eqs[0] === "x+3y=8" && bare.eqs[1] === "x=8-3y" ? { ok: true, id: "teach-no-isol-prefers-x" } : fail("teach-no-isol-prefers-x", JSON.stringify(bare.eqs && bare.eqs.slice(0, 4))));
+  var hint0 = handler.handle({ topic: "systems-sub", intent: "hint", eq1: "5x+4y=18", eq2: "x+3y=8", history: [], choices: [] });
+  add(hint0 && hint0.ok && /x/.test(hint0.hint) && /שנייה/.test(hint0.hint) ? { ok: true, id: "hint-convenient-x" } : fail("hint-convenient-x", JSON.stringify(hint0)));
+  var again = handler.handle({ topic: "systems-sub", intent: "setup", eq1: "5x+4y=18", eq2: "x+3y=8", history: [], choices: [] });
+  add(again.phase === "pick_isolate" ? { ok: true, id: "hint-does-not-move" } : fail("hint-does-not-move", again.phase));
+
+  var givenTeach = unfoldTeach("x+3y=36", "x=6");
+  add(givenTeach.ok && givenTeach.eqs.indexOf("x=6") === -1 && givenTeach.last && givenTeach.last.known.y === 10 ? { ok: true, id: "teach-numeric-isol" } : fail("teach-numeric-isol", JSON.stringify(givenTeach.eqs)));
+
+  var exprTeach = unfoldTeach("5x+3y=36", "x=y+4");
+  add(exprTeach.ok && exprTeach.eqs[0] === "5x+3y=36" && exprTeach.eqs[1].indexOf("(y+4)") !== -1 ? { ok: true, id: "teach-expr-isol" } : fail("teach-expr-isol", JSON.stringify(exprTeach.eqs && exprTeach.eqs.slice(0, 3))));
+
+  var bothTeach = unfoldTeach("y=x+5", "y=2x+4");
+  add(bothTeach.ok && bothTeach.eqs[0] === "y=2x+4" ? { ok: true, id: "teach-two-isolations" } : fail("teach-two-isolations", JSON.stringify(bothTeach.eqs && bothTeach.eqs.slice(0, 3))));
+
+  var noneTeach = unfoldTeach("x+y=1", "x+y=2");
+  add(noneTeach.ok && noneTeach.last && noneTeach.last.kind === "none" ? { ok: true, id: "teach-none" } : fail("teach-none", JSON.stringify(noneTeach.last && noneTeach.last.kind)));
+  var infTeach = unfoldTeach("x+3y=10", "2x+6y=20");
+  add(infTeach.ok && infTeach.last && infTeach.last.kind === "infinite" ? { ok: true, id: "teach-infinite" } : fail("teach-infinite", JSON.stringify(infTeach.last && infTeach.last.kind)));
+
+  var altChoice = handler.handle({
+    topic: "systems-sub",
+    intent: "choice",
+    eq1: "5x+4y=18",
+    eq2: "x+3y=8",
+    history: [],
+    choices: [],
+    confirm: true,
+    choice: { kind: "isolate", eqIndex: 1, v: "y" },
+  });
+  var altHist = [altChoice.startEq];
+  var altChoices = [altChoice.choice];
+  var altHint = handler.handle({
+    topic: "systems-sub",
+    intent: "hint",
+    eq1: "5x+4y=18",
+    eq2: "x+3y=8",
+    history: altHist,
+    choices: altChoices,
+  });
+  var altStep = handler.handle({
+    topic: "systems-sub",
+    intent: "one-step",
+    eq1: "5x+4y=18",
+    eq2: "x+3y=8",
+    history: altHist,
+    choices: altChoices,
+  });
+  add(altHint && /y/.test(altHint.hint) && !/לבודד את x/.test(altHint.hint) ? { ok: true, id: "hint-follows-student" } : fail("hint-follows-student", JSON.stringify(altHint)));
+  add(altStep && altStep.ok && altStep.step === "3y=8-x" && altStep.phase === "work_isolate" ? { ok: true, id: "onestep-follows-student" } : fail("onestep-follows-student", JSON.stringify(altStep && { step: altStep.step, phase: altStep.phase, msg: altStep.message })));
+  var altDone = unfoldTeach("5x+4y=18", "x+3y=8", altHist.concat([altStep.step]), altChoices);
+  add(altDone.ok && altDone.last && altDone.last.kind === "unique" && altDone.last.known.x === 2 && altDone.last.known.y === 2 ? { ok: true, id: "onestep-alternate-finishes" } : fail("onestep-alternate-finishes", JSON.stringify(altDone.last && altDone.last.known)));
 
   console.log("flow-systems: passed " + passed + ", failed " + failed.length);
   failed.slice(0, 25).forEach(function (f) {

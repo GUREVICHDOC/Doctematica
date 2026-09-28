@@ -773,22 +773,34 @@
 
 .sys {
   display: inline-flex;
-  align-items: center;
-  gap: 0.12em;
+  align-items: stretch;
+  gap: 0.15em;
   direction: ltr;
 }
 
 .sys-brace {
-  font-size: 2.4em;
-  font-weight: 400;
-  line-height: 0.9;
-  padding-left: 0.08em;
+  align-self: stretch;
+  flex: none;
+  width: 18px;
+  min-height: 2.6em;
+  font-size: 0;
+  line-height: 0;
+  color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 100' preserveAspectRatio='none'%3E%3Cpath d='M18 3C10 3 11 16 11 30C11 42 4 47 4 50C4 53 11 58 11 70C11 84 10 97 18 97' fill='none' stroke='%231c1c1c' stroke-width='2.4' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
 }
 
 .sys-eqs {
   display: flex;
   flex-direction: column;
   gap: 0.25em;
+}
+
+.sys-eqs .lcd-eq {
+  padding: 2px 0 0;
+  font-size: 1.2rem;
 }
 
 .sys-guide {
@@ -806,6 +818,75 @@
 
 .sys-guide .sys-continue-row {
   margin-top: 10px;
+}
+
+.sys-prep {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  direction: ltr;
+  margin-top: 4px;
+}
+
+.sys-prep-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sys-prep-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sys-prep-row.is-lcd {
+  align-items: flex-end;
+}
+
+.sys-prep-arrow {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.sys-prep-kept {
+  font-family: "Times New Roman", "Frank Ruhl Libre", serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  direction: ltr;
+}
+
+.sys-prep-eq {
+  min-width: 11em;
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #c8bba8;
+  border-radius: 8px;
+  font-family: "Times New Roman", "Frank Ruhl Libre", serif;
+  font-size: 1.15rem;
+  direction: ltr;
+  text-align: left;
+  background: #fff;
+}
+
+.sys-prep-note {
+  margin: 10px 0 0;
+  font-weight: 600;
+}
+
+.sys-lcd {
+  margin: 4px 0 8px;
+}
+
+.sys-lcd-panel {
+  margin-top: 6px;
+}
+
+.sys-mul-mark {
+  font-weight: 700;
 }
 
 .lcd-guide {

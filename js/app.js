@@ -841,7 +841,14 @@
     if (equationsCheckBusy) return true;
     equationsCheckBusy = true;
     var body = {
-      topic: "systems-sub",
+      topic:
+        state.problem && state.problem.mode === "system-elim"
+          ? "systems-elim"
+          : state.problem && state.problem.mode === "system-arrange"
+            ? "systems-arrange"
+            : state.problem && state.problem.mode === "system-quad"
+              ? "systems-quad"
+              : "systems-sub",
       intent: payload.intent,
       eq1: (state.problem && state.problem.eq1) || payload.eq1,
       eq2: (state.problem && state.problem.eq2) || payload.eq2,
@@ -849,6 +856,7 @@
       choices: payload.choices != null ? payload.choices : (state.sys && state.sys.choices) || [],
     };
     if (payload.typed != null) body.typed = payload.typed;
+    if (payload.scale) body.scale = payload.scale;
     if (payload.choice) body.choice = payload.choice;
     if (payload.confirm) body.confirm = true;
     fetch(SYSTEMS_URL, {
@@ -943,6 +951,14 @@
     return state.topic === "systems-sub";
   }
 
+  function isSystemQuadMode() {
+    return !!(state.problem && state.problem.mode === "system-quad");
+  }
+
+  function sysQuadFormulaActive() {
+    return isSystemQuadMode() && mixedPath() === "formula";
+  }
+
   function isHighPowerTopic() {
     return state.topic === "high-power";
   }
@@ -975,6 +991,37 @@
     return String(text || "").replace(/[&<>"]/g, function (ch) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch];
     });
+  }
+
+  function freqStemHTML(stem) {
+    var prose = window.DoctematicaMath && DoctematicaMath.proseHTML
+      ? function (text) { return DoctematicaMath.proseHTML(text); }
+      : function (text) { return escapeFreqHtml(text); };
+    var src = String(stem || "").replace(/\r\n/g, "\n");
+    src = src.replace(/[ \t]+((?:III|II|I)\.)(?=\s)/g, "\n$1");
+    src = src.replace(/[ \t]+(\(\d+\))(?=\s+\()/g, "\n$1");
+    var lead = [];
+    var choices = [];
+    src.split("\n").forEach(function (line) {
+      var trimmed = line.trim();
+      var roman = trimmed.match(/^((?:III|II|I)\.)\s+(.+)$/);
+      var paren = trimmed.match(/^(\(\d+\))\s+(.+)$/);
+      var hit = roman || paren;
+      if (hit && hit[2].indexOf("=") >= 0) choices.push({ label: hit[1], eq: hit[2] });
+      else if (trimmed) lead.push(trimmed);
+    });
+    if (!choices.length) return prose(String(stem || ""));
+    var html = prose(lead.join(" "));
+    html += '<div class="eq-choices">';
+    choices.forEach(function (choice) {
+      html += '<div class="eq-choice" dir="ltr"><span class="eq-choice-label">' +
+        escapeFreqHtml(choice.label) +
+        '</span><span class="eq-choice-eq">' +
+        prose(choice.eq) +
+        "</span></div>";
+    });
+    html += "</div>";
+    return html;
   }
 
   function clearFreqUi() {
@@ -2602,6 +2649,8 @@
 
   function canUseMixedFormula() {
     if (state.locked || !state.problem) return false;
+    if (sysQuadFormulaActive()) return false;
+    if (isSystemQuadMode() && state.offerFormula) return true;
     if (!isMixedEqMode() && !geoEqSolveActive()) return false;
     if (mixedPath()) return false;
     if (state.offerFormula) return true;
@@ -2861,7 +2910,7 @@
     if (!domainPending() || !domainMulti()) {
       domainGuideEl.classList.add("hidden");
       domainGuideEl.innerHTML = "";
-      if (mathWrap && !formulaWorkActive()) mathWrap.classList.remove("hidden");
+      if (mathWrap && !formulaWorkActive() && !sysPrepActive()) mathWrap.classList.remove("hidden");
       return;
     }
     wireDomainMathKeys();
@@ -3879,7 +3928,11 @@
   function topicLevels() {
     var all = (state.catalog && state.catalog.levels) || [];
     var sub =
-      state.topic === "equations" || state.topic === "analytic" || state.topic === "statistics" || state.topic === "percents"
+      state.topic === "equations" ||
+      state.topic === "analytic" ||
+      state.topic === "statistics" ||
+      state.topic === "percents" ||
+      state.topic === "systems-sub"
         ? state.subtopic
         : null;
     if (!state.topic) return all;
@@ -3889,6 +3942,7 @@
       if (state.topic === "analytic" && sub) return (item.subtopic || "segments") === sub;
       if (state.topic === "statistics" && sub) return (item.subtopic || "freq-table") === sub;
       if (state.topic === "percents" && sub) return (item.subtopic || "find-part") === sub;
+      if (state.topic === "systems-sub" && sub) return (item.subtopic || "sub") === sub;
       return true;
     });
   }
@@ -4084,7 +4138,7 @@
     state.topic = topic.id;
     state.source = "worksheet";
     state.exerciseIndex = 0;
-    if (topic.id === "equations" || topic.id === "analytic" || topic.id === "statistics" || topic.id === "percents") {
+    if (topic.id === "equations" || topic.id === "analytic" || topic.id === "statistics" || topic.id === "percents" || topic.id === "systems-sub") {
       var subs = ((state.catalog && state.catalog.subtopics) || {})[topic.id] || [];
       state.subtopic = state.subtopic || (subs[0] && subs[0].id);
       if (!subs.some(function (s) { return s.id === state.subtopic; })) {
@@ -4195,7 +4249,7 @@
     level.exercises.forEach(function (ex, index) {
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.textContent = String(index + 1);
+      btn.textContent = String((level.mode === "system-arrange" || level.mode === "system-quad") && ex.n != null ? ex.n : index + 1);
       btn.className = index === state.exerciseIndex ? "active" : "";
       if (index === state.exerciseIndex) btn.setAttribute("aria-current", "true");
       btn.addEventListener("click", function () {
@@ -4324,7 +4378,13 @@
       return t.id === state.topic;
     })[0];
     var label = found ? found.label : "";
-    if (state.topic === "equations" || state.topic === "analytic" || state.topic === "statistics" || state.topic === "percents") {
+    if (
+      state.topic === "equations" ||
+      state.topic === "analytic" ||
+      state.topic === "statistics" ||
+      state.topic === "percents" ||
+      (state.topic === "systems-sub" && (state.subtopic === "elim" || state.subtopic === "arrange"))
+    ) {
       var subList =
         ((state.catalog && state.catalog.subtopics) || {})[state.topic] || [];
       var sub = (subList.filter(function (s) {
@@ -4421,6 +4481,10 @@
     state.sys.workTarget = view.workTarget;
     state.sys.found = view.found || null;
     state.sys.view = view;
+    state.sys.formulaEq = view.formulaEq || "";
+    state.sys.formulaLetter = view.formulaLetter || "x";
+    state.offerFormula = !!view.offerFormula;
+    updateFormulaBtn();
   }
 
   function beginWorkFromView(view) {
@@ -4445,6 +4509,8 @@
   }
 
   function applySysSetup(view) {
+    if (view && view.stamp && state.sys && state.sys.stamp !== view.stamp) return;
+    if ((state.history && state.history.length) || (state.sys && state.sys.choices && state.sys.choices.length)) return;
     if (!view || view.ok === false) {
       showFeedback(false, "<strong>עוד לא.</strong> " + ((view && view.message) || "לא ניתן להתחיל את המערכת."));
       return;
@@ -4492,6 +4558,11 @@
       return;
     }
     state.sys.pendingChoice = null;
+    if (remote.historyMark) {
+      state.history.push(remote.historyMark);
+      if (!state.sys.reasons) state.sys.reasons = {};
+      if (remote.reason) state.sys.reasons[state.history.length - 1] = remote.reason;
+    }
     if (remote.choice) {
       if (!state.sys.choices) state.sys.choices = [];
       state.sys.choices.push(remote.choice);
@@ -4501,7 +4572,9 @@
   }
 
   function startSystemSession(problem) {
+    var stamp = String(problem.eq1 || "") + "|" + String(problem.eq2 || "");
     state.sys = {
+      stamp: stamp,
       eq: [problem.eq1, problem.eq2],
       choices: [],
       known: {},
@@ -4510,6 +4583,8 @@
       workTarget: null,
       givenAt: [],
       keepAt: [],
+      reasons: {},
+      lcdHats: {},
       pendingChoice: null,
       phase: null,
       view: null,
@@ -4523,11 +4598,22 @@
           history: [],
           choices: [],
         },
-        applySysSetup
+        function (remote) {
+          if (remote) remote.stamp = stamp;
+          applySysSetup(remote);
+        }
       )
     ) {
       showBasicEqServerUnavailable();
     }
+  }
+
+  function sysPrepActive() {
+    return !!(
+      isSystemMode() &&
+      state.sys &&
+      (state.sys.phase === "prep" || state.sys.phase === "prep_write" || state.sys.phase === "normalize")
+    );
   }
 
   function setWorkInput(on) {
@@ -4560,7 +4646,13 @@
       markSolved();
       mathField.setDisabled(true);
       nextAfterSolveBtn.classList.remove("hidden");
-      showFeedback(true, "<strong>אין פתרון.</strong> המערכת סותרת.");
+      var noneAnswer = state.sys.view && state.sys.view.answer;
+      showFeedback(
+        true,
+        noneAnswer === "אין פתרון ממשי"
+          ? "<strong>אין פתרון ממשי.</strong>"
+          : "<strong>אין פתרון.</strong> המערכת סותרת."
+      );
       return;
     }
     if (kind === "infinite") {
@@ -4573,18 +4665,26 @@
     markSolved();
     mathField.setDisabled(true);
     nextAfterSolveBtn.classList.remove("hidden");
+    var pairAnswer = state.sys.view && state.sys.view.answer;
     showFeedback(
       true,
-      "<strong>כל הכבוד.</strong> x = " +
-        DoctematicaSystems.fmt(state.sys.known.x) +
-        ", y = " +
-        DoctematicaSystems.fmt(state.sys.known.y) +
+      "<strong>כל הכבוד.</strong> " +
+        (pairAnswer ||
+          "x = " +
+            DoctematicaSystems.fmt(state.sys.known.x) +
+            ", y = " +
+            DoctematicaSystems.fmt(state.sys.known.y)) +
         (extra ? " " + extra : "")
     );
   }
 
   function renderSysGuide() {
     renderSysKnown();
+    if (sysQuadFormulaActive()) {
+      sysGuideEl.classList.add("hidden");
+      sysGuideEl.innerHTML = "";
+      return;
+    }
     if (!isSystemMode() || !state.sys) {
       sysGuideEl.classList.add("hidden");
       sysGuideEl.innerHTML = "";
@@ -4628,7 +4728,531 @@
       );
       sysGuideEl.appendChild(wrap);
     }
-    setWorkInput(!!view.input && String(sys.phase).indexOf("work") === 0);
+    if (sys.phase === "normalize" && view.arrange) {
+      sysGuideEl.appendChild(buildSysArrange(view.arrange));
+      var arrangeField = sysGuideEl.querySelector("[data-sys-new]");
+      if (arrangeField && arrangeField.focus) arrangeField.focus();
+      setWorkInput(false);
+      checkBtn.classList.remove("hidden");
+      return;
+    }
+    if ((sys.phase === "prep" || sys.phase === "prep_write") && view.prep) {
+      sysGuideEl.appendChild(buildSysPrep(view.prep, sys.phase));
+      var nextField = sysGuideEl.querySelector("[data-sys-new], .lcd-mul");
+      if (nextField && nextField.focus) nextField.focus();
+      setWorkInput(false);
+      checkBtn.classList.remove("hidden");
+      return;
+    }
+    setWorkInput(!!view.input);
+  }
+
+  function readSysMul(raw) {
+    var s = String(raw || "")
+      .trim()
+      .replace(/×/g, "")
+      .replace(/[−–—]/g, "-")
+      .replace(/^\*/, "");
+    if (!s) return null;
+    if (!/^[+-]?\d+$/.test(s)) return { bad: true };
+    var n = Number(s);
+    if (!n || Math.abs(n) < 2) return { bad: true };
+    return n;
+  }
+
+  function normSysLine(s) {
+    return String(s || "")
+      .replace(/\s+/g, "")
+      .replace(/[−–—]/g, "-");
+  }
+
+  function sysHatsHTML(pair, hats) {
+    var parts = [];
+    var i;
+    for (i = 0; i < 2; i++) {
+      if (hats && hats[i]) {
+        parts.push('<span class="sys-lcd-line">' + buildLcdEqView(hats[i]).outerHTML + "</span>");
+      } else if (DoctematicaMath && typeof DoctematicaMath.toHTML === "function") {
+        parts.push(DoctematicaMath.toHTML(pair[i] || ""));
+      }
+    }
+    return (
+      '<span class="sys" dir="ltr"><span class="sys-brace">{</span><span class="sys-eqs">' +
+      parts.join("") +
+      "</span></span>"
+    );
+  }
+
+  function sysStepHTML(eq, hats) {
+    var s = String(eq || "");
+    if (s.indexOf("sys:") === 0 && hats && (hats[0] || hats[1])) {
+      return sysHatsHTML(s.slice(4).split("|"), hats);
+    }
+    if (s.indexOf("method:") === 0) {
+      var methodName = s.slice(7) === "elim" ? "שיטת השוואת מקדמים" : "שיטת ההצבה";
+      return '<span class="sys-mul-mark" dir="rtl">' + methodName + "</span>";
+    }
+    if (s.indexOf("mul:") === 0) {
+      var bits = s.slice(4).split("|");
+      var lines = String(bits[0] || "")
+        .split(",")
+        .map(function (part) {
+          var head = part.split(":");
+          var idx = Number(head[0]) + 1;
+          var k = String(head[1] || "").replace(/-/g, "−");
+          return "משוואה " + idx + ": ×" + k;
+        });
+      return '<span class="sys-mul-mark" dir="rtl">' + lines.join("<br>") + "</span>";
+    }
+    if (s.indexOf("sys:") === 0) {
+      var pair = s.slice(4).split("|");
+      if (DoctematicaMath && typeof DoctematicaMath.systemHTML === "function") {
+        return DoctematicaMath.systemHTML(pair[0] || "", pair[1] || "");
+      }
+    }
+    return "";
+  }
+
+  function prepEnter(event) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    if (focusMissingFactor()) return;
+    if (focusMissingArrange()) return;
+    handleSystemSubmit();
+  }
+
+  function focusMissingArrange() {
+    var sys = state.sys;
+    var arrange = sys && sys.view && sys.view.arrange;
+    if (!sys || sys.phase !== "normalize" || !arrange || !arrange.open || !sysGuideEl) return false;
+    if (!(arrange.open[0] && arrange.open[1])) return false;
+    var fields = [
+      sysGuideEl.querySelector('[data-sys-new="0"]'),
+      sysGuideEl.querySelector('[data-sys-new="1"]'),
+    ];
+    if (!fields[0] || !fields[1]) return false;
+    var filled = [
+      !!String(fields[0].value || "").trim(),
+      !!String(fields[1].value || "").trim(),
+    ];
+    if (filled[0] && filled[1]) return false;
+    var active = document.activeElement;
+    var activeIndex = active === fields[0] ? 0 : active === fields[1] ? 1 : -1;
+    if (activeIndex >= 0 && filled[activeIndex] && !filled[1 - activeIndex]) {
+      fields[1 - activeIndex].focus();
+      return true;
+    }
+    if (!filled[0] && !filled[1]) return false;
+    var empty = !filled[0] ? fields[0] : fields[1];
+    empty.focus();
+    return true;
+  }
+
+  function focusMissingFactor() {
+    var sys = state.sys;
+    var prep = sys && sys.view && sys.view.prep;
+    if (!sys || sys.phase !== "prep" || !prep || !prep.needsBoth || !sysGuideEl) return false;
+    var fields = [
+      sysGuideEl.querySelector('[data-sys-mul="0"]'),
+      sysGuideEl.querySelector('[data-sys-mul="1"]'),
+    ];
+    if (!fields[0] || !fields[1]) return false;
+    var empty = null;
+    var i;
+    for (i = 0; i < 2; i++) {
+      if (!String(fields[i].value || "").trim()) empty = fields[i];
+    }
+    if (!empty) return false;
+    empty.focus();
+    return true;
+  }
+
+  function buildSysPrep(prep, phase) {
+    if (phase === "prep_write" && prep.scale) return buildSysPrepWrite(prep);
+    var box = document.createElement("div");
+    box.className = "sys-prep";
+    var brace = document.createElement("span");
+    brace.className = "sys-brace";
+    brace.textContent = "{";
+    box.appendChild(brace);
+    var rows = document.createElement("div");
+    rows.className = "sys-prep-rows";
+    var eqs = [prep.eq1, prep.eq2];
+    var i;
+    for (i = 0; i < 2; i++) {
+      var row = document.createElement("div");
+      row.className = "sys-prep-row";
+      var term = document.createElement("span");
+      term.className = "lcd-term";
+      var mul = document.createElement("input");
+      mul.type = "text";
+      mul.className = "lcd-mul";
+      mul.setAttribute("data-sys-mul", String(i));
+      mul.setAttribute("aria-label", "כופל למשוואה " + (i + 1));
+      mul.autocomplete = "off";
+      mul.placeholder = "×";
+      term.appendChild(mul);
+      wireLcdMulFit(mul);
+      var body = document.createElement("span");
+      body.className = "lcd-term-body";
+      body.innerHTML = DoctematicaMath.toHTML(eqs[i]);
+      term.appendChild(body);
+      row.appendChild(term);
+      mul.addEventListener("keydown", prepEnter);
+      rows.appendChild(row);
+    }
+    box.appendChild(rows);
+    var note = document.createElement("p");
+    note.className = "sys-prep-note";
+    note.textContent = "סמנו כופל ליד משוואה אחת, או ליד שתיהן.";
+    var wrap = document.createElement("div");
+    wrap.appendChild(box);
+    wrap.appendChild(note);
+    return wrap;
+  }
+
+  function prepFactors(scale) {
+    if (!scale) return [null, null];
+    if (scale.factors) {
+      return [
+        scale.factors[0] == null || scale.factors[0] === "" ? null : scale.factors[0],
+        scale.factors[1] == null || scale.factors[1] === "" ? null : scale.factors[1],
+      ];
+    }
+    var out = [null, null];
+    if (scale.index === 0 || scale.index === 1) out[scale.index] = scale.k;
+    return out;
+  }
+
+  function buildSysPrepWrite(prep) {
+    var factors = prepFactors(prep.scale);
+    var active = [];
+    var ai;
+    for (ai = 0; ai < 2; ai++) if (factors[ai] != null) active.push(ai);
+    var eqs = [prep.eq1, prep.eq2];
+    var box = document.createElement("div");
+    box.className = "sys-prep";
+    var brace = document.createElement("span");
+    brace.className = "sys-brace";
+    brace.textContent = "{";
+    box.appendChild(brace);
+    var rows = document.createElement("div");
+    rows.className = "sys-prep-rows";
+    var i;
+    for (i = 0; i < 2; i++) {
+      var row = document.createElement("div");
+      row.className = "sys-prep-row" + (factors[i] != null ? " is-new" : " is-kept");
+      if (factors[i] == null) {
+        var kept = document.createElement("span");
+        kept.className = "sys-prep-kept";
+        kept.innerHTML = DoctematicaMath.toHTML(eqs[i]);
+        row.appendChild(kept);
+      } else {
+        var term = document.createElement("span");
+        term.className = "lcd-term";
+        var hat = document.createElement("span");
+        hat.className = "lcd-mul is-ok lcd-mul-view";
+        hat.textContent = "×" + String(factors[i]).replace(/-/g, "−");
+        term.appendChild(hat);
+        var body = document.createElement("span");
+        body.className = "lcd-term-body";
+        body.innerHTML = DoctematicaMath.toHTML(eqs[i]);
+        term.appendChild(body);
+        row.appendChild(term);
+        var arrow = document.createElement("span");
+        arrow.className = "sys-prep-arrow";
+        arrow.textContent = "→";
+        row.appendChild(arrow);
+        var field = document.createElement("input");
+        field.type = "text";
+        field.className = "sys-prep-eq";
+        field.setAttribute("data-sys-new", String(i));
+        field.setAttribute("aria-label", "משוואה " + (i + 1) + " אחרי הכפל");
+        field.dir = "ltr";
+        field.autocomplete = "off";
+        field.placeholder = "המשוואה אחרי הכפל";
+        field.addEventListener("keydown", prepEnter);
+        row.appendChild(field);
+      }
+      rows.appendChild(row);
+    }
+    box.appendChild(rows);
+    var note = document.createElement("p");
+    note.className = "sys-prep-note";
+    if (active.length === 2) {
+      note.textContent = "כתבו את שתי המשוואות אחרי הכפל.";
+    } else {
+      var idx = active.length ? active[0] : 0;
+      var other = idx === 0 ? 1 : 0;
+      note.textContent = "משוואה " + (other + 1) + " נשארת כמו שהיא. כתבו את משוואה " + (idx + 1) + " אחרי הכפל.";
+    }
+    var wrap = document.createElement("div");
+    wrap.appendChild(box);
+    wrap.appendChild(note);
+    return wrap;
+  }
+
+  function sysLcdFeedback(remote) {
+    if (!remote || !remote.ok) {
+      showFeedback(false, "<strong>עוד לא.</strong> " + ((remote && remote.message) || ""));
+      return;
+    }
+    showFeedback(true, "<strong>נכון.</strong> " + (remote.note ? remote.note + " " : "") + (remote.message || ""), "tip");
+  }
+
+  function buildArrangeLcd(index, pack) {
+    var box = document.createElement("div");
+    box.className = "sys-lcd";
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ghost";
+    btn.textContent = "מכפילים";
+    var panel = document.createElement("div");
+    panel.className = "sys-lcd-panel";
+    panel.hidden = true;
+    btn.addEventListener("click", function () {
+      panel.hidden = false;
+      if (!panel.childNodes.length) renderArrangeLcdAsk(panel, index);
+    });
+    box.appendChild(btn);
+    box.appendChild(panel);
+    return box;
+  }
+
+  function renderArrangeLcdAsk(panel, index) {
+    panel.innerHTML = "";
+    var label = document.createElement("label");
+    label.textContent = "מכנה משותף ";
+    var input = document.createElement("input");
+    input.type = "text";
+    input.className = "sys-prep-eq";
+    input.setAttribute("aria-label", "מכנה משותף למשוואה " + (index + 1));
+    input.autocomplete = "off";
+    label.appendChild(input);
+    panel.appendChild(label);
+    var tip = document.createElement("p");
+    tip.className = "sys-prep-note";
+    tip.textContent = "אפשר גם בלי זה — לכתוב ישר את המשוואה אחרי ביטול המכנים.";
+    panel.appendChild(tip);
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key !== "Enter") return;
+      ev.preventDefault();
+      requestSystemsAction(
+        { intent: "check", typed: "lcdv:" + index + ":" + input.value, history: state.history || [] },
+        function (remote) {
+          sysLcdFeedback(remote);
+          if (!remote || !remote.ok) {
+            input.focus();
+            return;
+          }
+          renderArrangeLcdMuls(panel, index, remote);
+        }
+      );
+    });
+    input.focus();
+  }
+
+  function renderArrangeLcdMuls(panel, index, remote) {
+    panel.innerHTML = "";
+    var title = document.createElement("p");
+    title.className = "sys-prep-note";
+    title.textContent = "מכנה משותף " + remote.lcd + ". מעל כל איבר רשמו בכמה מכפילים.";
+    panel.appendChild(title);
+    var eqEl = document.createElement("div");
+    eqEl.className = "lcd-eq";
+    eqEl.setAttribute("data-sys-eq", String(index));
+    var terms = remote.terms || [];
+    var leftN = remote.leftN || 0;
+    appendLcdSide(eqEl, terms.slice(0, leftN), 0, []);
+    var eqSign = document.createElement("span");
+    eqSign.className = "lcd-op";
+    eqSign.textContent = "=";
+    eqEl.appendChild(eqSign);
+    appendLcdSide(eqEl, terms.slice(leftN), leftN, []);
+    var kept = sysGuideEl.querySelector('[data-sys-eq="' + index + '"]');
+    var row = kept && kept.closest ? kept.closest(".sys-prep-row") : null;
+    if (kept && kept.parentNode) {
+      kept.parentNode.replaceChild(eqEl, kept);
+      if (row) row.classList.add("is-lcd");
+    } else {
+      panel.appendChild(eqEl);
+    }
+    refitLcdMuls(eqEl);
+    var fields = eqEl.querySelectorAll(".lcd-mul");
+    function submitMuls() {
+      var vals = [];
+      var fi;
+      for (fi = 0; fi < fields.length; fi++) {
+        if (!String(fields[fi].value || "").trim()) {
+          fields[fi].focus();
+          return;
+        }
+        vals.push(String(fields[fi].value).trim());
+      }
+      requestSystemsAction(
+        {
+          intent: "check",
+          typed: "lcdm:" + index + ":" + remote.lcd + ":" + vals.join(","),
+          history: state.history || [],
+        },
+        function (res) {
+          sysLcdFeedback(res);
+          if (!res || !res.ok) return;
+          var eqField = sysGuideEl.querySelector('[data-sys-new="' + index + '"]');
+          if (eqField && eqField.focus) eqField.focus();
+        }
+      );
+    }
+    var mi;
+    for (mi = 0; mi < fields.length; mi++) {
+      fields[mi].addEventListener("keydown", function (ev) {
+        if (ev.key !== "Enter") return;
+        ev.preventDefault();
+        var empty = null;
+        var j;
+        for (j = 0; j < fields.length; j++) {
+          if (!String(fields[j].value || "").trim()) empty = fields[j];
+        }
+        if (empty && empty !== ev.target && String(ev.target.value || "").trim()) {
+          empty.focus();
+          return;
+        }
+        if (empty) {
+          empty.focus();
+          return;
+        }
+        submitMuls();
+      });
+    }
+    if (fields[0]) fields[0].focus();
+  }
+
+  function buildSysArrange(arrange) {
+    var box = document.createElement("div");
+    box.className = "sys-prep";
+    var brace = document.createElement("span");
+    brace.className = "sys-brace";
+    brace.textContent = "{";
+    box.appendChild(brace);
+    var rows = document.createElement("div");
+    rows.className = "sys-prep-rows";
+    var eqs = [arrange.eq1, arrange.eq2];
+    var i;
+    for (i = 0; i < 2; i++) {
+      var row = document.createElement("div");
+      row.className = "sys-prep-row is-new";
+      var kept = document.createElement("span");
+      kept.className = "sys-prep-kept";
+      kept.setAttribute("data-sys-eq", String(i));
+      kept.innerHTML = DoctematicaMath.toHTML(eqs[i]);
+      var arrow = document.createElement("span");
+      arrow.className = "sys-prep-arrow";
+      arrow.textContent = "→";
+      var field = document.createElement("input");
+      field.type = "text";
+      field.className = "sys-prep-eq";
+      field.setAttribute("data-sys-new", String(i));
+      field.setAttribute("aria-label", "משוואה " + (i + 1) + " אחרי הסידור");
+      field.dir = "ltr";
+      field.autocomplete = "off";
+      field.placeholder = "השאירו ריק אם אין שינוי";
+      field.addEventListener("keydown", prepEnter);
+      row.appendChild(kept);
+      row.appendChild(arrow);
+      row.appendChild(field);
+      rows.appendChild(row);
+      if (arrange.lcd && arrange.lcd[i]) rows.appendChild(buildArrangeLcd(i, arrange.lcd[i]));
+    }
+    box.appendChild(rows);
+    var note = document.createElement("p");
+    note.className = "sys-prep-note";
+    note.textContent = "כתבו משוואה שסידרתם. אם גם השנייה צריכה שינוי, אנטר עובר אליה. משוואה שלא משנים אפשר להשאיר ריקה.";
+    var wrap = document.createElement("div");
+    wrap.appendChild(box);
+    wrap.appendChild(note);
+    return wrap;
+  }
+
+  function handleArrangeSubmit() {
+    var arrange = state.sys && state.sys.view && state.sys.view.arrange;
+    if (!arrange) return;
+    var current = [arrange.eq1, arrange.eq2];
+    var next = current.slice();
+    var any = false;
+    var i;
+    for (i = 0; i < 2; i++) {
+      var field = sysGuideEl.querySelector('[data-sys-new="' + i + '"]');
+      var typedEq = String((field && field.value) || "").trim();
+      if (!typedEq) continue;
+      any = true;
+      next[i] = typedEq;
+    }
+    if (!any) {
+      showFeedback(false, "<strong>עוד לא.</strong> כתבו משוואה אחרי הסידור. משוואה שלא משנים אפשר להשאיר ריקה.");
+      return;
+    }
+    sendPrepCheck("sys:" + next[0] + "|" + next[1]);
+  }
+
+  function sendPrepCheck(typed, scale) {
+    var payload = {
+      intent: "check",
+      typed: typed,
+      history: state.history || [],
+      choices: (state.sys && state.sys.choices) || [],
+    };
+    if (scale) payload.scale = scale;
+    if (equationsCheckBusy) return;
+    if (
+      !requestSystemsAction(payload, function (remote) {
+        applySysCheckView(typed, remote);
+      })
+    ) {
+      showBasicEqServerUnavailable();
+    }
+  }
+
+  function handlePrepSubmit() {
+    var sys = state.sys;
+    var prep = sys && sys.view && sys.view.prep;
+    if (!prep) return;
+    if (sys.phase === "prep_write" && prep.scale) {
+      var factors = prepFactors(prep.scale);
+      var current = [prep.eq1, prep.eq2];
+      var wi;
+      for (wi = 0; wi < 2; wi++) {
+        if (factors[wi] == null) continue;
+        var field = sysGuideEl.querySelector('[data-sys-new="' + wi + '"]');
+        var typedEq = String((field && field.value) || "").trim();
+        if (!typedEq || normSysLine(typedEq) === normSysLine(current[wi])) {
+          showFeedback(false, "<strong>עוד לא.</strong> כתבו את משוואה " + (wi + 1) + " אחרי הכפל.");
+          return;
+        }
+        current[wi] = typedEq;
+      }
+      sendPrepCheck("sys:" + current[0] + "|" + current[1]);
+      return;
+    }
+    var m0 = readSysMul(sysGuideEl.querySelector('[data-sys-mul="0"]').value);
+    var m1 = readSysMul(sysGuideEl.querySelector('[data-sys-mul="1"]').value);
+    if ((m0 && m0.bad) || (m1 && m1.bad)) {
+      showFeedback(false, "<strong>עוד לא.</strong> הכופל צריך להיות מספר שלם שונה מ־1.");
+      return;
+    }
+    if (prep.needsBoth && !(m0 && m1)) {
+      showFeedback(false, "<strong>עוד לא.</strong> כאן צריך כופל לשתי המשוואות. כתבו את שניהם, ואז בדיקה.");
+      var missing = sysGuideEl.querySelector('[data-sys-mul="' + (m0 ? "1" : "0") + '"]');
+      if (missing && missing.focus) missing.focus();
+      return;
+    }
+    var parts = [];
+    if (m0) parts.push("0:" + m0);
+    if (m1) parts.push("1:" + m1);
+    if (!parts.length) {
+      showFeedback(false, "<strong>עוד לא.</strong> סמנו כופל ליד משוואה אחת, או ליד שתיהן.");
+      return;
+    }
+    sendPrepCheck("mul:" + parts.join(",") + "|" + prep.eq1 + "|" + prep.eq2);
   }
 
   function applySysCheckView(typed, remote) {
@@ -4671,14 +5295,73 @@
       return;
     }
     mathField.clear();
-    showFeedback(true, "<strong>צעד חוקי.</strong> " + (remote.message || ""));
-    mathField.focus();
+    showFeedback(true, "<strong>צעד חוקי.</strong> " + (remote.message || "") + (remote.note ? " " + remote.note : ""));
+    if (remote.input) mathField.focus();
     renderSysGuide();
+  }
+
+  function applySysTaughtStep(remote) {
+    remote = remote || {};
+    if (remote.done && !remote.step) {
+      showFeedback(true, "<strong>רמז.</strong> " + (remote.hint || "הפתרון כבר הושלם."), "tip");
+      return;
+    }
+    if (!remote.ok) {
+      showFeedback(false, "<strong>עוד לא.</strong> " + (remote.message || "לא הצלחתי לבצע את הצעד."));
+      return;
+    }
+    if (!state.sys) return;
+    if (!state.sys.reasons) state.sys.reasons = {};
+    if (!state.sys.choices) state.sys.choices = [];
+    state.sys.pendingChoice = null;
+    if (remote.choice) state.sys.choices.push(remote.choice);
+    if (remote.startEq) {
+      if (!state.history.length || state.history[state.history.length - 1] !== remote.startEq) {
+        state.history.push(remote.startEq);
+        if (!state.sys.givenAt) state.sys.givenAt = [];
+        state.sys.givenAt.push(state.history.length - 1);
+      }
+    }
+    if (remote.step) {
+      state.history.push(remote.step);
+      if (remote.reason) state.sys.reasons[state.history.length - 1] = remote.reason;
+      if (remote.lcdHats) {
+        if (!state.sys.lcdHats) state.sys.lcdHats = {};
+        state.sys.lcdHats[state.history.length - 1] = remote.lcdHats;
+      }
+      if (remote.keep) markKeep();
+    }
+    mergeSysFromView(remote);
+    mathField.clear();
+    renderSteps();
+    renderSysGuide();
+    if (remote.solved) {
+      finishSystem(remote.kind);
+      return;
+    }
+    showFeedback(true, "<strong>צעד של האתר.</strong> " + (remote.reason || ""), "tip");
+    if (remote.input) mathField.focus();
   }
 
   function handleSystemSubmit() {
     var sys = state.sys;
-    if (!sys || String(sys.phase).indexOf("work") !== 0) return;
+    if (!sys) return;
+    if (sys.phase === "prep" || sys.phase === "prep_write") {
+      handlePrepSubmit();
+      return;
+    }
+    if (sys.phase === "normalize") {
+      handleArrangeSubmit();
+      return;
+    }
+    var writing =
+      String(sys.phase).indexOf("work") === 0 ||
+      sys.phase === "final_pair" ||
+      sys.phase === "isolate" ||
+      sys.phase === "equate" ||
+      sys.phase === "quad" ||
+      sys.phase === "back";
+    if (!writing) return;
     var typed = typedAnswer().trim();
     if (!typed) {
       showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
@@ -5048,7 +5731,13 @@
       if (formulaWorkActive()) renderQuadGuide();
       return;
     }
-    if (formulaWorkActive() && state.quad && state.quad.trail && state.quad.trail.length) {
+    if (
+      formulaWorkActive() &&
+      state.quad &&
+      state.quad.trail &&
+      state.quad.trail.length &&
+      !isSystemMode()
+    ) {
       stepsEl.classList.remove("hidden");
       if (isMixedEqMode() && state.history.length) {
         var stepNumF = { n: 0 };
@@ -5106,12 +5795,24 @@
       var isGiven = givenAt ? givenAt.indexOf(index) !== -1 : index === 0;
       n.textContent = isGiven ? "נתון" : String(++stepNum.n);
       var body = document.createElement("span");
+      var hats = state.sys && state.sys.lcdHats && state.sys.lcdHats[index];
+      var sysHtml = isSystemMode() ? sysStepHTML(eq, hats) : "";
       var mark = state.lcdMarks && state.lcdMarks[index];
-      if (mark) {
+      if (sysHtml) {
+        body.innerHTML = sysHtml;
+        refitLcdMuls(body);
+      } else if (mark) {
         body.appendChild(buildLcdEqView(mark));
         refitLcdMuls(body);
       } else {
         body.innerHTML = DoctematicaMath.toHTML(eq);
+      }
+      var whyText = state.sys && state.sys.reasons && state.sys.reasons[index];
+      if (whyText && isSystemMode()) {
+        var why = document.createElement("span");
+        why.className = "sys-step-why";
+        why.textContent = whyText;
+        body.appendChild(why);
       }
       li.appendChild(n);
       li.appendChild(body);
@@ -5129,6 +5830,25 @@
       stepsEl.appendChild(li);
       if (index === 0) appendDomainHistorySteps(stepsEl, stepNum);
     });
+    if (
+      isSystemMode() &&
+      formulaWorkActive() &&
+      state.quad &&
+      state.quad.trail &&
+      state.quad.trail.length
+    ) {
+      state.quad.trail.forEach(function (item, index) {
+        var liF = document.createElement("li");
+        var nF = document.createElement("span");
+        nF.className = "n";
+        nF.textContent = index === 0 ? "מקדמים" : String(index);
+        var bodyF = document.createElement("span");
+        bodyF.innerHTML = item.html;
+        liF.appendChild(nF);
+        liF.appendChild(bodyF);
+        stepsEl.appendChild(liF);
+      });
+    }
     if (factorSplit) {
       stepsEl.appendChild(renderFactorFork(stepNum.n + 1));
     }
@@ -5528,6 +6248,12 @@
             DoctematicaMath.toHTML("ax^2+bx+c=0") +
             ". אחרי כל מקדם לחצו Enter.";
       quadGuideEl.appendChild(note);
+      if (isSystemQuadMode() && state.sys && state.sys.formulaLetter === "y") {
+        var yNote = document.createElement("p");
+        yNote.className = "q-note";
+        yNote.textContent = "הנעלם במשוואה הוא y. בנוסחה רושמים אותו כ־x, והשורשים יחזרו כ־y.";
+        quadGuideEl.appendChild(yNote);
+      }
       var row = document.createElement("div");
       row.className = "q-abc";
       var order = ["a", "b", "c"];
@@ -5732,6 +6458,7 @@
   function isFormulaWorkServerMode() {
     return (
       isFormulaServerMode() ||
+      sysQuadFormulaActive() ||
       ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "formula")
     );
   }
@@ -5760,12 +6487,18 @@
   function requestQuadCheck(extra, onResult) {
     extra = extra || {};
     var q = state.quad;
+    var sysStart = sysQuadFormulaActive() && state.sys && state.sys.formulaEq ? state.sys.formulaEq : "";
     return requestQuadraticAction(
       Object.assign(
         {
           intent: extra.intent || "check",
-          start: (state.problem && state.problem.startEquation) || lastHistoryEq(),
-          history: state.history && state.history.length ? state.history : [(state.problem && state.problem.startEquation) || ""],
+          subtopic: sysStart ? "mixed" : undefined,
+          start: sysStart || (state.problem && state.problem.startEquation) || lastHistoryEq(),
+          history: sysStart
+            ? [sysStart]
+            : state.history && state.history.length
+              ? state.history
+              : [(state.problem && state.problem.startEquation) || ""],
           phase: q.phase,
           letter: q.abcAt,
           slots: collectQuadSlots(),
@@ -6009,6 +6742,7 @@
     }
     renderQuadGuide();
     renderSteps();
+    if (finishEqSolveForSys(ans)) return;
     if (finishEqSolveForGeo(ans || (state.problem.quad && state.problem.quad.answer))) return;
     markSolved();
     mathField.setDisabled(true);
@@ -7129,9 +7863,50 @@
     return false;
   }
 
+  function finishEqSolveForSys(answer) {
+    if (!sysQuadFormulaActive()) return false;
+    var letter = (state.sys && state.sys.formulaLetter) || "x";
+    var typed = String(answer || "");
+    if (letter === "y") typed = typed.replace(/x/gi, "y");
+    state.mixed = emptyMixedState();
+    state.quad = null;
+    state.offerFormula = false;
+    hideQuadGuide();
+    updateFormulaBtn();
+    setModeUi();
+    if (!typed) {
+      showFeedback(false, "<strong>עוד לא.</strong> לא התקבל פתרון מהנוסחה.");
+      renderSysGuide();
+      return true;
+    }
+    if (
+      !requestSystemsAction(
+        {
+          intent: "check",
+          typed: typed,
+          history: state.history || [],
+          choices: (state.sys && state.sys.choices) || [],
+        },
+        function (remote) {
+          applySysCheckView(typed, remote);
+        }
+      )
+    ) {
+      showBasicEqServerUnavailable();
+    }
+    return true;
+  }
+
   function beginMixedFormulaFromServer(res, md53) {
     res = res || {};
     if (res.ok === false) {
+      if (isSystemQuadMode()) {
+        state.mixed = emptyMixedState();
+        state.quad = null;
+        updateFormulaBtn();
+        renderSysGuide();
+        setModeUi();
+      }
       showFeedback(false, "<strong>עוד לא.</strong> " + (res.message || ""));
       return false;
     }
@@ -7154,7 +7929,36 @@
     return true;
   }
 
+  function enterSysFormula(md53) {
+    var eq = state.sys && state.sys.formulaEq;
+    if (!eq) {
+      showFeedback(false, "<strong>עוד לא.</strong> קודם סדרו ל־ax²+bx+c=0.");
+      return;
+    }
+    state.mixed = state.mixed || emptyMixedState();
+    state.mixed.path = "formula";
+    state.mixed.md53 = !!md53;
+    updateFormulaBtn();
+    renderSysGuide();
+    requestQuadraticAction(
+      {
+        intent: "formula-enter",
+        subtopic: "mixed",
+        start: eq,
+        history: [eq],
+        md53: !!md53,
+      },
+      function (res) {
+        beginMixedFormulaFromServer(res, !!md53);
+      }
+    );
+  }
+
   function enterMixedFormula() {
+    if (isSystemQuadMode()) {
+      enterSysFormula(false);
+      return;
+    }
     if (isMixedServerMode() || geoEqSolveActive()) {
       requestQuadraticAction(
         {
@@ -7174,6 +7978,10 @@
   }
 
   function enterMixedMd53() {
+    if (isSystemQuadMode()) {
+      enterSysFormula(true);
+      return;
+    }
     if (isMixedServerMode() || geoEqSolveActive()) {
       requestQuadraticAction(
         {
@@ -7488,9 +8296,12 @@
     for (i = 0; i < steps.length; i++) {
       var step = steps[i];
       var src = step && typeof step === "object" && step.eq != null ? step.eq : step;
-      var body = opts.plain
-        ? String(src).replace(/-/g, "−")
-        : DoctematicaMath.toHTML(src);
+      var sysHtml = sysStepHTML(src, opts.lcdHats && opts.lcdHats[i]);
+      var body = sysHtml
+        ? sysHtml
+        : opts.plain
+          ? String(src).replace(/-/g, "−")
+          : DoctematicaMath.toHTML(src);
       var why = notes[i] ? "<div class=\"why\" dir=\"rtl\">" + notes[i] + "</div>" : "";
       lines += "<li>" + body + why + "</li>";
       if (
@@ -7533,6 +8344,7 @@
       "</ol><p dir=\"rtl\">" +
       footerHtml +
       "</p>";
+    refitLcdMuls(modelEl);
     return true;
   }
 
@@ -7881,7 +8693,52 @@
     if (isSystemMode()) {
       return {
         work: true,
+        buttons: true,
         hintText: MATH_FIELD_HINT,
+        hint: function () {
+          if (sysQuadFormulaActive()) {
+            quadHint();
+            return;
+          }
+          if (!state.sys) return;
+          if (
+            !requestSystemsAction(
+              {
+                intent: "hint",
+                history: state.history || [],
+                choices: state.sys.choices || [],
+              },
+              function (remote) {
+                if (!remote || remote.ok === false) {
+                  showFeedback(false, "<strong>עוד לא.</strong> " + ((remote && remote.message) || ""));
+                  return;
+                }
+                showFeedback(true, "<strong>רמז.</strong> " + (remote.hint || ""), "tip");
+              }
+            )
+          ) {
+            showBasicEqServerUnavailable();
+          }
+        },
+        oneStep: function () {
+          if (sysQuadFormulaActive()) {
+            fillQuadStep();
+            return;
+          }
+          if (!state.sys) return;
+          if (
+            !requestSystemsAction(
+              {
+                intent: "one-step",
+                history: state.history || [],
+                choices: state.sys.choices || [],
+              },
+              applySysTaughtStep
+            )
+          ) {
+            showBasicEqServerUnavailable();
+          }
+        },
         showSolution: function () {
           if (
             !requestSystemsAction(
@@ -7893,15 +8750,39 @@
                 choices: (state.sys && state.sys.choices) || [],
               },
               function (remote) {
-                modelEl.classList.remove("hidden");
-                modelEl.innerHTML =
-                  "<strong>המערכת:</strong> " +
-                  DoctematicaMath.systemHTML(state.problem.eq1, state.problem.eq2) +
-                  "<p>הפתרון: " +
-                  ((remote && remote.answer) || "—") +
-                  "</p><p>" +
-                  ((remote && remote.explain) || (state.problem && state.problem.explain) || "") +
-                  "</p>";
+                if (!remote || remote.ok === false) {
+                  showFeedback(false, "<strong>עוד לא.</strong> " + ((remote && remote.message) || ""));
+                  return;
+                }
+                var prior = (state.history || []).map(function (eq, index) {
+                  return {
+                    eq: eq,
+                    reason: (state.sys && state.sys.reasons && state.sys.reasons[index]) || "",
+                    lcdHats: (state.sys && state.sys.lcdHats && state.sys.lcdHats[index]) || null,
+                  };
+                });
+                var rest = remote.steps || [];
+                var lines = prior.concat(rest);
+                showEqSolution(
+                  state.problem && state.problem.mode === "system-elim"
+                    ? "פתרון מלא — השוואת מקדמים"
+                    : state.problem && state.problem.mode === "system-arrange"
+                      ? "פתרון מלא — משוואות לא מסודרות"
+                      : "פתרון מלא — שיטת ההצבה",
+                  {
+                  always: true,
+                  steps: lines.map(function (s) {
+                    return s.eq;
+                  }),
+                  notes: lines.map(function (s) {
+                    return s.reason || "";
+                  }),
+                  lcdHats: lines.map(function (s) {
+                    return s.lcdHats || null;
+                  }),
+                  withNotes: true,
+                  footer: "הפתרון: " + ((remote && remote.answer) || "—"),
+                });
               }
             )
           ) {
@@ -8745,12 +9626,15 @@
         isHighPowerTopic() ||
         isAnalyticTopic() ||
         isStatisticsTopic() ||
-        isPercentTopic()
+        isPercentTopic() ||
+        (state.topic === "systems-sub" && (state.subtopic === "elim" || state.subtopic === "arrange"))
           ? currentTopicLabel() + " · "
           : "") +
         currentLevel().title +
         " · תרגיל " +
-        (state.exerciseIndex + 1)
+        (state.problem && state.problem.mode === "system-arrange" && state.problem.n != null
+          ? state.problem.n
+          : state.exerciseIndex + 1)
       : currentTopicLabel();
     setModeUi();
     var guide = currentGuide();
@@ -8772,10 +9656,7 @@
     clearFreqUi();
     if (isFreqTableMode()) {
       var freqStem = state.problem.stem || state.problem.prompt || "";
-      promptEl.innerHTML =
-        window.DoctematicaMath && DoctematicaMath.proseHTML
-          ? DoctematicaMath.proseHTML(freqStem)
-          : freqStem;
+      promptEl.innerHTML = freqStemHTML(freqStem);
       checkBtn.classList.remove("hidden");
       answerLabelEl.classList.remove("hidden");
       answerLabelEl.textContent = "התשובה שלך";
@@ -9075,6 +9956,11 @@
 
     if (reasonBoxEl && !reasonBoxEl.classList.contains("hidden")) {
       applyRequiredReason(reasonInput ? reasonInput.value : "");
+      return;
+    }
+
+    if (isSystemMode() && sysQuadFormulaActive()) {
+      handleQuadSubmit();
       return;
     }
 

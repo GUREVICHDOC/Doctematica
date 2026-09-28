@@ -1,8 +1,11 @@
 (function (global) {
   function buildProblem(ex, level) {
     if (ex.eq1 && ex.eq2) {
+      var elim = level.mode === "system-elim";
+      var arrange = level.mode === "system-arrange";
+      var quad = level.mode === "system-quad";
       return {
-        mode: "system-sub",
+        mode: elim ? "system-elim" : arrange ? "system-arrange" : quad ? "system-quad" : "system-sub",
         source: "worksheet",
         levelId: level.id,
         n: ex.n,
@@ -10,7 +13,13 @@
         instruction: level.instruction,
         eq1: ex.eq1,
         eq2: ex.eq2,
-        explain: "בודדו משתנה, הציבו במשוואה השנייה, ואז מצאו את המשתנה השני.",
+        explain: quad
+          ? "השוו בין שני הביטויים, פתרו את המשוואה הריבועית, ומצאו זוג (x, y) לכל פתרון."
+          : arrange
+          ? "סדרו את שתי המשוואות, בחרו שיטת הצבה או השוואת מקדמים, והמשיכו עד לפתרון."
+          : elim
+            ? "חברו או חסרו את המשוואות כדי לבטל משתנה, פתרו את הנעלם שנשאר, ואז הציבו במשוואה המקורית."
+            : "בודדו משתנה, הציבו במשוואה השנייה, ואז מצאו את המשתנה השני.",
       };
     }
     if (level.mode === "quad-factor") {
@@ -373,6 +382,9 @@
         }
         if (topicId === "percents" && subtopicId) {
           return (item.subtopic || "find-part") === subtopicId;
+        }
+        if (topicId === "systems-sub" && subtopicId) {
+          return (item.subtopic || "sub") === subtopicId;
         }
         return true;
       });

@@ -1,5 +1,7 @@
 "use strict";
 
+var teach = require("./systems-teach");
+
 function cloneKnown(known) {
   known = known || {};
   var out = {};
@@ -193,7 +195,7 @@ function applyOutcome(st, result) {
       st.found = { v: result.v, value: result.value };
       st.known[result.v] = result.value;
       if (bothKnown(st)) {
-        st.phase = "done";
+        st.phase = "final_pair";
         st.doneKind = "unique";
       } else {
         st.phase = "pick_back";
@@ -206,7 +208,7 @@ function applyOutcome(st, result) {
     if (result.kind === "value") {
       st.known[result.v] = result.value;
       if (bothKnown(st)) {
-        st.phase = "done";
+        st.phase = "final_pair";
         st.doneKind = "unique";
       }
     }
@@ -245,6 +247,13 @@ function reconstruct(Sys, eq1, eq2, history, choices) {
       if (!res || !res.ok) break;
       applyOutcome(st, res);
       prev = typed;
+      i += 1;
+    }
+  }
+  if (st.phase === "final_pair" && i < hist.length) {
+    var pairChk = Sys.checkOrderedPairs(hist[i], [{ x: st.known.x, y: st.known.y }]);
+    if (pairChk.ok) {
+      st.phase = "done";
       i += 1;
     }
   }
@@ -316,6 +325,9 @@ function viewFromState(Sys, st, extra) {
       { label: "משוואה 1", choice: { kind: "back", target: 0 } },
       { label: "משוואה 2", choice: { kind: "back", target: 1 } },
     ];
+  } else if (st.phase === "final_pair") {
+    prompt = "מצאתם את כל הערכים. רשמו את פתרון המערכת כזוג סדור.";
+    input = true;
   } else if (String(st.phase).indexOf("work") === 0) {
     prompt = workPrompt(st);
     input = true;
@@ -346,8 +358,7 @@ function viewFromState(Sys, st, extra) {
   if (extra.choice) out.choice = extra.choice;
   if (extra.resultKind) out.resultKind = extra.resultKind;
   if (st.phase === "done" && st.doneKind === "unique") {
-    out.answer =
-      "x = " + Sys.fmt(st.known.x) + ", y = " + Sys.fmt(st.known.y);
+    out.answer = Sys.formatPairs([{ x: st.known.x, y: st.known.y }]);
   }
   if (st.phase === "done" && st.doneKind === "none") out.answer = "אין פתרון";
   if (st.phase === "done" && st.doneKind === "infinite") out.answer = "אינסוף פתרונות";
@@ -401,6 +412,17 @@ function handleCheck(engine, body) {
   var rec = reconstruct(Sys, pair.eq1, pair.eq2, body.history || [], body.choices || []);
   if (rec.error) return { ok: false, message: rec.error };
   var st = rec.st;
+  if (st.phase === "final_pair") {
+    var typedPair = String((body && body.typed) || "").trim();
+    if (!typedPair) return { ok: false, message: "כתבו את הצעד הבא.", phase: "final_pair" };
+    var pairRes = Sys.checkOrderedPairs(typedPair, [{ x: st.known.x, y: st.known.y }]);
+    if (!pairRes.ok) return { ok: false, message: pairRes.message, phase: "final_pair" };
+    st.phase = "done";
+    var pairView = viewFromState(Sys, st, { ok: true, message: pairRes.message || "" });
+    pairView.ok = true;
+    if (pairRes.note) pairView.note = pairRes.note;
+    return pairView;
+  }
   if (String(st.phase).indexOf("work") !== 0) {
     return { ok: false, message: "עכשיו בוחרים משוואה או משתנה, לא כותבים צעד.", phase: st.phase };
   }
@@ -427,22 +449,151 @@ function handleCheck(engine, body) {
   return view;
 }
 
+function answerOf(Sys, st, pair) {
+  if (st && st.phase === "done" && st.doneKind === "unique") {
+    return Sys.formatPairs([{ x: st.known.x, y: st.known.y }]);
+  }
+  if (st && st.phase === "done" && st.doneKind === "none") return "אין פתרון";
+  if (st && st.phase === "done" && st.doneKind === "infinite") return "אינסוף פתרונות";
+  var sol = Sys.solvePair(pair.eq1, pair.eq2);
+  if (sol.kind === "unique") return "x = " + Sys.fmt(sol.x) + ", y = " + Sys.fmt(sol.y);
+  if (sol.kind === "none") return "אין פתרון";
+  return "אינסוף פתרונות";
+}
+
+function teachFrom(engine, body) {
+  var Sys = engine.DoctematicaSystems;
+  var Algebra = engine.DoctematicaAlgebra;
+  var pair = pairFromBody(body);
+  var hist = Array.isArray(body.history) ? body.history.map(String) : [];
+  var choices = Array.isArray(body.choices) ? body.choices : [];
+  var rec = reconstruct(Sys, pair.eq1, pair.eq2, hist, choices);
+  if (rec.error) return { error: rec.error, pair: pair, hist: hist, choices: choices };
+  return { Sys: Sys, Algebra: Algebra, pair: pair, hist: hist, choices: choices, st: rec.st };
+}
+
+function handleHint(engine, body) {
+  var ctx = teachFrom(engine, body);
+  if (ctx.error) return { ok: false, message: ctx.error };
+  if (ctx.st.phase === "done") {
+    return { ok: true, done: true, hint: "התרגיל כבר פתור.", phase: "done" };
+  }
+  if (ctx.st.phase === "final_pair") {
+    return { ok: true, done: false, hint: "מצאתם את כל הערכים. רשמו את פתרון המערכת כזוג סדור.", phase: "final_pair" };
+  }
+  var action = teach.nextAction(ctx.Sys, ctx.Algebra, ctx.st, ctx.hist);
+  if (!action) return { ok: true, done: true, hint: "התרגיל כבר פתור.", phase: ctx.st.phase };
+  if (action.error) return { ok: false, message: action.error };
+  return { ok: true, done: false, hint: action.hint || action.reason || "", phase: ctx.st.phase };
+}
+
+function performTeach(engine, body) {
+  var ctx = teachFrom(engine, body);
+  if (ctx.error) return { ok: false, message: ctx.error };
+  var Sys = ctx.Sys;
+  var st = ctx.st;
+  if (st.phase === "done") {
+    return viewFromState(Sys, st, {
+      ok: true,
+      done: true,
+      message: "התרגיל כבר פתור.",
+    });
+  }
+  if (st.phase === "final_pair") {
+    var pairText = Sys.formatPairs([{ x: st.known.x, y: st.known.y }]);
+    st.phase = "done";
+    var finished = viewFromState(Sys, st, { ok: true, message: "רשמו את פתרון המערכת כזוג סדור." });
+    finished.step = pairText;
+    finished.reason = "מצאתם את x ואת y. פתרון המערכת הוא זוג סדור.";
+    finished.hint = "רשמו את הפתרון כזוג סדור: קודם x, אחר כך y.";
+    finished.done = false;
+    finished.solved = true;
+    return finished;
+  }
+  var action = teach.nextAction(Sys, ctx.Algebra, st, ctx.hist);
+  if (!action) {
+    return viewFromState(Sys, st, { ok: true, done: true, message: "התרגיל כבר פתור." });
+  }
+  if (action.error || !action.eq) {
+    return { ok: false, message: (action && action.error) || "אין צעד המשך.", eq: action && action.eq };
+  }
+  var choiceOut = null;
+  var startOut = null;
+  if (action.choice) {
+    var applied = applyChoice(Sys, st, action.choice, true);
+    if (!applied.ok || !applied.applied) {
+      return { ok: false, message: (applied && applied.message) || "לא הצלחתי לבחור את המסלול." };
+    }
+    choiceOut = applied.choice;
+    startOut = applied.startEq || null;
+  }
+  var prev = ctx.hist.length ? ctx.hist[ctx.hist.length - 1] : "";
+  if (startOut) prev = startOut;
+  var result = runCheck(Sys, st, prev, action.eq);
+  if (!result.ok) {
+    return { ok: false, message: result.message || "הצעד לא עבר את הבדיקה.", eq: action.eq };
+  }
+  var keep =
+    (st.phase === "work_isolate" && (result.kind === "isolated" || result.kind === "value")) ||
+    ((st.phase === "work_sub" || st.phase === "work_back") && result.kind === "value");
+  applyOutcome(st, result);
+  var view = viewFromState(Sys, st, {
+    ok: true,
+    message: action.reason || result.message || "",
+    keep: keep,
+    resultKind: result.kind || null,
+    choice: choiceOut,
+    startEq: startOut,
+  });
+  view.step = action.eq;
+  view.reason = action.reason || "";
+  view.hint = action.hint || action.reason || "";
+  view.done = false;
+  return view;
+}
+
+function handleOneStep(engine, body) {
+  return performTeach(engine, body);
+}
+
 function handleSolution(engine, body) {
   var Sys = engine.DoctematicaSystems;
   var pair = pairFromBody(body);
-  var sol = Sys.solvePair(pair.eq1, pair.eq2);
-  var answer = "—";
-  if (sol.kind === "unique") {
-    answer = "x = " + Sys.fmt(sol.x) + ", y = " + Sys.fmt(sol.y);
-  } else if (sol.kind === "none") {
-    answer = "אין פתרון";
-  } else {
-    answer = "אינסוף פתרונות";
+  var hist = Array.isArray(body.history) ? body.history.map(String) : [];
+  var choices = Array.isArray(body.choices) ? body.choices.slice() : [];
+  var steps = [];
+  var guard = 0;
+  var last = null;
+  while (guard < 48) {
+    guard += 1;
+    var remote = performTeach(engine, {
+      eq1: pair.eq1,
+      eq2: pair.eq2,
+      history: hist,
+      choices: choices,
+    });
+    if (!remote || remote.ok === false) return remote || { ok: false, message: "הפתרון נעצר." };
+    if (remote.done && !remote.step) break;
+    if (!remote.step) break;
+    if (remote.choice) choices = choices.concat([remote.choice]);
+    if (remote.startEq) {
+      steps.push({ eq: remote.startEq, reason: "" });
+      hist = hist.concat([remote.startEq]);
+    }
+    steps.push({ eq: remote.step, reason: remote.reason || "" });
+    hist = hist.concat([remote.step]);
+    last = remote;
+    if (remote.solved) break;
   }
+  var rec = reconstruct(Sys, pair.eq1, pair.eq2, hist, choices);
+  var st = rec.st;
+  var answer = answerOf(Sys, st, pair);
   return {
     ok: true,
-    kind: sol.kind,
+    kind: (st && st.doneKind) || (last && last.kind) || Sys.solvePair(pair.eq1, pair.eq2).kind,
     answer: answer,
+    steps: steps,
+    solved: !!(st && st.phase === "done"),
     explain: "בודדו משתנה, הציבו במשוואה השנייה, ואז מצאו את המשתנה השני.",
   };
 }
@@ -458,6 +609,8 @@ function createSystemsHandler(engine) {
     if (intent === "setup") return handleSetup(engine, body);
     if (intent === "choice") return handleChoice(engine, body);
     if (intent === "check") return handleCheck(engine, body);
+    if (intent === "hint") return handleHint(engine, body);
+    if (intent === "one-step") return handleOneStep(engine, body);
     if (intent === "solution") return handleSolution(engine, body);
     return { error: "unknown intent", message: "unknown intent" };
   }
