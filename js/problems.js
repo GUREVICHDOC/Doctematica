@@ -51,6 +51,8 @@
       { id: "relative-freq", label: "שכיחות יחסית" },
       { id: "bar-chart", label: "דיאגרמת עמודות" },
       { id: "pie-chart", label: "דיאגרמת עיגול" },
+      { id: "mode", label: "שכיח" },
+      { id: "mean", label: "ממוצע" },
     ],
   };
 

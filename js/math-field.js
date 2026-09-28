@@ -1269,6 +1269,14 @@
         },
       },
       {
+        label: "ממוצע",
+        className: "mean-key",
+        icon: '<span class="m-bar" aria-hidden="true">x</span>',
+        run: function () {
+          self.insertChars("x\u0304");
+        },
+      },
+      {
         label: "שורש",
         icon: '<span class="sqrt-icon" aria-hidden="true">√</span>',
         run: function () {
@@ -1313,7 +1321,7 @@
     ].forEach(function (spec) {
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "ghost math-action";
+      btn.className = "ghost math-action" + (spec.className ? " " + spec.className : "");
       btn.innerHTML = spec.icon + "<span>" + spec.label + "</span>";
       btn.addEventListener("mousedown", function (event) {
         event.preventDefault();

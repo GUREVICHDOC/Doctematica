@@ -3,6 +3,8 @@
 var Symbols = require("./freq-symbols");
 var Balance = require("./freq-balance");
 var Pie = require("./pie-chart");
+var Mean = require("./mean");
+var Unknown = require("./mean-unknown");
 var OPS = { gt: true, lt: true, gte: true, lte: true, eq: true, in: true, between: true };
 
 function sum(nums) {
@@ -837,39 +839,470 @@ function matchValueSet(compiled, expected, typed, prevFound, partialMessage) {
   };
 }
 
-function modeRows(compiled) {
-  var max = null;
-  compiled.rows.forEach(function (row) {
-    if (max == null || row.freq > max) max = row.freq;
+function compileList(spec) {
+  spec = spec || {};
+  var map = {};
+  var rows = [];
+  (spec.data || []).forEach(function (item) {
+    var key = valueKey(item);
+    if (!map[key]) {
+      map[key] = { value: typeof item === "number" ? item : item, freq: 0 };
+      rows.push(map[key]);
+    }
+    map[key].freq += 1;
   });
-  return compiled.rows.filter(function (row) { return max != null && sameNum(row.freq, max); });
+  var compiled = compileTable({
+    variable: { label: spec.variable || "" },
+    frequency: { label: spec.frequency || "" },
+    rows: rows,
+  }, null, null);
+  compiled.data = (spec.data || []).slice();
+  compiled.listSource = true;
+  compiled.fill = false;
+  return compiled;
+}
+
+function distOf(compiled, task) {
+  var base = task && Array.isArray(task.data) && task.data.length ? compileList(task) : compiled;
+  if (!task || !task.adjust || task.adjust.value == null) return base;
+  var delta = Number(task.adjust.delta);
+  if (!isFinite(delta)) return base;
+  var rows = base.rows.map(function (row) {
+    var copy = Object.assign({}, row);
+    var hit = row.key === valueKey(task.adjust.value) || (row.num != null && sameNum(row.num, Number(task.adjust.value)));
+    if (hit) copy.freq = Number(row.freq) + delta;
+    return copy;
+  });
+  return Object.assign({}, base, { rows: rows, ordered: rows.slice().sort(function (a, b) {
+    if (a.num != null && b.num != null && !sameNum(a.num, b.num)) return a.num - b.num;
+    return a.index - b.index;
+  }) });
+}
+
+function modeReport(compiled) {
+  var max = null;
+  (compiled.rows || []).forEach(function (row) {
+    if (row.freq == null || !isFinite(Number(row.freq))) return;
+    if (max == null || Number(row.freq) > max) max = Number(row.freq);
+  });
+  var modes = (compiled.rows || []).filter(function (row) { return max != null && sameNum(row.freq, max); });
+  var none = (compiled.rows || []).length > 1 && modes.length === compiled.rows.length;
+  return { max: max, modes: none ? [] : modes, none: none };
+}
+
+function modeRows(compiled) {
+  return modeReport(compiled).modes;
+}
+
+function adjustFacts(compiled, task) {
+  if (!task || !task.adjust) return null;
+  var row = findRow(compiled.rows, task.adjust.value);
+  if (!row) return null;
+  var delta = Number(task.adjust.delta);
+  if (!isFinite(delta)) return null;
+  return { row: row, oldFreq: Number(row.freq), delta: delta, nextFreq: Number(row.freq) + delta };
+}
+
+function modeCounts(progress, task) {
+  var got = progress && progress.got && progress.got[task.id];
+  return got && got.counts ? got.counts : {};
+}
+
+function modeOptions(compiled, task) {
+  var live = distOf(compiled, task);
+  var options = displayRows(live).map(function (row) {
+    return { value: row.key, label: displayValue(row) };
+  });
+  options.push({ value: "none", label: "אין שכיח" });
+  return options;
 }
 
 function maxFreq(compiled) {
-  var rows = modeRows(compiled);
-  return rows.length ? rows[0].freq : null;
+  return modeReport(compiled).max;
+}
+
+function modeValueMiss(compiled, live, task, keys) {
+  var report = modeReport(live);
+  var facts = adjustFacts(compiled, task);
+  var largest = null;
+  live.rows.forEach(function (row) {
+    if (row.num == null) return;
+    if (largest == null || row.num > largest) largest = row.num;
+  });
+  if (keys.length === 1 && keys[0] === "none" && !report.none) {
+    return "יש ערך שמופיע יותר מהאחרים. בחרו אותו.";
+  }
+  if (report.none && keys.some(function (key) { return key !== "none"; })) {
+    return "כל הערכים מופיעים באותה שכיחות, ולכן אין שכיח.";
+  }
+  var pickedRows = keys.map(function (key) { return findRow(live.rows, key); }).filter(Boolean);
+  var modeKeys = report.modes.map(function (row) { return row.key; });
+  var extras = pickedRows.filter(function (row) { return modeKeys.indexOf(row.key) < 0; });
+  var hits = pickedRows.filter(function (row) { return modeKeys.indexOf(row.key) >= 0; });
+  if (facts && pickedRows.length && pickedRows.every(function (row) { return sameNum(row.num, facts.row.num + facts.delta); })) {
+    return "הוספתם את השינוי לערך המשתנה. צריך להוסיף אותו לשכיחות.";
+  }
+  if (facts && hits.length === 0 && extras.length) {
+    var oldModes = modeReport(compiled).modes;
+    if (oldModes.length && extras.every(function (row) { return oldModes.some(function (mode) { return mode.key === row.key; }); }) && !report.modes.some(function (mode) { return extras.some(function (row) { return row.key === mode.key; }); })) {
+      return "זה השכיח לפני השינוי. עדכנו קודם את השכיחות, ואז בדקו מחדש.";
+    }
+  }
+  if (hits.length && extras.length) return "אחד הערכים שבחרת אינו מופיע בשכיחות הגבוהה ביותר.";
+  if (!hits.length && extras.length === 1 && largest != null && sameNum(extras[0].num, largest) && !sameNum(largest, report.max)) {
+    return "בחרתם את הערך הגדול ביותר. השכיח הוא הערך שמופיע הכי הרבה פעמים.";
+  }
+  if (!hits.length && extras.length === 1 && sameNum(extras[0].num, report.max) && !report.modes.some(function (mode) { return sameNum(mode.num, report.max); })) {
+    return "מצאת את השכיחות הגבוהה ביותר. עכשיו בדוק לאיזה ערך היא שייכת.";
+  }
+  if (hits.length && hits.length < report.modes.length && !extras.length) {
+    return "מצאת ערך שמופיע בשכיחות הגבוהה ביותר, אבל בדוק אם יש ערך נוסף עם אותה שכיחות.";
+  }
+  return "";
+}
+
+function matchModePick(compiled, task, keys, progress) {
+  var live = distOf(compiled, task);
+  var report = modeReport(live);
+  var unique = [];
+  (keys || []).forEach(function (key) {
+    var text = String(key);
+    if (text && unique.indexOf(text) < 0) unique.push(text);
+  });
+  if (!unique.length) return { ok: false, message: "בחרו לפחות ערך אחד." };
+  if (report.none) {
+    if (unique.length === 1 && unique[0] === "none") {
+      return { ok: true, done: true, shows: ["אין שכיח"], message: "" };
+    }
+    return { ok: false, message: modeValueMiss(compiled, live, task, unique) || "כל הערכים מופיעים באותה שכיחות, ולכן אין שכיח." };
+  }
+  if (unique.indexOf("none") >= 0) {
+    return { ok: false, message: "יש ערך שמופיע יותר מהאחרים. בחרו אותו." };
+  }
+  var expected = report.modes;
+  var picked = unique.map(function (key) { return findRow(live.rows, key); });
+  if (picked.some(function (row) { return !row; })) return { ok: false, message: "הערך הזה לא מופיע בהתפלגות." };
+  var miss = modeValueMiss(compiled, live, task, unique);
+  var modeKeys = expected.map(function (row) { return row.key; });
+  var extras = unique.filter(function (key) { return modeKeys.indexOf(key) < 0; });
+  var hits = unique.filter(function (key) { return modeKeys.indexOf(key) >= 0; });
+  if (extras.length) return { ok: false, message: miss || "אחד הערכים שבחרת אינו מופיע בשכיחות הגבוהה ביותר." };
+  var prev = (progress.found && progress.found[task.id]) || [];
+  var union = prev.slice();
+  hits.forEach(function (key) { if (union.indexOf(key) < 0) union.push(key); });
+  var done = modeKeys.every(function (key) { return union.indexOf(key) >= 0; }) && union.length === modeKeys.length;
+  if (!done) {
+    return {
+      ok: true,
+      done: false,
+      found: union,
+      shows: [formatList(expected.filter(function (row) { return hits.indexOf(row.key) >= 0 && prev.indexOf(row.key) < 0; }))],
+      message: "מצאת ערך שמופיע בשכיחות הגבוהה ביותר, אבל בדוק אם יש ערך נוסף עם אותה שכיחות.",
+    };
+  }
+  return { ok: true, done: true, found: union, shows: [formatList(expected)], message: "" };
+}
+
+function matchModeSelect(compiled, task, typed, progress) {
+  var live = distOf(compiled, task);
+  var report = modeReport(live);
+  var text = String(typed || "").trim().replace(/[−–—]/g, "-");
+  var facts = adjustFacts(compiled, task);
+  var countLine = /^השכיחות של (.+) היא (-?\d+)$/.exec(text);
+  if (countLine) {
+    var named = findRow((facts && text.indexOf(formatInt(facts.nextFreq)) >= 0 ? live : compiled).rows, countLine[1]);
+    var source = findRow(compiled.rows, countLine[1]) || findRow(live.rows, countLine[1]);
+    var stated = Number(countLine[2]);
+    if (!source) return { ok: false, message: "הערך הזה לא מופיע בהתפלגות." };
+    var expectedCount = facts && source.key === facts.row.key && (progress.phase[task.id] === "expr" || progress.phase[task.id] === "scaled" || progress.phase[task.id] === "total")
+      ? facts.nextFreq
+      : source.freq;
+    if (facts && source.key === facts.row.key && sameNum(stated, facts.nextFreq)) {
+      return { ok: true, done: false, phase: "scaled", shows: [text], message: "השכיחות עודכנה. עכשיו בדקו מהי השכיחות הגבוהה ביותר." };
+    }
+    if (!sameNum(stated, expectedCount)) {
+      if (sameNum(Math.abs(stated - Number(source.freq)), 1)) {
+        return { ok: false, message: stated < source.freq ? "נראה שפספסתם מופע אחד." : "נראה שספרתם מופע אחד נוסף." };
+      }
+      return { ok: false, message: "הספירה של " + displayValue(source) + " אינה נכונה." };
+    }
+    var counts = Object.assign({}, modeCounts(progress, task));
+    counts[source.key] = source.freq;
+    return { ok: true, done: false, got: { counts: counts }, shows: [text], message: "אפשר להמשיך לספור, או להשוות בין הספירות." };
+  }
+  var maxLine = /^השכיחות הגבוהה ביותר היא (-?\d+)$/.exec(text);
+  if (maxLine) {
+    if (!sameNum(Number(maxLine[1]), report.max)) {
+      return { ok: false, message: "זו אינה השכיחות הגבוהה ביותר." };
+    }
+    return { ok: true, done: false, phase: "total", shows: [text], message: report.none ? "כל הערכים באותה שכיחות, ולכן אין שכיח." : "בדוק לאיזה ערך של המשתנה שייכת השכיחות הזאת." };
+  }
+  if (facts) {
+    var bumped = Number(facts.row.num) + facts.delta;
+    var lone = loneNumber(text);
+    if (lone != null && sameNum(lone, bumped) && !live.rows.some(function (row) { return sameNum(row.num, bumped); })) {
+      return { ok: false, message: "הוספתם את השינוי לערך המשתנה. צריך להוסיף אותו לשכיחות." };
+    }
+    var sumText = formatInt(facts.oldFreq) + " + " + formatInt(facts.delta);
+    if (text.replace(/\s+/g, "") === sumText.replace(/\s+/g, "")) {
+      return { ok: true, done: false, phase: "expr", shows: [sumText], message: "" };
+    }
+    var fullSum = sumText + " = " + formatInt(facts.nextFreq);
+    if (text.replace(/\s+/g, "") === fullSum.replace(/\s+/g, "")) {
+      return { ok: true, done: false, phase: "scaled", shows: [fullSum], message: "" };
+    }
+    if (text === "השכיחות של " + displayValue(facts.row) + " היא " + formatInt(facts.oldFreq)) {
+      return { ok: true, done: false, phase: "part", shows: [text], message: "" };
+    }
+  }
+  if (normText(text) === "אין שכיח") {
+    if (!report.none) return { ok: false, message: "יש ערך שמופיע יותר מהאחרים. בחרו אותו." };
+    return { ok: true, done: true, shows: ["אין שכיח"], message: "" };
+  }
+  var typedNum = loneNumber(text);
+  if (typedNum != null && facts && !report.modes.some(function (row) { return sameNum(row.num, typedNum); }) && modeReport(compiled).modes.some(function (row) { return sameNum(row.num, typedNum); })) {
+    return { ok: false, message: "זה השכיח לפני השינוי. עדכנו קודם את השכיחות, ואז בדקו מחדש." };
+  }
+  var balanceInfo = Balance.truth(compiled);
+  if (typedNum != null && balanceInfo && sameNum(typedNum, balanceInfo.missing) && !report.modes.some(function (row) { return row.num != null && sameNum(row.num, typedNum); })) {
+    return { ok: false, message: "זה ערך השכיחות שמצאתם, לא ערך המשתנה." };
+  }
+  if (typedNum != null && sameNum(typedNum, report.max) && !report.modes.some(function (row) { return row.num != null && sameNum(row.num, typedNum); })) {
+    return { ok: false, message: "מצאת את השכיחות הגבוהה ביותר. עכשיו בדוק לאיזה ערך היא שייכת." };
+  }
+  if (typedNum != null) {
+    var largestValue = null;
+    live.rows.forEach(function (row) {
+      if (row.num != null && (largestValue == null || row.num > largestValue)) largestValue = row.num;
+    });
+    if (largestValue != null && sameNum(typedNum, largestValue) && !report.modes.some(function (row) { return sameNum(row.num, typedNum); }) && !sameNum(typedNum, report.max)) {
+      return { ok: false, message: "בחרתם את הערך הגדול ביותר. השכיח הוא הערך שמופיע הכי הרבה פעמים." };
+    }
+  }
+  if (report.none) return { ok: false, message: "כל הערכים מופיעים באותה שכיחות, ולכן אין שכיח." };
+  return matchValueSet(
+    live,
+    report.modes,
+    text,
+    progress.found[task.id],
+    report.modes.length > 1 ? "מצאת ערך שמופיע בשכיחות הגבוהה ביותר, אבל בדוק אם יש ערך נוסף עם אותה שכיחות." : ""
+  );
+}
+
+function flipCompare(op) {
+  if (op === ">") return "<";
+  if (op === "<") return ">";
+  if (op === ">=") return "<=";
+  if (op === "<=") return ">=";
+  return op;
+}
+
+function parseComparison(typed) {
+  var text = String(typed || "").replace(/\s+/g, "").replace(/≥/g, ">=").replace(/≤/g, "<=").replace(/[−–—]/g, "-");
+  var forward = text.match(/^([A-Za-z])(>=|<=|>|<)(-?\d+(?:\.\d+)?)$/);
+  if (forward) return { variable: forward[1], operator: forward[2], value: Number(forward[3]) };
+  var backward = text.match(/^(-?\d+(?:\.\d+)?)(>=|<=|>|<)([A-Za-z])$/);
+  if (backward) return { variable: backward[3], operator: flipCompare(backward[2]), value: Number(backward[1]) };
+  return null;
+}
+
+function sameComparison(got, expected) {
+  return !!(got && expected && got.variable === expected.variable && got.operator === expected.operator && sameNum(got.value, expected.value));
+}
+
+function formatComparison(item) {
+  return item.variable + " " + item.operator + " " + formatInt(item.value);
+}
+
+function otherMax(compiled, row) {
+  var max = null;
+  (compiled.rows || []).forEach(function (other) {
+    if (!other || other.key === row.key || other.freq == null || !isFinite(Number(other.freq)) || other.givenExpr) return;
+    if (max == null || Number(other.freq) > max) max = Number(other.freq);
+  });
+  return max;
+}
+
+function raiseNeed(compiled, task) {
+  var row = findRow(compiled.rows, task.value);
+  if (!row) return null;
+  var maxOther = otherMax(compiled, row);
+  if (maxOther == null) return null;
+  var gap = maxOther - Number(row.freq);
+  var unique = task.unique !== false;
+  return { row: row, current: Number(row.freq), maxOther: maxOther, gap: gap, k: unique ? gap + 1 : gap, unique: unique };
+}
+
+function boundNeed(compiled, task) {
+  var row = findRow(compiled.rows, task.value);
+  if (!row) return null;
+  var maxOther = otherMax(compiled, row);
+  if (maxOther == null) return null;
+  var unique = task.unique !== false;
+  var symbol = symbolFrom(row);
+  return {
+    row: row,
+    maxOther: maxOther,
+    comparison: { variable: symbol, operator: unique ? ">" : ">=", value: maxOther },
+    unique: unique,
+  };
+}
+
+function symbolFrom(row) {
+  var match = String(row && row.givenExpr || "").match(/[A-Za-z]/);
+  return match ? match[0] : "x";
+}
+
+function modeSetNeed(compiled, task) {
+  var listed = (task.values || []).map(function (value) { return findRow(compiled.rows, value); }).filter(Boolean);
+  var known = listed.filter(function (row) { return !row.givenExpr && row.freq != null; });
+  var missing = listed.filter(function (row) { return row.givenExpr; });
+  if (!known.length || !missing.length) return null;
+  var level = null;
+  known.forEach(function (row) {
+    if (level == null || Number(row.freq) > level) level = Number(row.freq);
+  });
+  return { listed: listed, known: known, missing: missing, level: level };
+}
+
+function matchModeRaise(compiled, task, typed, progress) {
+  var need = raiseNeed(compiled, task);
+  if (!need) return { ok: false, message: "עוד לא." };
+  var text = String(typed || "").trim().replace(/\s+/g, "");
+  var raw = String(typed || "").trim();
+  var phase = (progress.phase && progress.phase[task.id]) || "";
+  if (raw === "השכיחות הגבוהה ביותר היא " + formatInt(need.maxOther)) {
+    return { ok: true, done: false, phase: "part", shows: [raw], message: "" };
+  }
+  if (raw === "השכיחות של " + displayValue(need.row) + " היא " + formatInt(need.current)) {
+    return { ok: true, done: false, phase: "expr", shows: [raw], message: "" };
+  }
+  var gapLine = formatInt(need.maxOther) + "-" + formatInt(need.current) + "=" + formatInt(need.gap);
+  var plusLine = formatInt(need.gap) + "+1=" + formatInt(need.k);
+  var flat = text.replace(/[−–—]/g, "-");
+  if (flat === gapLine) return { ok: true, done: false, phase: "scaled", shows: [formatInt(need.maxOther) + " - " + formatInt(need.current) + " = " + formatInt(need.gap)], message: "" };
+  if (need.unique && flat === plusLine) {
+    return { ok: true, done: true, shows: [formatInt(need.gap) + " + 1 = " + formatInt(need.k)], message: "" };
+  }
+  if (flat === formatInt(need.current) + "+" + formatInt(need.k) + "=" + formatInt(need.current + need.k)) {
+    return { ok: true, done: false, phase: "value", shows: [formatInt(need.current) + " + " + formatInt(need.k) + " = " + formatInt(need.current + need.k)], message: "זו השכיחות החדשה. מה שנשאל הוא כמה צריך להוסיף." };
+  }
+  var n = loneNumber(typed);
+  if (n == null) return { ok: false, message: "אפשר לרשום את הפער, או את מספר היחידות שצריך להוסיף." };
+  if (sameNum(n, need.k)) return { ok: true, done: true, shows: [formatInt(need.k)], message: "" };
+  if (need.unique && sameNum(n, need.gap)) {
+    return { ok: false, message: "אם השכיחות רק תשתווה לשכיחות הגבוהה ביותר, לא ייווצר שכיח יחיד. צריך שכיחות גבוהה יותר." };
+  }
+  if (sameNum(n, need.maxOther)) return { ok: false, message: "מצאת את השכיחות הגבוהה ביותר. עכשיו בדוק כמה חסר כדי לעבור אותה." };
+  if (sameNum(n, need.current)) return { ok: false, message: "זו השכיחות הנוכחית. צריך לבדוק כמה להוסיף לה." };
+  if (need.row.num != null && sameNum(n, need.row.num)) return { ok: false, message: "זה ערך המשתנה. צריך להוסיף לשכיחות שלו, לא לשנות את הערך." };
+  if (need.row.num != null && sameNum(n, need.row.num + need.k)) return { ok: false, message: "שיניתם את הערך שבציר האופקי. צריך להוסיף לגובה העמודה." };
+  if (phase === "value" && sameNum(n, need.k)) return { ok: true, done: true, shows: [formatInt(need.k)], message: "" };
+  return { ok: false, message: "בדקו שוב בכמה צריכה השכיחות לעלות כדי להיות הגבוהה ביותר." };
+}
+
+function matchModeBound(compiled, task, typed, progress) {
+  var need = boundNeed(compiled, task);
+  if (!need) return { ok: false, message: "עוד לא." };
+  var text = String(typed || "").trim();
+  var maxLine = "השכיחות הגבוהה ביותר של שאר הערכים היא " + formatInt(need.maxOther);
+  if (text === maxLine) return { ok: true, done: false, phase: "total", shows: [maxLine], message: "" };
+  var got = parseComparison(text);
+  if (!got) {
+    var n = loneNumber(text);
+    if (n != null && sameNum(n, need.maxOther)) return { ok: false, message: "מצאת את השכיחות הגבוהה ביותר של השאר. עכשיו כתבו את התנאי על " + need.comparison.variable + "." };
+    if (n != null && need.row.num != null && sameNum(n, need.row.num)) return { ok: false, message: "זה ערך המשתנה. התנאי הוא על השכיחות שלו." };
+    return { ok: false, message: "כתבו תנאי על " + need.comparison.variable + ", למשל " + need.comparison.variable + " > a." };
+  }
+  if (got.variable !== need.comparison.variable) return { ok: false, message: "התנאי צריך להיות על " + need.comparison.variable + "." };
+  if (need.unique && (got.operator === ">=" || got.operator === "<=") && sameNum(got.value, need.maxOther)) {
+    return { ok: false, message: "אם השכיחות תהיה שווה לשכיחות הגבוהה ביותר הקיימת, יהיו שני שכיחים. נדרש ש־" + displayValue(need.row) + " יהיה השכיח היחיד." };
+  }
+  if (sameComparison(got, need.comparison)) return { ok: true, done: true, shows: [formatComparison(need.comparison)], message: "" };
+  if (!sameNum(got.value, need.maxOther)) {
+    return { ok: false, message: "השוו אל השכיחות הגבוהה ביותר של שאר הערכים, לא אל ערך אחר." };
+  }
+  return { ok: false, message: "בדקו את כיוון האי־שוויון." };
+}
+
+function matchModeSet(compiled, task, typed, progress) {
+  var need = modeSetNeed(compiled, task);
+  if (!need) return { ok: false, message: "עוד לא." };
+  var text = String(typed || "").trim().replace(/\s+/g, "");
+  var known = need.known[0];
+  var missing = need.missing[0];
+  var symbol = symbolFrom(missing);
+  var shown = "השכיחות של " + displayValue(known) + " היא " + formatInt(need.level);
+  if (String(typed || "").trim() === shown) return { ok: true, done: false, phase: "part", shows: [shown], message: "" };
+  var n = loneNumber(typed);
+  if (n != null && known.num != null && sameNum(n, known.num) && !sameNum(n, need.level)) {
+    return { ok: false, message: "מצאת את ערך המשתנה. עכשיו בדקו את השכיחות שלו." };
+  }
+  if (n != null && missing.num != null && sameNum(n, missing.num)) {
+    return { ok: false, message: "זה ערך המשתנה. x הוא השכיחות שלו." };
+  }
+  var solved = text.replace(/[−–—]/g, "-");
+  if (n != null && sameNum(n, need.level) || solved === symbol + "=" + formatInt(need.level)) {
+    var solve = Object.assign({}, (progress && progress.solve) || {}, { missing: need.level });
+    return { ok: true, done: true, solve: solve, shows: [symbol + " = " + formatInt(need.level)], message: "" };
+  }
+  return { ok: false, message: "הערכים השכיחים חייבים להיות בעלי אותה שכיחות, והיא הגבוהה ביותר." };
+}
+
+function nextModeRaise(compiled, task, progress) {
+  var need = raiseNeed(compiled, task);
+  if (!need) return null;
+  var phase = (progress.phase && progress.phase[task.id]) || "";
+  if (!phase) return { line: "השכיחות הגבוהה ביותר היא " + formatInt(need.maxOther), phase: "part" };
+  if (phase === "part") return { line: "השכיחות של " + displayValue(need.row) + " היא " + formatInt(need.current), phase: "expr" };
+  if (phase === "expr") return { line: formatInt(need.maxOther) + " - " + formatInt(need.current) + " = " + formatInt(need.gap), phase: "scaled" };
+  if (need.unique) return { line: formatInt(need.gap) + " + 1 = " + formatInt(need.k), done: true };
+  return { line: formatInt(need.k), done: true };
+}
+
+function nextModeBound(compiled, task, progress) {
+  var need = boundNeed(compiled, task);
+  if (!need) return null;
+  var phase = (progress.phase && progress.phase[task.id]) || "";
+  if (phase !== "total") {
+    return { line: "השכיחות הגבוהה ביותר של שאר הערכים היא " + formatInt(need.maxOther), phase: "total" };
+  }
+  return { line: formatComparison(need.comparison), done: true };
+}
+
+function nextModeSet(compiled, task, progress) {
+  var need = modeSetNeed(compiled, task);
+  if (!need) return null;
+  var phase = (progress.phase && progress.phase[task.id]) || "";
+  var known = need.known[0];
+  var symbol = symbolFrom(need.missing[0]);
+  if (phase !== "part") return { line: "השכיחות של " + displayValue(known) + " היא " + formatInt(need.level), phase: "part" };
+  var solve = Object.assign({}, (progress && progress.solve) || {}, { missing: need.level });
+  return { line: symbol + " = " + formatInt(need.level), done: true, solve: solve };
 }
 
 function matchMode(compiled, task, typed, progress) {
+  var live = distOf(compiled, task);
   if (task.of === "frequency") {
     var n = loneNumber(typed);
-    var max = maxFreq(compiled);
+    var max = maxFreq(live);
     if (n == null || max == null || !sameNum(n, max)) {
       return { ok: false, message: "חפשו בשורת השכיחויות את המספר הגדול ביותר." };
     }
     return { ok: true, done: true, shows: [formatInt(max)], message: "" };
   }
-  var expected = modeRows(compiled);
+  if (task.select || task.adjust || (task.data && task.data.length)) return matchModeSelect(compiled, task, typed, progress);
+  var expected = modeRows(live);
   var typedNum = loneNumber(typed);
   if (
     typedNum != null &&
-    sameNum(typedNum, maxFreq(compiled)) &&
+    sameNum(typedNum, maxFreq(live)) &&
     !expected.some(function (row) { return row.num != null && sameNum(row.num, typedNum); })
   ) {
     return { ok: false, message: "מצאתם את השכיחות. עכשיו רשמו את ערך המשתנה שמתאים לה." };
   }
   return matchValueSet(
-    compiled,
+    live,
     expected,
     typed,
     progress.found[task.id],
@@ -1254,6 +1687,13 @@ function parseYesNo(typed) {
 }
 
 function matchYesNo(compiled, task, typed, progress) {
+  if (task && (task.expect === "yes" || task.expect === "no")) {
+    var word = parseYesNo(typed);
+    if (!word) return { ok: false, message: "ענו כן או לא." };
+    var want = task.expect === "yes" ? "כן" : "לא";
+    if (word !== want) return { ok: false, message: task.miss || "בדקו שוב." };
+    return { ok: true, done: true, shows: [word], message: "" };
+  }
   var verdict = parseYesNo(typed);
   if (verdict) {
     if (verdict !== verdictWord(compiled, task)) {
@@ -2472,6 +2912,16 @@ function sanitizeGot(compiled, ex, raw) {
   raw = raw || {};
   (ex.parts || []).forEach(function (part) {
     (part.tasks || []).forEach(function (task) {
+      if (task.kind === "mode" && raw[task.id] && raw[task.id].counts) {
+        var counted = distOf(compiled, task);
+        var counts = {};
+        Object.keys(raw[task.id].counts).forEach(function (key) {
+          var row = findRow(counted.rows, key);
+          if (row && sameNum(Number(raw[task.id].counts[key]), row.freq)) counts[key] = row.freq;
+        });
+        if (Object.keys(counts).length) got[task.id] = { counts: counts };
+        return;
+      }
       if (task.kind === "compareRelative" && raw[task.id]) {
         var sides = compareSides(compiled, task);
         var srcCompare = raw[task.id];
@@ -2804,7 +3254,36 @@ function nextFillAction(compiled, task, progress) {
   return null;
 }
 
-function matchTask(compiled, task, typed, progress) {
+function listBag(progress, task) {
+  var bag = { mean: {}, known: (progress.unknown && progress.unknown.known) || {}, done: {} };
+  var saved = progress.unknown && progress.unknown.list && progress.unknown.list[task.id];
+  if (saved) bag.mean[task.id] = saved;
+  return bag;
+}
+
+function saveListBag(progress, task, bag) {
+  if (!progress.unknown) progress.unknown = { equation: "", value: null, sum: null, list: {}, known: {} };
+  progress.unknown.list = progress.unknown.list || {};
+  progress.unknown.known = bag.known || {};
+  if (bag.mean[task.id]) progress.unknown.list[task.id] = bag.mean[task.id];
+  else delete progress.unknown.list[task.id];
+}
+
+function checkListMean(task, typed, progress) {
+  var bag = listBag(progress, task);
+  var result = Mean.checkMeanText(task, typed);
+  Mean.listApply(bag, task, result);
+  saveListBag(progress, task, bag);
+  return {
+    ok: result.ok !== false,
+    done: !!result.done,
+    shows: result.shows || [],
+    message: result.message || "",
+    unknown: progress.unknown,
+  };
+}
+
+function matchTask(compiled, task, typed, progress, engine) {
   if (task.kind === "relative") return matchRelative(compiled, task, typed, progress);
   if (task.kind === "relativeSum") return matchRelativeSum(compiled, task, typed);
   if (task.kind === "identify") return matchIdentify(compiled, task, typed);
@@ -2819,8 +3298,20 @@ function matchTask(compiled, task, typed, progress) {
     return summed;
   }
   if (task.kind === "compareRelative") return matchCompare(compiled, task, typed, progress);
-  if (task.kind === "weightedSum") return matchWeighted(compiled, task, typed, progress);
+  if (task.kind === "weightedSum") {
+    var weighted = matchWeighted(compiled, task, typed, progress);
+    if (weighted && weighted.ok && weighted.done) {
+      weighted.share = { weightedSum: numericTotal(compiled, task) };
+    }
+    return weighted;
+  }
   if (task.kind === "mode") return matchMode(compiled, task, typed, progress);
+  if (task.kind === "modeRaise") return matchModeRaise(compiled, task, typed, progress);
+  if (task.kind === "modeBound") return matchModeBound(compiled, task, typed, progress);
+  if (task.kind === "modeSet") return matchModeSet(compiled, task, typed, progress);
+  if (task.kind === "mean" && task.source && task.source.type === "list") return checkListMean(task, typed, progress);
+  if (task.kind === "mean") return Mean.checkTable(compiled, task, typed, progress);
+  if (Unknown.owns(task)) return Unknown.check(engine, compiled, task, typed, progress);
   if (task.kind === "matchValues") return matchValues(compiled, task, typed, progress);
   if (task.kind === "yesNo") return matchYesNo(compiled, task, typed, progress);
   if (task.kind === "fillFreq") return matchFill(compiled, task, typed, progress, null);
@@ -2975,7 +3466,7 @@ function viewTable(compiled, progress) {
 }
 
 function staticView(compiled, progress) {
-  if (!compiled || compiled.build || compiled.fill) return null;
+  if (!compiled || compiled.build || compiled.fill || !(compiled.rows || []).length) return null;
   var symbols = (progress && progress.symbols) || {};
   var cells = symbols.cells || {};
   var resolved = symbols.resolved || {};
@@ -2984,20 +3475,22 @@ function staticView(compiled, progress) {
     frequencyLabel: compiled.frequencyLabel,
     columnOrder: compiled.columnOrder || "given",
     rows: displayRows(compiled).map(function (row) {
-      var revealed = row.givenExpr && progress && progress.solve && progress.solve.missing != null;
+      var knownValue = progress && progress.unknown && progress.unknown.value != null ? progress.unknown.value : null;
+      var revealed = row.givenExpr && ((progress && progress.solve && progress.solve.missing != null) || knownValue != null);
       if (row.givenExpr && !revealed) {
+        var editable = !!compiled.unknownCell;
         return {
           value: displayValue(row),
           freq: null,
           expr: row.givenExpr,
-          open: false,
-          locked: true,
+          open: editable,
+          locked: !editable,
         };
       }
       if (row.givenExpr && revealed) {
         return {
           value: displayValue(row),
-          freq: progress.solve.missing,
+          freq: knownValue != null ? knownValue : progress.solve.missing,
           expr: "",
           open: false,
           locked: true,
@@ -3105,6 +3598,10 @@ function decorateChart(view, compiled, ex, progress) {
 
 function viewOf(ex, progress, compiled) {
   if (progress && progress._history) delete progress._history;
+  if (compiled && ex) {
+    Unknown.mark(compiled, ex);
+    Unknown.apply(compiled, progress);
+  }
   var current = currentPart(ex, progress);
   var building = !!(current && current.task.kind === "buildFreq");
   var table = compiled && compiled.build
@@ -3112,11 +3609,16 @@ function viewOf(ex, progress, compiled) {
     : compiled && compiled.fill
       ? viewTable(compiled, progress)
       : staticView(compiled, progress);
-  var data = viewData(compiled);
+  var data = current && current.task && current.task.data && current.task.data.length
+    ? current.task.data.map(displayDatum)
+    : viewData(compiled);
+  if (current && current.task && current.task.data && current.task.data.length) table = null;
   if (!current) {
     var solved = { part: null, ask: "", input: "text", solved: true };
     if (table) solved.table = table;
     if (data) solved.data = data;
+    if (data && !table && exerciseHasMean(ex)) solved.list = "plain";
+    if (exerciseHasMean(ex)) solved.keys = "mean";
     return decorateChart(attachWork(solved, compiled, ex, progress), compiled, ex, progress);
   }
   var input = "text";
@@ -3131,7 +3633,24 @@ function viewOf(ex, progress, compiled) {
   };
   if (table) view.table = table;
   if (data) view.data = data;
+  if (current.task.kind === "mode" && current.task.select) {
+    view.entry = "pick";
+    view.options = modeOptions(compiled, current.task);
+    view.picked = (progress.found && progress.found[current.task.id]) || [];
+  }
+  if (data && !table && exerciseHasMean(ex)) view.list = "plain";
+  if (exerciseHasMean(ex)) view.keys = "mean";
   return decorateChart(attachWork(view, compiled, ex, progress), compiled, ex, progress);
+}
+
+function exerciseHasMean(ex) {
+  var found = false;
+  (ex && ex.parts || []).forEach(function (part) {
+    (part.tasks || []).forEach(function (task) {
+      if (task.kind === "mean" || task.kind === "meanUnknown" || task.kind === "meanChoice" || task.kind === "meanFollow" || task.kind === "meanShift") found = true;
+    });
+  });
+  return found;
 }
 
 function applyMatch(progress, task, result) {
@@ -3156,15 +3675,32 @@ function applyMatch(progress, task, result) {
   if (result.clearPending && progress.work) progress.work.pending = null;
   if (result.symbols) progress.symbols = result.symbols;
   if (result.solve) progress.solve = result.solve;
+  if (result.weighted) progress.weighted = result.weighted;
+  if (result.share) {
+    progress.weighted = Object.assign({}, progress.weighted || {});
+    progress.weighted._shared = { weightedSum: result.share.weightedSum };
+  }
+  if (result.unknown) progress.unknown = result.unknown;
   if (result.done) {
     progress.done[task.id] = true;
     delete progress.phase[task.id];
+    if (progress.weighted) delete progress.weighted[task.id];
   }
+}
+
+function balanceOwns(compiled, task, progress) {
+  if (!task) return false;
+  if (task.kind === "freqBalance") return true;
+  if (!Balance.pending(compiled, progress)) return false;
+  if (task.kind === "relative" || task.kind === "fillRelative" || task.kind === "mode" || task.kind === "modeSet" || task.kind === "modeBound" || task.kind === "modeRaise") {
+    return !(progress.solve && progress.solve.total != null);
+  }
+  return true;
 }
 
 function hintForTask(compiled, task, progress, engine) {
   if (task.kind === "freqBalance") return Balance.hint(engine, compiled, task, progress);
-  if ((task.kind === "relative" || task.kind === "fillRelative") && Balance.pending(compiled, progress)) {
+  if ((task.kind === "relative" || task.kind === "fillRelative") && balanceOwns(compiled, task, progress)) {
     return Balance.hint(engine, compiled, task, progress);
   }
   if (task.kind === "recoverFreq") return Symbols.hint(engine, compiled, task, progress);
@@ -3191,6 +3727,11 @@ function hintForTask(compiled, task, progress, engine) {
   }
   var phase = progress.phase[task.id] || "";
   var found = progress.found[task.id] || [];
+  if (task.kind === "mean" && task.source && task.source.type === "list") {
+    return Mean.listHint({ parts: [{ tasks: [task] }] }, task, listBag(progress, task));
+  }
+  if (task.kind === "mean") return Mean.hintTable(compiled, task, progress);
+  if (Unknown.owns(task)) return Unknown.hint(engine, compiled, task, progress);
   if (task.kind === "identify" && task.role === "frequency") {
     return "הסתכלו בכותרות הטבלה ומצאו את השורה שמתארת את השכיחות — כמה פעמים כל ערך מופיע.";
   }
@@ -3213,6 +3754,23 @@ function hintForTask(compiled, task, progress, engine) {
   }
   if (task.kind === "mode" && task.of === "frequency") {
     return "חפשו בשורת השכיחויות את המספר הגדול ביותר.";
+  }
+  if (task.kind === "mode" && (task.select || task.adjust || (task.data && task.data.length))) {
+    return modeHint(compiled, task, progress);
+  }
+  if (task.kind === "modeRaise") {
+    var raised = raiseNeed(compiled, task);
+    var name = raised ? displayValue(raised.row) : "";
+    return "בדוק מהי השכיחות הגבוהה ביותר כרגע. לכמה צריכה להגיע השכיחות של " + name + " כדי להיות גבוהה ממנה?";
+  }
+  if (task.kind === "modeBound") {
+    var bound = boundNeed(compiled, task);
+    if ((progress.phase && progress.phase[task.id]) === "total") return "כתבו את התנאי על " + (bound ? bound.comparison.variable : "x") + ".";
+    return "מצאו את השכיחות הגבוהה ביותר של שאר הערכים, ואז כתבו תנאי שהשכיחות המבוקשת גדולה ממנה.";
+  }
+  if (task.kind === "modeSet") {
+    if ((progress.phase && progress.phase[task.id]) === "part") return "השכיחויות של הערכים השכיחים שוות. רשמו את הנעלם.";
+    return "הערכים השכיחים הם בעלי אותה שכיחות, והיא הגבוהה ביותר. השוו את השכיחות החסרה לשכיחות הידועה מביניהם.";
   }
   if (task.kind === "mode") {
     if (found.length) return "יש יותר מערך אחד עם אותה שכיחות מקסימלית. רשמו גם את האחרים.";
@@ -3319,6 +3877,93 @@ function chartRelativeHint(compiled, task, progress) {
   return "זהו תחילה אילו ערכים בציר האופקי מקיימים את התנאי.";
 }
 
+function modeHint(compiled, task, progress) {
+  var phase = (progress.phase && progress.phase[task.id]) || "";
+  var found = (progress.found && progress.found[task.id]) || [];
+  var live = distOf(compiled, task);
+  var report = modeReport(live);
+  if (found.length && report.modes.length > 1) return "בדוק אם אותה שכיחות גבוהה מופיעה יותר מפעם אחת.";
+  if (task.adjust && phase !== "scaled" && phase !== "total" && phase !== "pick") {
+    var name = displayValue(adjustFacts(compiled, task).row);
+    return "עדכן תחילה את השכיחות של " + name + " בעקבות השינוי, ואז בדוק מחדש מהי השכיחות הגבוהה ביותר.";
+  }
+  if (phase === "scaled") return "בדקו מחדש מהי השכיחות הגבוהה ביותר אחרי העדכון.";
+  if (phase === "total") {
+    if (report.none) return "כל הערכים מופיעים באותה שכיחות.";
+    return "בדוק לאיזה ערך של המשתנה שייכת השכיחות הזאת.";
+  }
+  if (live.listSource) {
+    var counts = modeCounts(progress, task);
+    if (!Object.keys(counts).length) return "בדוק איזה ערך מופיע הכי הרבה פעמים.";
+    return "השווה בין מספר הפעמים שמופיעים הערכים שסיימת לספור.";
+  }
+  if (compiled && compiled.chartSource && !task.adjust) return "מצא את העמודה הגבוהה ביותר ובדוק איזה ערך מופיע מתחתיה בציר האופקי.";
+  if (!live.listSource) return "מצא תחילה את השכיחות הגבוהה ביותר בטבלה.";
+  return "השווה בין מספר הפעמים שמופיעים הערכים שסיימת לספור.";
+}
+
+function nextModeAction(compiled, task, progress) {
+  var phase = (progress.phase && progress.phase[task.id]) || "";
+  var found = (progress.found && progress.found[task.id]) || [];
+  var facts = adjustFacts(compiled, task);
+  var live = distOf(compiled, task);
+  var report = modeReport(live);
+  if (facts && phase !== "part" && phase !== "expr" && phase !== "scaled" && phase !== "total" && phase !== "pick") {
+    return { line: "השכיחות של " + displayValue(facts.row) + " היא " + formatInt(facts.oldFreq), phase: "part" };
+  }
+  if (facts && phase === "part") {
+    return { line: formatInt(facts.oldFreq) + " + " + formatInt(facts.delta), phase: "expr" };
+  }
+  if (facts && phase === "expr") {
+    return {
+      line: formatInt(facts.oldFreq) + " + " + formatInt(facts.delta) + " = " + formatInt(facts.nextFreq),
+      phase: "scaled",
+      joinPrev: true,
+    };
+  }
+  var balanceInfo = Balance.truth(compiled);
+  if (balanceInfo && progress.solve && progress.solve.total != null && progress.solve.missing == null && phase !== "expr" && phase !== "scaled" && phase !== "total" && phase !== "pick") {
+    return { line: formatInt(balanceInfo.known) + " + " + balanceInfo.missingSymbol + " = " + formatInt(balanceInfo.total), phase: "expr" };
+  }
+  if (balanceInfo && progress.solve && progress.solve.missing == null && phase === "expr") {
+    var solved = Object.assign({}, progress.solve, { missing: balanceInfo.missing });
+    return { line: balanceInfo.missingSymbol + " = " + formatInt(balanceInfo.missing), phase: "scaled", solve: solved };
+  }
+  if (found.length && report.modes.length > found.length) {
+    var pendingMode = report.modes.filter(function (row) { return found.indexOf(row.key) < 0; })[0];
+    if (pendingMode) {
+      var withMode = found.concat([pendingMode.key]);
+      return { line: displayValue(pendingMode), found: withMode, done: withMode.length === report.modes.length };
+    }
+  }
+  if (live.listSource && phase !== "total" && phase !== "pick" && phase !== "scaled") {
+    var counts = modeCounts(progress, task);
+    var pending = null;
+    displayRows(live).some(function (row) {
+      if (Object.prototype.hasOwnProperty.call(counts, row.key)) return false;
+      pending = row;
+      return true;
+    });
+    if (pending) {
+      var nextCounts = Object.assign({}, counts);
+      nextCounts[pending.key] = pending.freq;
+      return { line: fillShow(pending), got: { counts: nextCounts } };
+    }
+  }
+  if (phase !== "total" && phase !== "pick") {
+    return { line: "השכיחות הגבוהה ביותר היא " + formatInt(report.max), phase: "total" };
+  }
+  if (report.none) return { line: "אין שכיח", done: true };
+  var missing = report.modes.filter(function (row) { return found.indexOf(row.key) < 0; });
+  if (!missing.length) return null;
+  var union = found.concat([missing[0].key]);
+  return {
+    line: displayValue(missing[0]),
+    found: union,
+    done: union.length === report.modes.length,
+  };
+}
+
 function guidedExpr(compiled, task) {
   if (task.kind === "weightedSum") return formatWeighted(compiled.rows);
   var freqs = freqList(compiled, task);
@@ -3382,7 +4027,7 @@ function findLevel(engine, levelId) {
   var levels = (engine.DoctematicaCurriculum && engine.DoctematicaCurriculum.levels) || [];
   var i;
   for (i = 0; i < levels.length; i++) {
-    if (levels[i].id === levelId && levels[i].mode === "freq-table") return levels[i];
+    if (levels[i].id === levelId && (levels[i].mode === "freq-table" || levels[i].mode === "mean")) return levels[i];
   }
   return null;
 }
@@ -3432,7 +4077,44 @@ function checkTyped(engine, compiled, ex, typed, progress, fill, priorColumns) {
       message: "כל הסעיפים נכונים.",
     });
   }
-  if (current.task.kind === "freqBalance" || Balance.pending(compiled, progress)) {
+  if (fill && String(fill.typed || "").trim()) {
+    var cell = Unknown.noteCell(engine, compiled, ex, progress, fill);
+    if (cell) {
+      if (!cell.ok) {
+        return {
+          ok: false,
+          message: cell.message || "עוד לא.",
+          view: viewOf(ex, progress, compiled),
+          progress: progress,
+        };
+      }
+      progress.unknown = cell.unknown;
+      if (current.task.kind === "meanUnknown") {
+        applyMatch(progress, current.task, {
+          ok: true,
+          done: true,
+          shows: ["x=" + cell.value],
+          unknown: cell.unknown,
+        });
+        Unknown.apply(compiled, progress);
+        var cellStatus = statusAfter(ex, progress, false);
+        return respond(ex, compiled, progress, {
+          status: cellStatus,
+          message: messageFor(cellStatus, ""),
+          shows: ["x=" + cell.value],
+          part: current.part.label || "",
+        });
+      }
+      Unknown.apply(compiled, progress);
+      return respond(ex, compiled, progress, {
+        status: "note",
+        message: "הערך נשמר בטבלה. אפשר להמשיך בפתרון.",
+        shows: [String(cell.value)],
+        part: current.part.label || "",
+      });
+    }
+  }
+  if (balanceOwns(compiled, current.task, progress)) {
     var balanced = Balance.check(engine, compiled, current.task, typed, progress);
     if (balanced && (balanced.ok || current.task.kind === "freqBalance" || balanced.confident)) {
       if (!balanced.ok) {
@@ -3525,7 +4207,7 @@ function checkTyped(engine, compiled, ex, typed, progress, fill, priorColumns) {
   var hits = [];
   var focusMiss = null;
   open.forEach(function (task) {
-    var result = matchTask(compiled, task, typed, progress);
+    var result = matchTask(compiled, task, typed, progress, engine);
     if (result && result.ok) hits.push({ task: task, result: result });
     else if (task.id === open[0].id) focusMiss = result;
   });
@@ -3591,7 +4273,7 @@ function stepOnce(engine, compiled, ex, progress) {
   Symbols.apply(compiled, progress.symbols);
   var current = currentPart(ex, progress);
   if (!current) return null;
-  if (current.task.kind === "freqBalance" || Balance.pending(compiled, progress)) {
+  if (balanceOwns(compiled, current.task, progress)) {
     var balancedStep = Balance.step(engine, compiled, current.task, progress);
     if (!balancedStep) return null;
     var balanceMarked = {
@@ -3632,6 +4314,83 @@ function stepOnce(engine, compiled, ex, progress) {
     };
     applyMatch(progress, current.task, comparedMarked);
     return { part: current.part.label || "", shows: [compared.line], result: comparedMarked };
+  }
+  if (current.task.kind === "modeRaise" || current.task.kind === "modeBound" || current.task.kind === "modeSet") {
+    var special = current.task.kind === "modeRaise"
+      ? nextModeRaise(compiled, current.task, progress)
+      : current.task.kind === "modeBound"
+        ? nextModeBound(compiled, current.task, progress)
+        : nextModeSet(compiled, current.task, progress);
+    if (!special) return null;
+    var specialMarked = {
+      ok: true,
+      done: !!special.done,
+      phase: special.phase || "",
+      solve: special.solve,
+      shows: [special.line],
+      message: "",
+    };
+    applyMatch(progress, current.task, specialMarked);
+    return { part: current.part.label || "", shows: [special.line], result: specialMarked };
+  }
+  if (current.task.kind === "mode" && (current.task.select || current.task.adjust || (current.task.data && current.task.data.length))) {
+    var modeStep = nextModeAction(compiled, current.task, progress);
+    if (!modeStep) return null;
+    var modeMarked = {
+      ok: true,
+      done: !!modeStep.done,
+      phase: modeStep.phase || "",
+      found: modeStep.found,
+      got: modeStep.got,
+      solve: modeStep.solve,
+      shows: [modeStep.line],
+      joinPrev: !!modeStep.joinPrev,
+      message: "",
+    };
+    applyMatch(progress, current.task, modeMarked);
+    return { part: current.part.label || "", shows: [modeStep.line], result: modeMarked };
+  }
+  if (current.task.kind === "mean" && current.task.source && current.task.source.type === "list") {
+    var listBagNow = listBag(progress, current.task);
+    var listAction = Mean.listStep(ex, current.task, listBagNow);
+    Mean.listApply(listBagNow, current.task, listAction);
+    saveListBag(progress, current.task, listBagNow);
+    var listMarked = {
+      ok: true,
+      done: !!listAction.done,
+      shows: listAction.shows || [],
+      unknown: progress.unknown,
+      message: listAction.message || "",
+    };
+    applyMatch(progress, current.task, listMarked);
+    return { part: current.part.label || "", shows: listMarked.shows, result: listMarked };
+  }
+  if (current.task.kind === "mean") {
+    var meanStep = Mean.nextTable(compiled, current.task, progress);
+    if (!meanStep) return null;
+    var meanMarked = {
+      ok: true,
+      done: !!meanStep.done,
+      shows: [meanStep.line],
+      weighted: meanStep.weighted,
+      message: "",
+    };
+    applyMatch(progress, current.task, meanMarked);
+    return { part: current.part.label || "", shows: [meanStep.line], result: meanMarked };
+  }
+  if (Unknown.owns(current.task)) {
+    var unknownStep = Unknown.next(engine, compiled, current.task, progress);
+    if (!unknownStep) return null;
+    var unknownMarked = {
+      ok: true,
+      done: !!unknownStep.done,
+      shows: [unknownStep.line],
+      unknown: unknownStep.unknown,
+      message: "",
+    };
+    applyMatch(progress, current.task, unknownMarked);
+    if (unknownStep.done) Unknown.apply(compiled, progress);
+    return { part: current.part.label || "", shows: [unknownStep.line], result: unknownMarked };
   }
   if (current.task.kind === "relative" || current.task.kind === "fillRelative") {
     var action = current.task.kind === "fillRelative"
@@ -3721,9 +4480,26 @@ function loadExercise(engine, body) {
   return found;
 }
 
+function keepModeMissing(compiled, ex, raw, solve) {
+  if (!raw || raw.missing == null || !solve) return solve;
+  var kept = false;
+  (ex.parts || []).forEach(function (part) {
+    (part.tasks || []).forEach(function (task) {
+      if (task.kind !== "modeSet" || kept) return;
+      var need = modeSetNeed(compiled, task);
+      if (need && sameNum(raw.missing, need.level)) {
+        solve.missing = need.level;
+        kept = true;
+      }
+    });
+  });
+  return solve;
+}
+
 function handle(engine, body) {
   var found = loadExercise(engine, body);
   if (!found) return { error: "unknown exercise", message: "unknown exercise" };
+  if (found.level && found.level.mode === "mean") return Mean.handle(engine, body, found);
   if (found.ex.pie) return Pie.handle(engine, body, found);
   var compiled = compileExercise(found.ex);
   Balance.materialize(compiled);
@@ -3734,6 +4510,11 @@ function handle(engine, body) {
   progress.symbols = Symbols.sanitize(engine, compiled, body.progress && body.progress.symbols);
   Symbols.apply(compiled, progress.symbols);
   progress.solve = Balance.sanitize(compiled, body.progress && body.progress.solve);
+  progress.solve = keepModeMissing(compiled, found.ex, body.progress && body.progress.solve, progress.solve);
+  progress.weighted = Mean.sanitizeTable(compiled, found.ex, body.progress && body.progress.weighted);
+  progress.unknown = Unknown.sanitize(engine, compiled, found.ex, body.progress && body.progress.unknown);
+  Unknown.mark(compiled, found.ex);
+  Unknown.apply(compiled, progress);
   var keptTotal = body.progress && body.progress.solve && body.progress.solve.total;
   if (keptTotal != null && sameNum(keptTotal, tableTotal(compiled))) progress.solve.total = tableTotal(compiled);
   Balance.materialize(compiled);
@@ -3809,6 +4590,24 @@ function handle(engine, body) {
     fields.progress = progress;
     return fields;
   }
+  if (Array.isArray(body.pick)) {
+    var picking = currentPart(found.ex, progress);
+    if (!picking || picking.task.kind !== "mode") {
+      return { ok: false, message: "עוד לא.", view: viewOf(found.ex, progress, compiled), progress: progress };
+    }
+    var chosen = matchModePick(compiled, picking.task, body.pick, progress);
+    if (!chosen.ok) {
+      return { ok: false, message: chosen.message || "עוד לא.", view: viewOf(found.ex, progress, compiled), progress: progress };
+    }
+    applyMatch(progress, picking.task, chosen);
+    var pickStatus = statusAfter(found.ex, progress, !chosen.done);
+    return respond(found.ex, compiled, progress, {
+      status: pickStatus,
+      message: messageFor(pickStatus, chosen.message),
+      shows: chosen.shows || [],
+      part: picking.part.label || "",
+    });
+  }
   if (intent === "hint") return hintResponse(engine, compiled, found.ex, progress);
   if (intent === "step") return stepResponse(engine, compiled, found.ex, progress);
   if (intent === "solution") return solutionResponse(engine, compiled, found.ex, progress);
@@ -3818,6 +4617,7 @@ function handle(engine, body) {
 function openingView(engine, levelId, index, exerciseId) {
   var found = findExercise(engine, levelId, null, index, exerciseId);
   if (!found) return null;
+  if (found.level && found.level.mode === "mean") return Mean.openingView(found);
   if (found.ex.pie) return Pie.openingView(found);
   var compiled = compileExercise(found.ex);
   var progress = emptyProgress();
@@ -3868,6 +4668,19 @@ function nextStep(table, task, state, data) {
   if (task && task.kind === "buildFreq") {
     var action = nextBuildAction(ready.compiled, ready.packed.progress.columns);
     return { line: action && action.shows ? action.shows[0] : null, result: action, columns: action && action.columns };
+  }
+  if (task && task.kind === "mean" && task.source && task.source.type === "list") {
+    var listNow = listBag(ready.packed.progress, ready.packed.task);
+    var listAction = Mean.listStep({ parts: [{ tasks: [task] }] }, ready.packed.task, listNow);
+    return { line: listAction && listAction.shows && listAction.shows[0], result: listAction };
+  }
+  if (task && task.kind === "mean") {
+    var meanAction = Mean.nextTable(ready.compiled, ready.packed.task, ready.packed.progress);
+    return { line: meanAction && meanAction.line, result: meanAction };
+  }
+  if (task && Unknown.owns(task)) {
+    var unknownAction = Unknown.next(null, ready.compiled, ready.packed.task, ready.packed.progress);
+    return { line: unknownAction && unknownAction.line, result: unknownAction };
   }
   var line = nextLine(ready.compiled, ready.packed.task, ready.packed.progress);
   var result = line == null ? null : matchTask(ready.compiled, ready.packed.task, line, ready.packed.progress);

@@ -412,6 +412,11 @@
         i += 2;
         continue;
       }
+      if ((ch === "x" || ch === "X") && s.charAt(i + 1) === "\u0304") {
+        out += '<span class="m-bar">x</span>';
+        i += 2;
+        continue;
+      }
       var xIdx = s.slice(i).match(/^x(₁,₂|₁|₂)/);
       if (xIdx) {
         out += '<span class="m-x">x' + escapeHtml(xIdx[1]) + "</span>";
@@ -530,6 +535,10 @@
       return stash(chunk);
     });
     src = src.replace(RE_SLOPE_YX, stash);
+    src = src.replace(
+      /\((?:[^()]|\([^()]*\))*\)\s*\/\s*(?:\((?:[^()]|\([^()]*\))*\)|\d+\s*[·⋅×*]?\s*x)\s*=\s*[−–—-]?\d+(?:\.\d+)?/gi,
+      stash
+    );
     src = src.replace(RE_PROSE_MATH, stash);
     src = src.replace(
       /(^|[^A-Za-z0-9])([−–—-]\s*(?:\d+\s+\d+\s*\/\s*\d+|\(\d+\s*\/\s*\d+\)|\d+\s*\/\s*\d+|\d+(?:\.\d+)?))/g,

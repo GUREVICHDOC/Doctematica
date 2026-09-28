@@ -206,7 +206,7 @@ body.is-pick .d-line-r { opacity: 0; }
   align-items: flex-start;
   justify-content: flex-start;
   gap: 14px;
-  min-height: 0;
+  min-height: auto;
   padding: 8px 12px 28px;
 }
 
@@ -461,16 +461,38 @@ body.is-pick .solve-stage { display: none; }
   border-radius: 28px;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
   backdrop-filter: blur(10px);
-  max-height: calc(100dvh - 148px);
-  overflow: auto;
   margin: 0;
+}
+
+.sub-jump {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.sub-jump button {
+  border: 1px solid rgba(20, 36, 26, 0.12);
+  background: #f3f6f3;
+  color: #1c2b22;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.sub-jump button:hover:not(:disabled) { background: #e5eee7; }
+
+.sub-jump button:disabled {
+  opacity: 0.38;
+  cursor: default;
 }
 
 .qstrip {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
-  direction: ltr;
   margin-bottom: 8px;
 }
 
@@ -479,14 +501,14 @@ body.is-pick .solve-stage { display: none; }
 #exercise-nums {
   position: relative;
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  direction: ltr;
+  justify-content: flex-start;
   gap: 6px;
-  overflow-x: auto;
+  overflow: visible;
   margin: 0;
-  padding: 2px 2px 6px;
-  flex: 1;
-  min-width: 0;
-  scrollbar-width: thin;
+  padding: 2px 0 6px;
+  width: 100%;
 }
 
 #exercise-nums button {
@@ -512,19 +534,14 @@ body.is-pick .solve-stage { display: none; }
 }
 
 #prev-ex,
-#next-ex {
-  flex: 0 0 auto;
-  height: 2.35rem;
-  padding: 0 12px;
-  border-radius: 10px;
-}
+#next-ex { display: none; }
 
 #exercise-pos {
-  margin-left: auto;
+  margin: 0;
   color: var(--muted);
   font-weight: 800;
   font-size: 0.92rem;
-  white-space: nowrap;
+  text-align: right;
 }
 
 #kinds-wrap h2 {
@@ -648,10 +665,9 @@ body.is-pick .solve-stage { display: none; }
     padding: 0;
   }
 
-  .solve-card { max-height: none; }
+  .solve-card { overflow: visible; }
 
-  .qstrip { flex-wrap: wrap; }
-  #exercise-pos { width: 100%; margin-left: 0; text-align: right; }
+  .sub-jump { flex-wrap: wrap; }
 }
 
 @media (prefers-reduced-motion: reduce) {

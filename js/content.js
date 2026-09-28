@@ -144,6 +144,24 @@
       }
       return percentProblem;
     }
+    if (level.mode === "mean") {
+      return {
+        mode: "freq-table",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction || "",
+        prompt: ex.stem || "",
+        stem: ex.stem || "",
+        table: null,
+        data: ex.data && ex.data.length ? ex.data.slice() : null,
+        parts: (ex.parts || []).map(function (part) {
+          return { label: part.label || "", text: part.text || "" };
+        }),
+        explain: "",
+      };
+    }
     if (level.mode === "freq-table" && ex.pie) {
       return {
         mode: "freq-table",

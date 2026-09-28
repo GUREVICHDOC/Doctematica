@@ -46,6 +46,14 @@
   font-style: italic;
 }
 
+.m-bar {
+  font-style: italic;
+  display: inline-block;
+  border-top: 1.5px solid currentColor;
+  line-height: 0.85;
+  padding: 0 0.04em;
+}
+
 .m-pow {
   display: inline;
   white-space: nowrap;

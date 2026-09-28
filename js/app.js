@@ -37,6 +37,7 @@
   var mathFieldEl = document.getElementById("math-field");
   var mathKeysEl = document.getElementById("math-keys");
   var yesnoAskEl = document.getElementById("yesno-ask");
+  var modePickEl = document.getElementById("mode-pick");
   var yesnoQEl = document.getElementById("yesno-q");
   var yesBtn = document.getElementById("yes-btn");
   var noBtn = document.getElementById("no-btn");
@@ -70,6 +71,9 @@
   var lcdGuideEl = document.getElementById("lcd-guide");
   var crumbEl = document.getElementById("crumb");
   var exercisePosEl = document.getElementById("exercise-pos");
+  var subJumpEl = document.getElementById("sub-jump");
+  var prevSubBtn = document.getElementById("prev-sub");
+  var nextSubBtn = document.getElementById("next-sub");
   var topicRailEl = document.getElementById("topic-rail");
   var navToggleBtn = document.getElementById("nav-toggle");
   var homeBtn = document.getElementById("home-btn");
@@ -989,6 +993,10 @@
       freqAskEl.innerHTML = "";
     }
     if (yesnoAskEl && !isGeoLengthMode()) yesnoAskEl.classList.add("hidden");
+    if (modePickEl) {
+      modePickEl.classList.add("hidden");
+      modePickEl.innerHTML = "";
+    }
     if (percentFieldsEl) {
       percentFieldsEl.classList.add("hidden");
       percentFieldsEl.innerHTML = "";
@@ -1258,20 +1266,25 @@
       return;
     }
     if (data && data.length) {
-      var note = document.createElement("p");
-      note.className = "freq-note";
-      note.textContent = "אפשר ללחוץ על מספר כדי לסמן אותו ככזה שכבר נספר.";
-      freqTableEl.appendChild(note);
+      var plain = view.list === "plain";
+      if (!plain) {
+        var note = document.createElement("p");
+        note.className = "freq-note";
+        note.textContent = "אפשר ללחוץ על מספר כדי לסמן אותו ככזה שכבר נספר.";
+        freqTableEl.appendChild(note);
+      }
       var list = document.createElement("div");
       list.className = "freq-data";
       data.forEach(function (item, index) {
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "freq-datum";
+        var btn = document.createElement(plain ? "span" : "button");
+        if (!plain) btn.type = "button";
+        btn.className = plain ? "freq-datum is-plain" : "freq-datum";
         btn.textContent = item == null ? "" : String(item);
-        btn.setAttribute("data-index", String(index));
-        btn.setAttribute("aria-pressed", state.freqMarks && state.freqMarks[index] ? "true" : "false");
-        if (state.freqMarks && state.freqMarks[index]) btn.classList.add("is-struck");
+        if (!plain) {
+          btn.setAttribute("data-index", String(index));
+          btn.setAttribute("aria-pressed", state.freqMarks && state.freqMarks[index] ? "true" : "false");
+          if (state.freqMarks && state.freqMarks[index]) btn.classList.add("is-struck");
+        }
         list.appendChild(btn);
       });
       freqTableEl.appendChild(list);
@@ -1766,8 +1779,10 @@
     if (freqAnswerEl) freqAnswerEl.classList.add("hidden");
     if (mathWrap && isFreqTableMode()) mathWrap.classList.toggle("hidden", !showMath);
     if (mathKeysEl && isFreqTableMode()) {
+      var meanKeys = !!(view && view.keys === "mean");
       mathKeysEl.classList.toggle("hidden", !showMath);
-      mathKeysEl.classList.toggle("is-frac-only", showMath);
+      mathKeysEl.classList.toggle("is-frac-only", showMath && !meanKeys);
+      mathKeysEl.classList.toggle("is-mean-keys", showMath && meanKeys);
     }
     if (answerLabelEl && isFreqTableMode()) answerLabelEl.classList.toggle("hidden", board);
   }
@@ -1823,6 +1838,50 @@
       freqAskEl.appendChild(div);
     });
     freqAskEl.classList.remove("hidden");
+  }
+
+  function renderModePick(view) {
+    if (!modePickEl) return;
+    var show = !!(view && view.entry === "pick" && view.options && view.options.length && !state.locked);
+    modePickEl.classList.toggle("hidden", !show);
+    if (!show) {
+      modePickEl.innerHTML = "";
+      return;
+    }
+    var pressed = {};
+    modePickEl.querySelectorAll("button[aria-pressed='true']").forEach(function (btn) {
+      pressed[btn.getAttribute("data-value")] = true;
+    });
+    (view.picked || []).forEach(function (value) { pressed[String(value)] = true; });
+    modePickEl.innerHTML = "";
+    var note = document.createElement("p");
+    note.textContent = "אפשר לבחור ערך אחד או יותר, ואז לבדוק.";
+    modePickEl.appendChild(note);
+    var row = document.createElement("div");
+    row.className = "mode-pick-btns";
+    view.options.forEach(function (option) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = option.label;
+      btn.setAttribute("data-value", String(option.value));
+      var on = !!pressed[String(option.value)];
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.addEventListener("click", function () {
+        var next = btn.getAttribute("aria-pressed") !== "true";
+        btn.setAttribute("aria-pressed", next ? "true" : "false");
+      });
+      row.appendChild(btn);
+    });
+    modePickEl.appendChild(row);
+  }
+
+  function readModePick() {
+    if (!modePickEl) return [];
+    var values = [];
+    modePickEl.querySelectorAll("button[aria-pressed='true']").forEach(function (btn) {
+      values.push(btn.getAttribute("data-value"));
+    });
+    return values;
   }
 
   function syncFreqYesNo(view) {
@@ -1926,6 +1985,7 @@
       history: state.history || [],
     };
     if (payload.typed != null) body.typed = payload.typed;
+    if (payload.pick) body.pick = payload.pick;
     if (payload.fill) body.fill = payload.fill;
     if (payload.work) body.work = payload.work;
     if (payload.entries) body.entries = payload.entries;
@@ -2006,6 +2066,7 @@
         renderFreqBoard();
         renderFreqPart(remote.view);
         syncFreqYesNo(remote.view);
+        renderModePick(remote.view);
         syncFreqEntry(remote.view);
       }
       showFeedback(false, "<strong>עוד לא.</strong> " + escapeFreqHtml(remote.message || "נסו שוב."));
@@ -2034,6 +2095,7 @@
         renderFreqBoard();
         renderFreqPart(remote.view);
         syncFreqYesNo(remote.view);
+        renderModePick(remote.view);
         syncFreqEntry(remote.view);
       }
     }
@@ -4124,29 +4186,59 @@
     if (!level.exercises || !level.exercises.length) {
       prevExBtn.classList.add("hidden");
       nextExBtn.classList.add("hidden");
+      renderSubJump();
       syncShell();
       return;
     }
-    prevExBtn.classList.remove("hidden");
-    nextExBtn.classList.remove("hidden");
-    var activeBtn = null;
+    prevExBtn.classList.add("hidden");
+    nextExBtn.classList.add("hidden");
     level.exercises.forEach(function (ex, index) {
       var btn = document.createElement("button");
       btn.type = "button";
       btn.textContent = String(index + 1);
       btn.className = index === state.exerciseIndex ? "active" : "";
-      if (index === state.exerciseIndex) {
-        btn.setAttribute("aria-current", "true");
-        activeBtn = btn;
-      }
+      if (index === state.exerciseIndex) btn.setAttribute("aria-current", "true");
       btn.addEventListener("click", function () {
         state.exerciseIndex = index;
         nextProblem();
       });
       exerciseNumsEl.appendChild(btn);
     });
-    if (activeBtn) revealExerciseBtn(activeBtn);
+    renderSubJump();
     syncShell();
+  }
+
+  function subtopicList() {
+    return ((state.catalog && state.catalog.subtopics) || {})[state.topic] || [];
+  }
+
+  function subtopicIndex() {
+    var list = subtopicList();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === state.subtopic) return i;
+    }
+    return -1;
+  }
+
+  function renderSubJump() {
+    if (!subJumpEl) return;
+    var list = subtopicList();
+    var index = subtopicIndex();
+    if (!isWorksheet() || list.length < 2 || index < 0) {
+      subJumpEl.classList.add("hidden");
+      return;
+    }
+    subJumpEl.classList.remove("hidden");
+    if (prevSubBtn) prevSubBtn.disabled = index <= 0;
+    if (nextSubBtn) nextSubBtn.disabled = index >= list.length - 1;
+  }
+
+  function stepSubtopic(dir) {
+    var list = subtopicList();
+    var index = subtopicIndex();
+    var next = list[index + dir];
+    if (!next) return;
+    selectSubtopic(next);
   }
 
   function renderTopics() {
@@ -8455,7 +8547,10 @@
     }
     updateSplitBtn();
     updateFormulaBtn();
-    if (mathKeysEl && !isFreqTableMode()) mathKeysEl.classList.remove("is-frac-only");
+    if (mathKeysEl && !isFreqTableMode()) {
+      mathKeysEl.classList.remove("is-frac-only");
+      mathKeysEl.classList.remove("is-mean-keys");
+    }
   }
 
   function markSolved() {
@@ -8690,6 +8785,7 @@
       renderFreqBoard();
       renderFreqPart(state.freqView);
       syncFreqYesNo(state.freqView);
+      renderModePick(state.freqView);
       syncFreqEntry(state.freqView);
       renderSteps();
       if (mathWrap && !mathWrap.classList.contains("hidden")) mathField.focus();
@@ -8959,6 +9055,11 @@
       var fieldAnswers = readPercentFields();
       var hasField = Object.keys(fieldAnswers).some(function (key) { return String(fieldAnswers[key] || "").trim(); });
       var typedFreq = mathField ? mathField.serialize() : "";
+      var picked = readModePick();
+      if (!String(typedFreq || "").trim() && picked.length) {
+        requestStatistics({ intent: "check", pick: picked }, applyFreqRemote);
+        return;
+      }
       if (!String(typedFreq || "").trim() && hasField) {
         requestStatistics({ intent: "check", answers: fieldAnswers }, applyFreqRemote);
         return;
@@ -9113,6 +9214,13 @@
     }
     nextProblem();
   });
+
+  if (prevSubBtn) {
+    prevSubBtn.addEventListener("click", function () { stepSubtopic(-1); });
+  }
+  if (nextSubBtn) {
+    nextSubBtn.addEventListener("click", function () { stepSubtopic(1); });
+  }
 
   prevExBtn.addEventListener("click", function () {
     var level = currentLevel();

@@ -553,6 +553,43 @@ button#new-problem {
   color: var(--accent-dark, #24553a);
 }
 
+.mode-pick {
+  margin: 0 0 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: rgba(42, 111, 154, 0.08);
+  border: 1px solid rgba(42, 111, 154, 0.22);
+}
+
+.mode-pick p {
+  margin: 0 0 0.65rem;
+  font-weight: 800;
+}
+
+.mode-pick-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  direction: rtl;
+}
+
+.mode-pick-btns button {
+  font: inherit;
+  font-weight: 800;
+  min-width: 2.8rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(42, 111, 154, 0.35);
+  background: #fff;
+  cursor: pointer;
+}
+
+.mode-pick-btns button[aria-pressed="true"] {
+  background: #1f6b45;
+  color: #fff;
+  border-color: #1f6b45;
+}
+
 .yesno-ask {
   margin: 0 0 0.75rem;
   padding: 0.85rem 1rem;
@@ -957,6 +994,10 @@ code {
   color: inherit;
 }
 
+.freq-datum.is-plain {
+  cursor: default;
+}
+
 .freq-datum.is-struck {
   text-decoration: line-through;
   color: #8a938c;
@@ -1095,6 +1136,10 @@ code {
 }
 
 .math-actions.is-frac-only > :not(:first-child) {
+  display: none;
+}
+
+.math-actions.is-mean-keys > :not(:first-child):not(.mean-key) {
   display: none;
 }
 

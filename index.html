@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="css/math.css" />
     <link rel="stylesheet" href="css/coord-board.css" />
     <link rel="stylesheet" href="css/line-match.css" />
-    <link rel="stylesheet" href="css/shell.css?v=13" />
+    <link rel="stylesheet" href="css/shell.css?v=15" />
   </head>
   <body class="is-pick">
     <div class="scene" aria-hidden="true">
@@ -147,11 +147,15 @@
           <nav class="crumb" id="crumb" aria-label="מיקום"></nav>
           <section class="card solve-card" aria-live="polite">
             <div id="worksheet-nav" class="hidden">
+              <div class="sub-jump hidden" id="sub-jump">
+                <button type="button" id="prev-sub">תת־נושא קודם</button>
+                <button type="button" id="next-sub">תת־נושא הבא</button>
+              </div>
               <div class="qstrip">
-                <button type="button" class="ghost" id="prev-ex">הקודם</button>
-                <div class="topics" id="exercise-nums"></div>
-                <button type="button" class="ghost" id="next-ex">הבא</button>
                 <span id="exercise-pos" dir="rtl"></span>
+                <button type="button" class="ghost hidden" id="prev-ex">הקודם</button>
+                <div class="topics" id="exercise-nums"></div>
+                <button type="button" class="ghost hidden" id="next-ex">הבא</button>
               </div>
               <p class="instruction" id="instruction"></p>
             </div>
@@ -200,6 +204,7 @@
                     <button type="submit" id="check">בדיקה</button>
                   </div>
                   <div id="percent-fields" class="percent-fields hidden"></div>
+                  <div id="mode-pick" class="mode-pick hidden"></div>
                   <div id="yesno-ask" class="yesno-ask hidden">
                     <p id="yesno-q"></p>
                     <div class="yesno-btns">

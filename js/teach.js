@@ -2194,6 +2194,107 @@
     return normalizeEqDisplay(t);
   }
 
+  function plainConstant(term) {
+    return /^[+-]?\d+(?:\.\d+)?$/.test(String(term || "").replace(/\s+/g, ""));
+  }
+
+  function xCoef(term) {
+    var t = String(term || "").replace(/\s+/g, "");
+    var sign = 1;
+    if (t.charAt(0) === "+") t = t.slice(1);
+    else if (t.charAt(0) === "-") {
+      sign = -1;
+      t = t.slice(1);
+    }
+    var m = t.match(/^(\d+(?:\.\d+)?)?\*?x$/i);
+    if (!m) return null;
+    var coef = m[1] ? Number(m[1]) : 1;
+    if (!isFinite(coef)) return null;
+    return sign * coef;
+  }
+
+  function formatJoinedX(coef, leading) {
+    if (Math.abs(coef) < EPS) return "";
+    var abs = Math.abs(coef);
+    var shown = Math.abs(abs - Math.round(abs)) < 1e-8 ? String(Math.round(abs)) : String(abs);
+    var body = Math.abs(abs - 1) < EPS ? "x" : shown + "x";
+    if (coef < 0) return "-" + body;
+    return leading ? body : "+" + body;
+  }
+
+  function combineLikeInExpr(expr) {
+    var terms = splitRawTerms(unwrapOuterParens(expr));
+    if (terms.length < 2) return null;
+    var constants = [];
+    var xTerms = [];
+    var others = [];
+    var i;
+    for (i = 0; i < terms.length; i++) {
+      var compact = terms[i].replace(/\s+/g, "");
+      var coef = xCoef(compact);
+      if (plainConstant(compact)) {
+        var n = Number(compact);
+        if (!isFinite(n)) return null;
+        constants.push(n);
+      } else if (coef != null) xTerms.push(coef);
+      else others.push(compact);
+    }
+    if (constants.length < 2 && xTerms.length < 2) return null;
+    var pieces = [];
+    if (constants.length) {
+      var sum = 0;
+      for (i = 0; i < constants.length; i++) sum += constants[i];
+      if (Math.abs(sum) >= EPS || (!xTerms.length && !others.length)) pieces.push(String(sum));
+    }
+    if (xTerms.length) {
+      var coefSum = 0;
+      for (i = 0; i < xTerms.length; i++) coefSum += xTerms[i];
+      var xText = formatJoinedX(coefSum, !pieces.length);
+      if (xText) pieces.push(xText);
+    }
+    for (i = 0; i < others.length; i++) {
+      var other = others[i];
+      if (pieces.length && other.charAt(0) !== "+" && other.charAt(0) !== "-") other = "+" + other;
+      pieces.push(other);
+    }
+    if (!pieces.length) return "0";
+    return pieces.join("");
+  }
+
+  function combineLikeBeforeClear(eqText) {
+    var sides = splitEq(eqText);
+    if (!sides) return null;
+    var changedNum = false;
+    var changedDen = false;
+    function fixSide(side) {
+      var rebuilt = splitRawTerms(side).map(function (term) {
+        var info = splitTermDenExpr(term);
+        if (!info.hasVar) return term.replace(/\s+/g, "");
+        var num = combineLikeInExpr(info.body);
+        var den = combineLikeInExpr(info.denExpr);
+        if (num) changedNum = true;
+        if (den) changedDen = true;
+        if (!num && !den) return term.replace(/\s+/g, "");
+        var body = num || unwrapOuterParens(info.body).replace(/\s+/g, "");
+        var denExpr = den || info.denExpr;
+        return info.sign + "(" + body + ")/(" + denExpr + ")";
+      }).join("");
+      var outer = combineLikeInExpr(rebuilt);
+      return outer || rebuilt;
+    }
+    var left = fixSide(sides.left);
+    var right = fixSide(sides.right);
+    if (!changedNum && !changedDen && key(left + "=" + right) === key(eqText)) return null;
+    var next = tidyComputedEq(left + "=" + right);
+    if (key(next) === key(eqText)) return null;
+    var where = changedNum && changedDen ? " במונה ובמכנה" : changedDen ? " במכנה" : changedNum ? " במונה" : "";
+    return {
+      eq: next,
+      hint: "אחדו איברים דומים" + where + ".",
+      explain: "מאחדים איברים דומים" + where + " לפני שמורידים את המכנה.",
+    };
+  }
+
   function numericMulStep(eqText) {
     var src = String(eqText || "");
     var chains = findNumericMulChains(src.replace(/[−–—]/g, "-"));
@@ -2241,6 +2342,8 @@
     if (mulNow) return mulNow;
 
     if (eqHasVarDenom(eqText)) {
+      var summedLike = combineLikeBeforeClear(eqText);
+      if (summedLike) return summedLike;
       var lcdAlg = lcdStep(eqText, decimals);
       if (lcdAlg) return lcdAlg;
       var droppedAlg = dropDenomsStep(eqText, decimals);
