@@ -2789,6 +2789,7 @@
       answerLabelEl.classList.toggle("hidden", !!domainFields || !!sketch || !!choice || !!axisBoard);
     }
     if (hintEl && state.fnView && state.fnView.hint) hintEl.textContent = state.fnView.hint;
+    updateFormulaBtn();
   }
 
   function renderFnPart() {
@@ -2849,6 +2850,7 @@
       renderFnPart();
       renderFnBoard();
       syncFnAsk();
+      updateFormulaBtn();
       renderFnSteps();
       if (remote.hint && hintEl) hintEl.textContent = remote.hint;
       if (remote.solved) {
@@ -2961,6 +2963,7 @@
     state.mixed.path = null;
     state.mixed.md53 = false;
     state.quad = null;
+    if (state.fn) state.fn.formulaAxis = "";
     hideQuadGuide();
     setQuadInput(true);
     updateFormulaBtn();
@@ -3305,9 +3308,27 @@
     return "";
   }
 
+  function fnAxisQuadEq() {
+    if (!isFnMode() || !state.fnView || state.fnView.input !== "axes") return "";
+    if (state.fn && state.fn.axisDone && state.fn.axisDone.x) return "";
+    var live = (state.fn && state.fn.axisLive && state.fn.axisLive.x) || [];
+    var found = "";
+    var i;
+    for (i = 0; i < live.length; i++) {
+      var show = String((live[i] && live[i].show) || "");
+      if (fnLooksArrangedQuadratic(show)) found = show;
+    }
+    return found;
+  }
+
+  function fnCurrentQuadLine() {
+    if (isFnMode() && state.fnView && state.fnView.input === "axes") return fnAxisQuadEq();
+    return fnLastMathLine();
+  }
+
   function fnQuadSolveActive() {
     if (!isFnMode() || state.locked || mixedPath() === "formula") return false;
-    return fnLooksArrangedQuadratic(fnLastMathLine());
+    return fnLooksArrangedQuadratic(fnCurrentQuadLine());
   }
 
   function fnFormulaActive() {
@@ -3315,7 +3336,7 @@
   }
 
   function fnQuadChain() {
-    var eq = fnQuadText(fnLastMathLine());
+    var eq = fnQuadText(fnCurrentQuadLine());
     return { start: eq, history: [eq] };
   }
 
@@ -3336,7 +3357,11 @@
       showFeedback(false, "<strong>עוד לא.</strong> לא התקבל פתרון מהנוסחה.");
       return true;
     }
-    if (!requestFunctions({ intent: "check", typed: text }, applyFnRemote)) showBasicEqServerUnavailable();
+    var axis = state.fn && state.fn.formulaAxis;
+    if (state.fn) state.fn.formulaAxis = "";
+    var back = { intent: "check", typed: text };
+    if (axis === "x" || axis === "y") back.axis = axis;
+    if (!requestFunctions(back, applyFnRemote)) showBasicEqServerUnavailable();
     return true;
   }
 
@@ -9069,7 +9094,11 @@
     state.mixed = state.mixed || emptyMixedState();
     state.mixed.path = "formula";
     state.mixed.md53 = !!(md53 || res.md53);
-    if (isFnMode()) state.fnFormula = true;
+    if (isFnMode()) {
+      state.fnFormula = true;
+      state.fn = state.fn || {};
+      state.fn.formulaAxis = fnAxisQuadEq() ? "x" : "";
+    }
     startQuadSession();
     if (res.view) mergeQuadView(res.view);
     renderQuadGuide();
