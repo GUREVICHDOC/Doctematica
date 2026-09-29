@@ -122,40 +122,59 @@
     return { consumed: p - from, den: den };
   }
 
+  function isSignChar(ch) {
+    return ch === "-" || ch === "−" || ch === "–" || ch === "—";
+  }
+
+  function isUnarySign(s, index) {
+    var j = index - 1;
+    while (j >= 0 && s.charAt(j) === " ") j -= 1;
+    if (j < 0) return true;
+    return /[+\-−–—*/=(,]/.test(s.charAt(j));
+  }
+
   function matchAlgFrac(s, i) {
+    var origin = i;
     var j = i;
-    while (j < s.length && isNumChar(s.charAt(j))) j += 1;
+    // −b/(2a): the minus belongs in the numerator. Numeric −2/9 stays as it was.
+    if (isSignChar(s.charAt(j)) && isUnarySign(s, j)) {
+      var k = j + 1;
+      while (k < s.length && s.charAt(k) === " ") k += 1;
+      if (/^[a-z]/i.test(s.charAt(k)) && !/^[xy]/i.test(s.charAt(k))) j = k;
+    }
+    var scan = j;
+    while (scan < s.length && isNumChar(s.charAt(scan))) scan += 1;
     var numEnd = -1;
 
-    if (s.charAt(j) === "(") {
-      var p1 = matchBalancedParen(s, j);
+    if (s.charAt(scan) === "(") {
+      var p1 = matchBalancedParen(s, scan);
       if (!p1) return null;
-      var k = j + p1.length;
-      if (s.charAt(k) === "(") {
-        var p2 = matchBalancedParen(s, k);
+      var k2 = scan + p1.length;
+      if (s.charAt(k2) === "(") {
+        var p2 = matchBalancedParen(s, k2);
         if (!p2) return null;
-        numEnd = k + p2.length;
-      } else if (s.slice(k, k + 2) === "^2" || s.charAt(k) === "²") {
-        numEnd = k + (s.charAt(k) === "²" ? 1 : 2);
+        numEnd = k2 + p2.length;
+      } else if (s.slice(k2, k2 + 2) === "^2" || s.charAt(k2) === "²") {
+        numEnd = k2 + (s.charAt(k2) === "²" ? 1 : 2);
       } else {
-        numEnd = k;
+        numEnd = k2;
       }
-    } else if (/^[xy]/i.test(s.charAt(j))) {
-      var letterEnd = j + 1;
+    } else if (/^[a-z]/i.test(s.charAt(scan))) {
+      var letterEnd = scan + 1;
       if (s.slice(letterEnd, letterEnd + 2) === "^2" || s.charAt(letterEnd) === "²") {
         letterEnd += s.charAt(letterEnd) === "²" ? 1 : 2;
       }
       numEnd = letterEnd;
-    } else if (j > i) {
-      numEnd = j;
+    } else if (scan > j) {
+      numEnd = scan;
     } else {
       return null;
     }
 
     var slashDen = matchSlashDen(s, numEnd);
     if (!slashDen) return null;
-    var full = s.slice(i, numEnd + slashDen.consumed);
-    return [full, s.slice(i, numEnd), slashDen.den];
+    var full = s.slice(origin, numEnd + slashDen.consumed);
+    return [full, s.slice(origin, numEnd), slashDen.den];
   }
 
   function sideToHTML(side) {
@@ -300,6 +319,28 @@
       }
       var parenPow = s.slice(i).match(/^(\([^()]+\))(\^[2-6]|²|³|⁴|⁵|⁶)/);
       if (parenPow) {
+        var fracBase = String(parenPow[1]).slice(1, -1).match(/^([−–—-]?)(\d+)\s*\/\s*(\d+)$/);
+        if (fracBase) {
+          var fracBody = fracBase[1] ? '<span class="m-neg">−</span>' + fracHTML(fracBase[2], fracBase[3]) : fracHTML(fracBase[2], fracBase[3]);
+          var fracExp =
+            parenPow[2] === "^6" || parenPow[2] === "⁶"
+              ? "6"
+              : parenPow[2] === "^5" || parenPow[2] === "⁵"
+                ? "5"
+                : parenPow[2] === "^4" || parenPow[2] === "⁴"
+                  ? "4"
+                  : parenPow[2] === "^3" || parenPow[2] === "³"
+                    ? "3"
+                    : "2";
+          out +=
+            '<span class="m-pow"><span class="m-paren">(' +
+            fracBody +
+            ')</span><sup class="m-sup">' +
+            fracExp +
+            "</sup></span>";
+          i += parenPow[0].length;
+          continue;
+        }
         var pTok = parenPow[2];
         var pExp =
           pTok === "^6" || pTok === "⁶"
@@ -361,11 +402,10 @@
       }
       var parFrac = s.slice(i).match(/^\(([−–—-]?)(\d+)\s*\/\s*(\d+)\)/);
       if (parFrac) {
-        if (parFrac[1]) {
-          out += '<span class="m-neg">−</span>' + fracHTML(parFrac[2], parFrac[3]);
-        } else {
-          out += fracHTML(parFrac[2], parFrac[3]);
-        }
+        var fracInner = parFrac[1] ? '<span class="m-neg">−</span>' + fracHTML(parFrac[2], parFrac[3]) : fracHTML(parFrac[2], parFrac[3]);
+        var prevCh = i > 0 ? s.charAt(i - 1) : "";
+        if (/[A-Za-z]/.test(prevCh)) out += '<span class="m-paren">(' + fracInner + ")</span>";
+        else out += fracInner;
         i += parFrac[0].length;
         emitTimesAfterFracIfNeeded(out, s, i);
         continue;
@@ -483,6 +523,14 @@
     "\\bm" + M_TAG + "\\s*=\\s*" + M_VAL + "(?:\\s*[,;]\\s*m" + M_TAG + "\\s*=\\s*" + M_VAL + ")+",
     "gi"
   );
+  var INEQ_NUM = "[−–—-]?(?:\\d+\\s*/\\s*\\d+|\\d+(?:\\.\\d+)?)";
+  var INEQ_OP = "(?:<=|>=|≤|≥|<|>)";
+  var RE_INEQ = new RegExp(
+    INEQ_NUM + "\\s*" + INEQ_OP + "\\s*[xX]\\s*" + INEQ_OP + "\\s*" + INEQ_NUM +
+      "|[xX]\\s*" + INEQ_OP + "\\s*" + INEQ_NUM +
+      "|" + INEQ_NUM + "\\s*" + INEQ_OP + "\\s*[xX](?![A-Za-z0-9])",
+    "g"
+  );
   var RE_PROSE_MATH =
     /S(?:△|Δ|□|▭)?[A-Za-z]{3,4}(?:\s*=\s*S(?:△|Δ|□|▭)?[A-Za-z]{3,4}\s*[−–—-]\s*S(?:△|Δ|□|▭)?[A-Za-z]{3,4})?|[A-Za-z]→[A-Za-z]{2}|[A-Za-z]\s*\(\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*[.,;]\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*\)|\(\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*[.,;]\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*\)|[−–—-]?\d+(?:\.\d+)?[xX](?!\w)/g;
   var PROD_NUM =
@@ -510,8 +558,9 @@
   }
 
   // «מ-70» הוא מקף עברי (יותר מ־70), לא המספר −70.
+  // מינוס מתמטי − נשאר מינוס, גם אחרי אות עברית («את −4»).
   function hebrewMaqaf(text) {
-    return String(text || "").replace(/([\u05D0-\u05EA])[−–—\-]\s*(?=\d)/g, "$1־");
+    return String(text || "").replace(/([\u05D0-\u05EA])[–—\-]\s*(?=\d)/g, "$1־");
   }
 
   function proseHTML(text) {
@@ -520,7 +569,7 @@
     function stash(chunk) {
       var id = "\x00M" + slots.length + "\x00";
       slots.push(
-        '<span class="math-prose" dir="ltr">\u2066' + proseChunkHTML(chunk) + "\u2067</span>"
+        '<span class="math-prose" dir="ltr">\u2066' + proseChunkHTML(chunk) + "\u2069</span>"
       );
       return id;
     }
@@ -528,6 +577,26 @@
     src = src.replace(RE_M_EQ, stash);
     src = src.replace(/\bd_?[A-Za-z]{2,4}(?:\s*=\s*[^\s,;]+)?/g, stash);
     src = src.replace(/\bd\s*=\s*√[^\n.]*/g, stash);
+    function stashEq(chunk) {
+      var body = String(chunk || "");
+      var tail = "";
+      var space = body.match(/\s+$/);
+      if (space) {
+        tail = space[0];
+        body = body.slice(0, -space[0].length);
+      }
+      if (/\.$/.test(body)) {
+        body = body.slice(0, -1);
+        tail = "." + tail;
+      }
+      return stash(body) + tail;
+    }
+    src = src.replace(/f\s*\(\s*[^()\u05D0-\u05EA]+\s*\)\s*=\s*[0-9xXyY+−–—\-\s().\/^²³*·×]+/gi, stashEq);
+    src = src.replace(/f\s*\(\s*[^()\u05D0-\u05EA]+\s*\)\s*(?:<=|>=|≤|≥|<|>)\s*[−–—-]?\d+(?:\.\d+)?/gi, stashEq);
+    src = src.replace(RE_INEQ, stash);
+    src = src.replace(/[yY]\s*=\s*[0-9xXyY()²³^./+−–—\-\s*·×]+/g, stashEq);
+    src = src.replace(/[0-9a-zA-Z()²³^./+−–—\-\s*·×]*[xXa-zA-Z](?:²|\^2)[0-9a-zA-Z()²³^./+−–—\-\s*·×=]*/g, stashEq);
+    src = src.replace(/f\s*\(\s*[^()\u05D0-\u05EA]+\s*\)/gi, stash);
     src = src.replace(RE_SLOPE_TEMPLATE, stash);
     src = src.replace(RE_PROD_EQ, stash);
     src = src.replace(RE_LINEAR_EQ, function (chunk, offset, full) {
@@ -535,11 +604,21 @@
       return stash(chunk);
     });
     src = src.replace(RE_SLOPE_YX, stash);
+    src = src.replace(/[xX]\s*=\s*[−–—-]?\s*[a-zA-Z]\s*\/\s*\([^()]+\)/g, stashEq);
+    src = src.replace(/[−–—-]?\s*[a-zA-Z]\s*\/\s*\([^()]+\)/g, stash);
     src = src.replace(
       /\((?:[^()]|\([^()]*\))*\)\s*\/\s*(?:\((?:[^()]|\([^()]*\))*\)|\d+\s*[·⋅×*]?\s*x)\s*=\s*[−–—-]?\d+(?:\.\d+)?/gi,
       stash
     );
     src = src.replace(RE_PROSE_MATH, stash);
+    src = src.replace(/\(\s*[−–—-]?\s*\d+(?:\.\d+)?\s*\)\s*(?:\^[2-6]|²|³|⁴|⁵|⁶)/g, stashEq);
+    src = src.replace(/\(\s*[+−]\s*(?:\d+\s*\/\s*\d+|\d+(?:\.\d+)?)\s*\)/g, stash);
+    src = src.replace(
+      /(^|[^A-Za-z0-9])([+−]\s*(?:x(?:²|\^2)?|\d+\s+\d+\s*\/\s*\d+|\(\d+\s*\/\s*\d+\)|\d+\s*\/\s*\d+|\d+(?:\.\d+)?))/gi,
+      function (_, pre, num) {
+        return pre + stash(num);
+      }
+    );
     src = src.replace(
       /(^|[^A-Za-z0-9])([−–—-]\s*(?:\d+\s+\d+\s*\/\s*\d+|\(\d+\s*\/\s*\d+\)|\d+\s*\/\s*\d+|\d+(?:\.\d+)?))/g,
       function (_, pre, num) {

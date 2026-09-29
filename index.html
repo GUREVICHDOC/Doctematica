@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="css/styles.css" />
     <link rel="stylesheet" href="css/math.css" />
     <link rel="stylesheet" href="css/coord-board.css" />
+    <link rel="stylesheet" href="css/fn-sketch.css?v=9" />
     <link rel="stylesheet" href="css/line-match.css" />
     <link rel="stylesheet" href="css/shell.css?v=15" />
   </head>
@@ -181,6 +182,7 @@
             </div>
             <div class="solve-wrap" id="solve-wrap">
               <div id="geo-board" class="geo-board hidden" aria-label="מערכת צירים"></div>
+              <div id="fn-board" class="fn-board hidden" aria-label="שרטוט פונקציה"></div>
               <aside id="sys-known" class="sys-known hidden" aria-label="משתנים ידועים"></aside>
               <div class="solve-main">
                 <div class="prompt" id="prompt">טוען שאלה…</div>
@@ -188,11 +190,15 @@
                 <div id="freq-table" class="freq-table hidden" aria-label="טבלת שכיחויות"></div>
                 <div id="line-match-panel" class="line-match-panel hidden" aria-label="שיוך משוואות לישרים"></div>
                 <ol class="steps hidden" id="steps" aria-label="צעדי המשוואה"></ol>
+                <div id="fn-sketch-slot" class="fn-sketch-slot"></div>
                 <div id="lcd-guide" class="lcd-guide hidden"></div>
                 <div id="factor-guide" class="factor-guide hidden"></div>
                 <div id="sys-guide" class="sys-guide hidden"></div>
                 <form id="answer-form">
                   <label id="answer-label">התשובה שלך</label>
+                  <div id="fn-domains" class="fn-domains hidden"></div>
+                  <div id="fn-axes" class="fn-axis-board hidden"></div>
+                  <div id="fn-choice" class="fn-choice hidden"></div>
                   <div id="domain-guide" class="domain-guide hidden"></div>
                   <div id="quad-guide" class="quad-guide hidden"></div>
                   <div id="freq-ask" class="freq-ask hidden"></div>
@@ -247,6 +253,7 @@
     </div>
     <script src="js/geo/draw.js"></script>
     <script src="js/coord-board.js"></script>
+    <script src="js/fn-sketch.js?v=9"></script>
     <script src="js/math-render.js"></script>
     <script src="js/math-field.js"></script>
     <script src="js/client-ui.js"></script>

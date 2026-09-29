@@ -84,7 +84,9 @@ function snapshotProgressItems(items) {
       display: p.display || null,
       itemIndex: p.itemIndex == null ? null : p.itemIndex,
       trail: (p.trail || []).map(function (t) {
-        return { display: trailText(t) };
+        var row = { display: trailText(t) };
+        if (t && t.reason) row.reason = String(t.reason);
+        return row;
       }),
     };
   });
@@ -262,6 +264,7 @@ function createEquationsHandler(engine) {
         clearCheck.done = false;
         clearCheck.hint = "כפלו כל איבר במכפיל והורידו את המכנים.";
         clearCheck.step = String(cleared);
+        clearCheck.reason = "כופלים כל איבר במכפיל ומורידים את המכנים.";
         return attachLcdOffer(cleared, clearCheck);
       }
     }
@@ -282,6 +285,7 @@ function createEquationsHandler(engine) {
     check.done = false;
     check.hint = String(act.hint || "");
     check.step = String(act.eq);
+    check.reason = String(act.explain || act.hint || "");
     return attachLcdOffer(act.eq, check);
   }
 
@@ -413,9 +417,20 @@ function createEquationsHandler(engine) {
     } else {
       typed = Teach.domainNextStep(currentDomainConstraint(start, domain)).display;
     }
+    var started = domainStarted(start, domain);
     body.typed = typed;
     var checked = handleDomainCheck(body);
     checked.step = typed;
+    var why = started
+      ? String((Teach.domainNextStep(currentDomainConstraint(start, domain)).explain) || "")
+      : "המכנה עם הנעלם לא יכול להיות 0, לכן רושמים את תנאי תחום ההצבה.";
+    if (!why) why = "ממשיכים לפתור את תחום ההצבה כמו משוואה.";
+    checked.reason = why;
+    if (checked.progressItems && checked.itemIndex != null) {
+      var stamped = checked.progressItems[checked.itemIndex];
+      var stampedTrail = stamped && stamped.trail;
+      if (stampedTrail && stampedTrail.length) stampedTrail[stampedTrail.length - 1].reason = why;
+    }
     return checked;
   }
 
@@ -500,6 +515,7 @@ function createEquationsHandler(engine) {
       lcd: snapshotLcdInfo(info),
       mark: mark,
       message: "מכנה משותף " + info.lcd + " — המכפילים מעל כל איבר.",
+      reason: "המכנה המשותף הוא " + info.lcd + ". רושמים מעל כל איבר בכמה כופלים אותו.",
     };
   }
 

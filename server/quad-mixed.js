@@ -15,6 +15,17 @@ function lastEq(body) {
   return String(body.start || "");
 }
 
+function writtenQuad(Q, eqText) {
+  if (!Q.isStandardZero(eqText)) return null;
+  var parsed = Q.parseABC(eqText);
+  if (!parsed || !parsed.a) return null;
+  try {
+    return Q.analyze(parsed.a, parsed.b, parsed.c, eqText);
+  } catch (err) {
+    return null;
+  }
+}
+
 function formulaView(pack) {
   var q = pack && pack.quad;
   if (!q) return null;
@@ -33,6 +44,7 @@ function factorCheckEnter(engine, pack, typed, extra) {
   f2.enter = "factor";
   if (extra.step) f2.step = String(extra.step);
   if (extra.hint) f2.hint = String(extra.hint);
+  if (extra.reason) f2.reason = String(extra.reason);
   f2.done = false;
   if (!f2.message) f2.message = String(extra.hint || "");
   return f2;
@@ -128,12 +140,13 @@ function handleMixed(engine, body) {
     if (!p || !p.a) {
       return { ok: false, message: "קודם סדרו ל־ax²+bx+c=0 (גם אם b או c אפס)." };
     }
+    var written = writtenQuad(Q, last);
     return {
       ok: true,
       path: "formula",
       enter: "formula",
       md53: !!body.md53,
-      view: formulaView(pack),
+      view: formulaView(written ? { quad: written } : pack),
       message: body.md53
         ? "md53: רשמו a, אחר כך b, אחר כך c. אחרי שלושתם מופיע הפתרון."
         : "נוסחת שורשים. a, b, c הם המקדמים אחרי האיסוף, בצורה ax²+bx+c=0.",
@@ -219,6 +232,7 @@ function handleMixed(engine, body) {
       one.path = "sqrt";
       one.step = String(nextEq);
       one.hint = String((extra && extra.hint) || act.hint || "");
+      one.reason = String((extra && extra.explain) || act.explain || "");
       one.done = false;
       return one;
     }
@@ -251,6 +265,7 @@ function handleMixed(engine, body) {
         message: String(linCheck.message || ""),
         step: String(linAct.eq),
         hint: String(linAct.hint || ""),
+        reason: String(linAct.explain || ""),
       };
     }
     if (intent === "check") {
@@ -267,8 +282,9 @@ function handleMixed(engine, body) {
   }
 
   if (path === "formula") {
-    var want = pack.quad;
-    var fBody = Object.assign({}, body, { start: pack.standard });
+    var writtenWant = writtenQuad(Q, lastEq(body));
+    var want = writtenWant || pack.quad;
+    var fBody = Object.assign({}, body, { start: writtenWant ? lastEq(body) : pack.standard });
     var form = handleFormula(engine, fBody, want);
     form.path = "formula";
     return form;
@@ -288,14 +304,15 @@ function handleMixed(engine, body) {
     var nAct = Q.nextMixedStep(lastEq(body), pack) || {};
     var lastNow = lastEq(body);
     if (nAct.path === "formula" && !nAct.eq) {
+      var stepWant = writtenQuad(Q, lastNow) || pack.quad;
       var formStep = handleFormula(
         engine,
-        Object.assign({}, body, { intent: "one-step", phase: "abc", letter: "a" }),
-        pack.quad
+        Object.assign({}, body, { intent: "one-step", phase: "abc", letter: "a", start: stepWant === pack.quad ? body.start : lastNow }),
+        stepWant
       );
       formStep.path = "formula";
       formStep.enter = "formula";
-      formStep.view = Object.assign({}, formulaView(pack) || {}, formStep.view || {});
+      formStep.view = Object.assign({}, formulaView(stepWant === pack.quad ? pack : { quad: stepWant }) || {}, formStep.view || {});
       return formStep;
     }
     if (nAct.path && nAct.eq) {
@@ -304,10 +321,15 @@ function handleMixed(engine, body) {
         return mixedEnter(nAct.path, nAct, pack);
       }
       if (nxt.ok && (nAct.path === "factor" || nxt.path === "factor" || nxt.enter === "factor")) {
-        return factorCheckEnter(engine, pack, nAct.eq, { step: nAct.eq, hint: nAct.hint || nxt.message });
+        return factorCheckEnter(engine, pack, nAct.eq, {
+          step: nAct.eq,
+          hint: nAct.hint || nxt.message,
+          reason: nAct.explain || "",
+        });
       }
       nxt.step = String(nAct.eq);
       nxt.hint = String(nAct.hint || nxt.message || "");
+      nxt.reason = String(nAct.explain || "");
       nxt.path = nAct.path || nxt.path || nxt.enter || null;
       nxt.enter = nAct.path || nxt.enter || nxt.path;
       if (!nxt.message) nxt.message = String(nAct.hint || nxt.hint || "");
@@ -322,6 +344,7 @@ function handleMixed(engine, body) {
     var nxtEq = Q.checkMixedTyped(lastNow, nAct.eq, pack);
     nxtEq.step = String(nAct.eq);
     nxtEq.hint = String(nAct.hint || "");
+    nxtEq.reason = String(nAct.explain || "");
     nxtEq.path = nAct.path || nxtEq.path || nxtEq.enter || null;
     return nxtEq;
   }

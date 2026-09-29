@@ -287,6 +287,17 @@ function main() {
   });
   var both = call("solution", "y=2x^2+3x", "y=x^2-2x", {});
   add(both.ok && both.steps[0].eq === "2x^2+3x=x^2-2x" && both.steps[1].eq !== "x^2+5x=0" ? { ok: true, id: "l2-both-quad" } : fail("l2-both-quad", both.steps && both.steps[0] && both.steps[0].eq));
+  var splitHist = [];
+  var splitView = null;
+  var sg = 0;
+  while (sg < 20) {
+    sg += 1;
+    var ss = call("one-step", "y=2x^2+3x", "y=x^2-2x", { history: splitHist });
+    if (!ss || !ss.step) break;
+    splitHist.push(ss.step);
+    if (ss.step === "x(x+5)=0") { splitView = ss; break; }
+  }
+  add(splitView && splitView.offerSplit && splitView.splitStart === "x^2+5x=0" && splitView.splitEq === "x(x+5)=0" ? { ok: true, id: "l2-split-offer" } : fail("l2-split-offer", JSON.stringify(splitView && { step: splitView.step, offer: splitView.offerSplit, start: splitView.splitStart })));
 
   var a = "y=x^2";
   var b = "x+y=2";

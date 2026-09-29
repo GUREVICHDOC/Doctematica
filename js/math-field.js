@@ -23,12 +23,20 @@
     return v && typeof v === "object" && (v.type === "mslope" || v.type === "mdist");
   }
 
+  /** A negative number is the base only inside parentheses: (−2), not −2. */
+  function wrapNegativePowBase(base) {
+    var b = String(base || "").trim();
+    var norm = b.replace(/[−–—]/g, "-");
+    if (/^-\d+(?:\.\d+)?$/.test(norm) || /^-\d+\/\d+$/.test(norm)) return "(" + b + ")";
+    return base;
+  }
+
   /** Plain "x^3" / "2^4" → pow node (for radicands that stored caret as text). */
   function tryParsePowText(s) {
     var t = String(s || "").replace(/\s+/g, "");
     var m = t.match(/^([A-Za-z]|-?\d+(?:\.\d+)?)\^(\d+)$/);
     if (!m) return null;
-    return { type: "pow", base: m[1], exp: m[2] };
+    return { type: "pow", base: wrapNegativePowBase(m[1]), exp: m[2] };
   }
 
   function grabFracNumerator(left) {
@@ -546,7 +554,7 @@
       return true;
     }
     if (remLeft || right) base = remLeft + base + right;
-    this.setAt(part, path, { type: "pow", base: base, exp: "2" });
+    this.setAt(part, path, { type: "pow", base: wrapNegativePowBase(base), exp: "2" });
     this.focusPath = path.concat("exp");
     this.normalize();
     this.render();
@@ -556,7 +564,7 @@
 
   /** Power inside a root keeps the text before it, and a slot after it, under the same bar. */
   MathField.prototype.placePowInRad = function (part, path, remLeft, base, right) {
-    var powNode = { type: "pow", base: base, exp: "2" };
+    var powNode = { type: "pow", base: wrapNegativePowBase(base), exp: "2" };
     var pieces = [];
     if (remLeft) pieces.push(remLeft);
     pieces.push(powNode);
@@ -621,7 +629,23 @@
     return false;
   };
 
+  MathField.prototype.insertPlain = function (ch) {
+    var el = document.activeElement;
+    if (!el || !el.classList || !el.classList.contains("fn-axis-input")) return false;
+    var v = el.value || "";
+    var a = el.selectionStart != null ? el.selectionStart : v.length;
+    var b = el.selectionEnd != null ? el.selectionEnd : v.length;
+    el.value = v.slice(0, a) + ch + v.slice(b);
+    var pos = a + String(ch).length;
+    try {
+      el.setSelectionRange(pos, pos);
+    } catch (e) {}
+    el.focus();
+    return true;
+  };
+
   MathField.prototype.insertChars = function (ch) {
+    if (this.insertPlain(ch)) return;
     if (this.disabled) return;
     this.readInputs();
     var el =
@@ -660,6 +684,7 @@
   };
 
   MathField.prototype.insertPow = function () {
+    if (this.insertPlain("^2")) return;
     if (this.disabled) return;
     var part = this.parts[this.focusPart];
     if (!part || part.type !== "text") {
@@ -669,7 +694,7 @@
     var split = this.splitCurrentText();
     var grabbed = grabPowBase(split.left);
     split.left = grabbed.left;
-    this.insertWithSplit(split, { type: "pow", base: grabbed.base, exp: "2" });
+    this.insertWithSplit(split, { type: "pow", base: wrapNegativePowBase(grabbed.base), exp: "2" });
     this.normalize();
     this.focusPath = ["exp"];
     this.render();

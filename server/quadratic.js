@@ -138,11 +138,13 @@ function handleSqrtOneStep(engine, body) {
   var act = Teach.nextAction(cur, { unknown: "x2" }) || {};
   var nextEq = act.eq;
   var hint = act.hint;
+  var why = act.explain || "";
   if (!nextEq) {
     var fin = Q.nextSqrtStep(cur, pack);
     if (fin && fin.eq) {
       nextEq = fin.eq;
       hint = fin.hint || hint;
+      why = fin.explain || why;
     }
   }
   if (!nextEq) {
@@ -162,6 +164,7 @@ function handleSqrtOneStep(engine, body) {
   check.done = false;
   check.step = String(nextEq);
   check.hint = String(hint || check.message || "");
+  if (check.ok) check.reason = String(why || "");
   return check;
 }
 

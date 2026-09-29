@@ -31,6 +31,21 @@ function rootWorkView(Q, want) {
   return view;
 }
 
+function formulaReason(phase, letter) {
+  if (phase === "abc") {
+    if (letter === "a") return "a הוא המקדם של x².";
+    if (letter === "b") return "b הוא המקדם של x.";
+    return "a, b ו־c הם המקדמים של ax²+bx+c=0.";
+  }
+  if (phase === "plug") return "מציבים את a, b ו־c בנוסחת השורשים.";
+  if (phase === "compute") return "מחשבים את −b, את הביטוי שבתוך השורש, ואת 2a.";
+  if (phase === "sqrt") return "מוציאים שורש מהדיסקרימיננטה.";
+  if (phase === "count") return "לפי סימן הדיסקרימיננטה קובעים כמה פתרונות ממשיים.";
+  if (phase === "nosol") return "הדיסקרימיננטה שלילית, אין פתרון ממשי.";
+  if (phase === "rootwork") return "מחשבים את ערך x מהנוסחה.";
+  return "";
+}
+
 function formulaHint(Q, want, phase, md53) {
   var tips = {
     abc: "a מקדם x², b מקדם x, c החופשי. כאן a = " + want.a + ".",
@@ -302,6 +317,7 @@ function handleFormulaOneStep(engine, body, wantOverride) {
   var check = handleFormulaCheck(engine, nextBody, want);
   check.fill = fill;
   check.hint = formulaHint(Q, want, phase, !!body.md53);
+  if (check.ok) check.reason = formulaReason(phase, phase === "abc" ? abcLetter : "");
   return check;
 }
 

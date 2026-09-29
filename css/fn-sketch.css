@@ -1,0 +1,367 @@
+.fn-board {
+  margin: 0 0 0.85rem;
+  padding: 0.55rem 0.65rem 0.7rem;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line, rgba(20, 36, 26, 0.08));
+  border-radius: var(--radius-sm, 12px);
+  box-shadow: var(--shadow, none);
+}
+
+.fn-board.hidden {
+  display: none;
+}
+
+.fn-board-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.fn-tool-pick,
+.fn-tool-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+}
+
+.fn-board-tools button {
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.16rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(20, 36, 26, 0.16);
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+}
+
+.fn-board-tools button:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.fn-board-tools button.is-on {
+  background: #1f6b4a;
+  color: #fff;
+  border-color: #1f6b4a;
+}
+
+.fn-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  direction: ltr;
+  touch-action: none;
+  cursor: default;
+}
+
+.fn-svg.is-point,
+.fn-svg.is-pen {
+  cursor: crosshair;
+}
+
+.fn-svg.is-move {
+  cursor: grab;
+}
+
+.fn-sketch-slot:empty {
+  display: none;
+}
+
+.fn-board.is-sketch {
+  width: min(100%, 320px);
+  margin: 0 0 0.85rem;
+  margin-inline-end: auto;
+  padding: 0.4rem 0.45rem 0.45rem;
+  background: #f6f1e4;
+  border-color: rgba(90, 70, 40, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.fn-board.is-sketch .fn-svg {
+  max-height: 196px;
+  border-radius: 8px;
+  background: rgba(255, 252, 245, 0.65);
+}
+
+.fn-board.is-sketch .fn-graph-line,
+.fn-board.is-sketch .fn-ink {
+  stroke-width: 3.2;
+}
+
+.fn-board.is-sketch .fn-board-tools {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.28rem;
+}
+
+.fn-board.is-sketch .fn-tool-pick button {
+  flex: 1;
+  padding: 0.32rem 0.4rem;
+}
+
+.fn-board.is-sketch .fn-note {
+  font-size: 0.78rem;
+  margin-top: 0.28rem;
+}
+
+.fn-board.is-sketch .fn-point-form {
+  margin-top: 0.3rem;
+}
+
+.fn-board.is-sketch .fn-point-form input,
+.fn-board.is-sketch .fn-point-form button {
+  font-size: 0.85rem;
+  padding: 0.22rem 0.45rem;
+}
+
+.fn-svg.is-locked {
+  pointer-events: none;
+  cursor: default;
+}
+
+.fn-sketch-check {
+  display: block;
+  width: 100%;
+  margin-top: 0.45rem;
+  background: var(--ink, #14241a);
+  color: #fff;
+  border: 0;
+  font: inherit;
+  font-weight: 800;
+  padding: 0.48rem 0.8rem;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.fn-sketch-check.hidden {
+  display: none;
+}
+
+.fn-board.is-figure {
+  width: min(100%, 340px);
+  margin-inline-end: auto;
+  padding: 0.35rem 0.45rem 0.4rem;
+}
+
+.fn-board.is-figure .fn-svg {
+  max-height: 280px;
+}
+
+@media (min-width: 860px) {
+  .solve-wrap.has-fn-figure:has(.fn-board.is-figure:not(.hidden)) {
+    display: grid;
+    grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+    gap: 1.15rem;
+    align-items: start;
+  }
+
+  .solve-wrap.has-fn-figure .fn-board.is-figure {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    width: auto;
+    max-width: none;
+    margin: 0;
+    align-self: start;
+    position: sticky;
+    top: 0.85rem;
+  }
+
+  .solve-wrap.has-fn-figure .solve-main {
+    grid-column: 2;
+    min-width: 0;
+  }
+}
+
+.fn-axis {
+  stroke: #14241a;
+  stroke-width: 1.6;
+  fill: none;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+
+.fn-axis-name {
+  fill: #5a6d61;
+  font-family: "Frank Ruhl Libre", "Times New Roman", serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.fn-mark {
+  fill: #5a6d61;
+  font-family: "Frank Ruhl Libre", "Times New Roman", serif;
+  font-size: 13px;
+}
+
+.fn-tick {
+  stroke: #14241a;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.fn-graph-line {
+  stroke: #2a6f9a;
+  stroke-width: 2.4;
+  fill: none;
+  stroke-linecap: round;
+}
+
+.fn-graph-line.is-selected {
+  stroke: #c4552a;
+  stroke-width: 3;
+}
+
+.fn-ink {
+  stroke: #2a6f9a;
+  stroke-width: 2.6;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fn-dot {
+  fill: #1f6b4a;
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+
+.fn-dot.is-pending {
+  fill: transparent;
+  stroke: #1f6b4a;
+  stroke-width: 1.8;
+}
+
+.fn-dot.is-selected {
+  stroke: #c4552a;
+  stroke-width: 2.4;
+}
+
+.fn-dot-label {
+  fill: #14241a;
+  font-size: 13px;
+  font-family: "Frank Ruhl Libre", "Times New Roman", serif;
+}
+
+.fn-point-form {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.45rem;
+}
+
+.fn-point-form.hidden {
+  display: none;
+}
+
+.fn-point-form input {
+  font: inherit;
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid rgba(20, 36, 26, 0.18);
+  direction: ltr;
+  text-align: left;
+}
+
+.fn-note {
+  margin: 0.35rem 0 0;
+  color: var(--muted, #5a6d61);
+  font-size: 0.92rem;
+}
+
+.fn-domains {
+  display: flex;
+  flex-direction: row;
+  direction: ltr;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin: 0.15rem 0 0.85rem;
+}
+
+.fn-domains.hidden {
+  display: none;
+}
+
+.fn-domain-row {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  gap: 0.28rem;
+}
+
+.fn-domain-row span {
+  font-weight: 800;
+  direction: rtl;
+  text-align: right;
+}
+
+.steps li > .fn-domain-table-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fn-domain-table {
+  width: 100%;
+  border-collapse: collapse;
+  direction: ltr;
+  font-weight: 700;
+}
+
+.fn-domain-table th,
+.fn-domain-table td {
+  width: 50%;
+  border: 1px solid rgba(20, 36, 26, 0.16);
+  padding: 0.4rem 0.55rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.fn-domain-table th {
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.72);
+  direction: rtl;
+}
+
+.fn-domain-row input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-weight: 700;
+  padding: 0.6rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid rgba(20, 36, 26, 0.16);
+  background: #fff;
+  color: inherit;
+  direction: ltr;
+  text-align: left;
+}
+
+.fn-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0.2rem 0 0.8rem;
+}
+
+.fn-choice.hidden {
+  display: none;
+}
+
+.fn-choice-btn {
+  font: inherit;
+  font-weight: 700;
+  text-align: right;
+  padding: 0.7rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid rgba(20, 36, 26, 0.16);
+  background: #fff;
+  cursor: pointer;
+}

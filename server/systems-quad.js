@@ -827,11 +827,12 @@ function takeQuad(Q, st, typed) {
   var info = rootsFromAnswer(st.pack.answer);
   var got = rootsFromAnswer(typed);
   if ((info.none && got.none) || sameRootSet(info, got)) {
+    var onProduct = !!(current && Q.parseProductEq(current));
     st.quadAt = steps.length - 1;
     openBranches(st);
     return {
       ok: true,
-      note: info.none ? "" : "הצעד נכון. אפשר היה להראות את שלבי הנוסחה.",
+      note: info.none || onProduct ? "" : "הצעד נכון. אפשר היה להראות את שלבי הנוסחה.",
     };
   }
   if (checked && !checked.ok && checked.message) {
@@ -1651,6 +1652,7 @@ function viewOf(Q, Sys, A, st, extra) {
   if (st.phase === "done" && st.branches.length) answer = Sys.formatPairs(expectedPairs(st));
   var prompt = hintFor(Q, Sys, A, st);
   var offer = formulaOffer(Q, st);
+  var split = splitOffer(Q, st);
   return {
     ok: extra.ok !== false,
     phase: st.phase,
@@ -1670,6 +1672,10 @@ function viewOf(Q, Sys, A, st, extra) {
     offerFormula: !!offer,
     formulaEq: offer ? offer.eq : "",
     formulaLetter: offer ? offer.letter : "x",
+    offerSplit: !!split,
+    splitStart: split ? split.start : "",
+    splitEq: split ? split.eq : "",
+    splitLetter: split ? split.letter : "x",
   };
 }
 
@@ -1680,6 +1686,21 @@ function formulaOffer(Q, st) {
   var parsed = Q.parseABC(engine);
   if (!parsed || !parsed.a) return null;
   return { eq: engine, letter: st.solvedVar === "y" ? "y" : "x" };
+}
+
+function splitOffer(Q, st) {
+  if (!st || st.phase !== "quad") return null;
+  var engine = st.quadAt >= 0 ? st.pack.steps[st.quadAt] : st.engineEq || st.equated;
+  if (!engine || !Q.parseProductEq(engine)) return null;
+  var steps = (st.pack && st.pack.steps) || [];
+  var start = "";
+  var i;
+  for (i = 0; i < steps.length; i++) {
+    if (Q.isAbcOrder(steps[i]) && Q.parseABC(steps[i])) start = steps[i];
+    if (keyEq(steps[i]) === keyEq(engine)) break;
+  }
+  if (!start) return null;
+  return { start: start, eq: engine, letter: st.solvedVar === "y" ? "y" : "x" };
 }
 
 function createQuadSystemsHandler(engine) {

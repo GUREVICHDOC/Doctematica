@@ -726,6 +726,7 @@
     return {
       done: false,
       hint: act.hint,
+      explain: act.explain || "",
       display: domainEqToConstraint(act.eq),
     };
   }

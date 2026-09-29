@@ -444,6 +444,10 @@ button#new-problem {
   background: rgba(47, 107, 69, 0.12);
 }
 
+.steps li.has-why {
+  align-items: flex-start;
+}
+
 .sys-step-why {
   display: block;
   margin-top: 3px;
@@ -834,6 +838,63 @@ code {
     width: 100%;
     margin-top: 8px;
   }
+}
+
+.fn-axis-board,
+.steps li.fn-axis-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 4px 0 12px;
+  direction: rtl;
+}
+
+.steps li.fn-axis-card {
+  margin: 0;
+  padding: 6px 4px 8px;
+  background: transparent;
+}
+
+.fn-axis-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.fn-axis-col.is-done {
+  background: #eef6ef;
+  border-color: rgba(47, 107, 69, 0.28);
+}
+
+.fn-axis-col h3 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.fn-axis-step {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-weight: 700;
+}
+
+.fn-axis-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+
+.fn-axis-check {
+  align-self: flex-start;
 }
 
 .factor-guide {

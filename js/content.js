@@ -49,6 +49,21 @@
           "העבירו לאגף אחד אם צריך, הוציאו חזקה משותפת של x, פצלו לשתי משוואות, ופתרו — ייתכן שענף אחד ריבועי.",
       };
     }
+    if (level.mode === "fn") {
+      var fnPack = global.DoctematicaFn && DoctematicaFn.prepare(ex);
+      return {
+        mode: "fn",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction || "",
+        prompt: ex.stem || level.instruction || "",
+        stem: ex.stem || "",
+        fn: fnPack,
+        explain: "הציבו בפונקציה, פתרו משוואה כשצריך, ורשמו נקודה כזוג סדור או תחום כאי־שוויון.",
+      };
+    }
     if (level.mode === "geo-length") {
       var geo = DoctematicaGeometry.analyzeStart(ex);
       return {
@@ -385,6 +400,9 @@
         }
         if (topicId === "systems-sub" && subtopicId) {
           return (item.subtopic || "sub") === subtopicId;
+        }
+        if (topicId === "calculus" && subtopicId) {
+          return (item.subtopic || "intro") === subtopicId;
         }
         return true;
       });

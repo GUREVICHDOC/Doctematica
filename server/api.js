@@ -12,6 +12,7 @@ var createQuadSystemsHandler = require("./systems-quad").createQuadSystemsHandle
 var createElimHandler = require("./systems-elim").createElimHandler;
 var createArrangeHandler = require("./systems-arrange").createArrangeHandler;
 var createGeometryHandler = require("./geometry").createGeometryHandler;
+var createFunctionsHandler = require("./functions").createFunctionsHandler;
 var createStatisticsHandler = require("./statistics").createStatisticsHandler;
 var percentEngine = require("./percent");
 var db = require("./db");
@@ -47,6 +48,7 @@ var quadSystems = createQuadSystemsHandler(engine);
 var elim = createElimHandler(engine);
 var arrange = createArrangeHandler(engine);
 var geometry = createGeometryHandler(engine);
+var functionsApi = createFunctionsHandler(engine);
 var statistics = createStatisticsHandler(engine);
 
 function sendJson(res, status, body, cookie) {
@@ -364,6 +366,12 @@ function handleRequest(req, res) {
   if (req.method === "POST" && pathname === "/api/statistics") {
     handleMathPost(req, res, function (body) {
       return statistics.handle(body);
+    });
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/functions") {
+    handleMathPost(req, res, function (body) {
+      return functionsApi.handle(body);
     });
     return;
   }

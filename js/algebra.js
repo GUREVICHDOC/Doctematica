@@ -427,7 +427,7 @@
 
   function formatNumber(n) {
     if (near0(n)) return "0";
-    var decPlaces = terminatingDecimalPlaces(n, 3);
+    var decPlaces = terminatingDecimalPlaces(n, 4);
     if (decPlaces != null) {
       return formatDecimalFixed(n, decPlaces);
     }

@@ -59,6 +59,12 @@
   white-space: nowrap;
 }
 
+.m-paren {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
 .m-sqrt {
   display: inline-flex;
   align-items: stretch;
@@ -671,6 +677,15 @@
 .model ol.sol-lines > li {
   margin: 0.85rem 0;
   line-height: 1.15;
+}
+
+.model ol.sol-lines > li.sol-task-row {
+  list-style: none;
+  direction: rtl;
+  text-align: right;
+  font-weight: 800;
+  color: var(--accent-dark, #24553a);
+  margin-left: -1.2rem;
 }
 
 .model ol.sol-lines .m-expr {

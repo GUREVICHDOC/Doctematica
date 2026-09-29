@@ -11515,6 +11515,7 @@
   }
 
   global.DoctematicaGeometry = {
+    parsePointPair: parsePointPair,
     analyzeStart: analyzeStart,
     initDrawProgress: initDrawProgress,
     resolveDrawConfig: resolveDrawConfig,

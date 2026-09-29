@@ -77,6 +77,13 @@ function slimProblem(problem) {
   };
   if (problem.geo) out.geo = dropSecrets(problem.geo, 0);
   if (problem.mode === "quad-mixed") out.offerFormula = !!problem.offerFormula;
+  if (problem.mode === "fn") {
+    out.stem = problem.stem || "";
+    out.prompt = problem.stem || problem.prompt || "";
+    out.parts = (problem.fn && problem.fn.parts ? problem.fn.parts : problem.parts || []).map(function (part) {
+      return { label: part.label || "", text: part.text || "" };
+    });
+  }
   if (problem.mode === "percent") {
     out.stem = problem.stem || "";
     out.prompt = problem.stem || problem.prompt || "";
@@ -239,6 +246,9 @@ function openProblem(engine, levelId, index) {
   }
   if (problem.mode === "percent") {
     view = percent.openingView(engine, problem.levelId, index, problem.exerciseId);
+  }
+  if (problem.mode === "fn" && problem.fn && engine.DoctematicaFn) {
+    view = engine.DoctematicaFn.viewFor(problem.fn, engine.DoctematicaFn.freshProgress());
   }
   var slim = slimProblem(problem);
   if (slim) slim.displayNumber = index + 1;

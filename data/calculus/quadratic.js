@@ -1,0 +1,266 @@
+(function (global) {
+  var C = global.DoctematicaCurriculum;
+  if (!C || !C.levels) return;
+
+  function claim(id, text, left, right) {
+    return { id: id, text: text, left: left, right: right };
+  }
+
+  C.levels = C.levels.concat([
+    {
+      id: "calc-quad-1",
+      topic: "calculus",
+      subtopic: "intro",
+      mode: "fn",
+      title: "פונקציה ממעלה שנייה",
+      instruction:
+        "הציבו בפונקציה וחשבו. משוואה ריבועית נפתרת כמו במשוואות הריבועיות. קודקוד: x = −b/(2a), ואז מציבים. תחום יכול להיות אחד, או שניים המחוברים ב־או.",
+      exercises: [
+        {
+          id: "calc-quad-1-ex-a001",
+          n: 1,
+          fn: "x^2-8x+7",
+          stem: "נתונה הפונקציה f(x) = x² − 8x + 7.",
+          parts: [
+            { label: "א", text: "חשבו את f(−2).", taskIds: ["f2"] },
+            { label: "ב", text: "מצאו את ערכי x המקיימים f(x) = −5.", taskIds: ["eq"] },
+            { label: "ג", text: "מהם שיעורי הנקודה על גרף הפונקציה ששיעור ה־y שלה הוא −9?", taskIds: ["pt"] },
+          ],
+          tasks: [
+            { id: "f2", kind: "fnValue", at: -2 },
+            { id: "eq", kind: "fnSolve", k: -5 },
+            { id: "pt", kind: "fnSolve", k: -9, points: true },
+          ],
+        },
+        {
+          id: "calc-quad-1-ex-a002",
+          n: 2,
+          fn: "5x^2",
+          stem: "נתונה הפונקציה f(x) = 5x².",
+          parts: [
+            { label: "א", text: "מהם שיעורי הנקודות על הגרף שבהן ערך הפונקציה הוא 45?", taskIds: ["pts"] },
+            { label: "ב", text: "קבעו איזו טענה היא הנכונה.", taskIds: ["claim"] },
+          ],
+          tasks: [
+            { id: "pts", kind: "fnSolve", k: 45, points: true },
+            {
+              id: "claim",
+              kind: "fnChoice",
+              claims: [
+                claim("1", "f(−3) = f(3)", { op: "eval", at: -3 }, { op: "eval", at: 3 }),
+                claim("2", "f(−3) = −f(3)", { op: "eval", at: -3 }, { op: "neg", at: 3 }),
+              ],
+            },
+          ],
+        },
+        {
+          id: "calc-quad-1-ex-a003",
+          n: 3,
+          fn: "-2x^2+5x-2",
+          stem: "מצאו את שיעורי הקודקוד של הפרבולה y = −2x² + 5x − 2.",
+          parts: [{ label: "", text: "מצאו את שיעורי הקודקוד.", taskIds: ["v"] }],
+          tasks: [{ id: "v", kind: "fnVertex", want: "point" }],
+        },
+        {
+          id: "calc-quad-1-ex-a004",
+          n: 4,
+          fn: "x^2-4x-5",
+          graph: true,
+          labels: [
+            { name: "A", at: "y" },
+            { name: "B", at: "x", order: "left" },
+            { name: "C", at: "x", order: "right" },
+            { name: "M", at: "vertex" },
+          ],
+          stem: "בשרטוט נתון גרף הפרבולה y = x² − 4x − 5.",
+          parts: [
+            {
+              label: "",
+              text: "מצאו את שיעורי הנקודות A, B, C, M.‏ A, B ו־C הן נקודות החיתוך עם הצירים, ו־M הוא קודקוד הפרבולה.",
+              taskIds: ["A", "BC", "M"],
+            },
+          ],
+          tasks: [
+            { id: "A", kind: "fnPoint", at: 0, name: "A" },
+            { id: "BC", kind: "fnZero", points: true, names: ["B", "C"] },
+            { id: "M", kind: "fnVertex", want: "point", name: "M" },
+          ],
+        },
+        {
+          id: "calc-quad-1-ex-a005",
+          n: 5,
+          fn: "x^2-8x+12",
+          graph: true,
+          stem: "בציור משורטט גרף הפונקציה y = x² − 8x + 12.",
+          parts: [
+            { label: "א", text: "מצאו את שיעורי נקודת המינימום של הפונקציה.", taskIds: ["min"] },
+            { label: "ב", text: "מהם תחומי העלייה והירידה של הפונקציה?", taskIds: ["mono"] },
+            { label: "ג", text: "מהו הערך המינימלי של הפונקציה?", taskIds: ["minval"] },
+            { label: "ד", text: "מצאו את נקודות האפס של הפונקציה.", taskIds: ["zeros"] },
+            { label: "ה", text: "רשמו את התחום שבו הפונקציה חיובית ואת התחום שבו היא שלילית.", taskIds: ["sign"] },
+            { label: "ו", text: "בכמה נקודות חותך הישר y = −2 את גרף הפונקציה? ענו על פי השרטוט, ללא חישובים.", taskIds: ["cut"] },
+          ],
+          tasks: [
+            { id: "min", kind: "fnVertex", want: "point" },
+            { id: "mono", kind: "fnMono" },
+            { id: "minval", kind: "fnVertex", want: "value" },
+            { id: "zeros", kind: "fnZero", points: true },
+            { id: "sign", kind: "fnSign" },
+            { id: "cut", kind: "fnCount", k: -2 },
+          ],
+        },
+        {
+          id: "calc-quad-1-ex-a006",
+          n: 6,
+          fn: "-x^2+2x+8",
+          graph: true,
+          stem: "בשרטוט מתואר גרף הפונקציה f(x) = −x² + 2x + 8.",
+          parts: [
+            { label: "א", text: "מצאו את שיעורי נקודת המקסימום של הפונקציה.", taskIds: ["max"] },
+            { label: "ב", text: "מהם תחומי העלייה והירידה של הפונקציה?", taskIds: ["mono"] },
+            { label: "ג", text: "מצאו את נקודות החיתוך של הפונקציה עם הצירים.", taskIds: ["axes"] },
+            { label: "ד", text: "מצאו את ערכי x שעבורם מתקיים f(x) > 0.", taskIds: ["pos"] },
+          ],
+          tasks: [
+            { id: "max", kind: "fnVertex", want: "point" },
+            { id: "mono", kind: "fnMono" },
+            { id: "axes", kind: "fnIntercepts" },
+            { id: "pos", kind: "fnSign", only: "pos" },
+          ],
+        },
+        {
+          id: "calc-quad-1-ex-a007",
+          n: 7,
+          fn: "x^2-2x-3",
+          stem: "חקרו את הפונקציה y = x² − 2x − 3.",
+          parts: [
+            { label: "א", text: "מצאו את נקודת המינימום או המקסימום של הפונקציה.", taskIds: ["ext"] },
+            { label: "ב", text: "מצאו את נקודות החיתוך של גרף הפונקציה עם הצירים.", taskIds: ["axes"] },
+            { label: "ג", text: "שרטטו סקיצה של גרף הפונקציה.", taskIds: ["sketch"] },
+            { label: "ד", text: "מצאו את תחומי העלייה והירידה של הפונקציה.", taskIds: ["mono"] },
+            { label: "ה", text: "מצאו את תחומי החיוביות והשליליות של הפונקציה.", taskIds: ["sign"] },
+          ],
+          tasks: [
+            { id: "ext", kind: "fnVertex", want: "point", classify: true },
+            { id: "axes", kind: "fnIntercepts" },
+            { id: "sketch", kind: "fnSketch" },
+            { id: "mono", kind: "fnMono" },
+            { id: "sign", kind: "fnSign" },
+          ],
+        },
+        {
+          id: "calc-quad-1-ex-a008",
+          n: 8,
+          fn: "-(x-3)^2",
+          stem: "חקרו את הפונקציה y = −(x − 3)².",
+          parts: [
+            { label: "א", text: "מצאו את נקודת המינימום או המקסימום של הפונקציה.", taskIds: ["ext"] },
+            { label: "ב", text: "מצאו את נקודות החיתוך של גרף הפונקציה עם הצירים.", taskIds: ["axes"] },
+            { label: "ג", text: "שרטטו סקיצה של גרף הפונקציה.", taskIds: ["sketch"] },
+            { label: "ד", text: "מצאו את תחומי העלייה והירידה של הפונקציה.", taskIds: ["mono"] },
+            { label: "ה", text: "מצאו את תחומי החיוביות והשליליות של הפונקציה.", taskIds: ["sign"] },
+          ],
+          tasks: [
+            { id: "ext", kind: "fnVertex", want: "point", classify: true },
+            { id: "axes", kind: "fnIntercepts" },
+            { id: "sketch", kind: "fnSketch" },
+            { id: "mono", kind: "fnMono" },
+            { id: "sign", kind: "fnSign" },
+          ],
+        },
+        {
+          id: "calc-quad-1-ex-a009",
+          n: 9,
+          fn: "x^2+3",
+          stem: "חקרו את הפונקציה y = x² + 3.",
+          parts: [
+            { label: "א", text: "מצאו את נקודת המינימום או המקסימום של הפונקציה.", taskIds: ["ext"] },
+            { label: "ב", text: "מצאו את נקודות החיתוך של גרף הפונקציה עם הצירים.", taskIds: ["axes"] },
+            { label: "ג", text: "שרטטו סקיצה של גרף הפונקציה.", taskIds: ["sketch"] },
+            { label: "ד", text: "מצאו את תחומי העלייה והירידה של הפונקציה.", taskIds: ["mono"] },
+            { label: "ה", text: "מצאו את תחומי החיוביות והשליליות של הפונקציה.", taskIds: ["sign"] },
+          ],
+          tasks: [
+            { id: "ext", kind: "fnVertex", want: "point", classify: true },
+            { id: "axes", kind: "fnIntercepts" },
+            { id: "sketch", kind: "fnSketch" },
+            { id: "mono", kind: "fnMono" },
+            { id: "sign", kind: "fnSign" },
+          ],
+        },
+        {
+          id: "calc-quad-1-ex-a010",
+          n: 10,
+          fn: "-x^2+10x-16",
+          graph: true,
+          stem: "לפניכם גרף הפונקציה f(x) = −x² + 10x − 16.",
+          parts: [
+            { label: "א", text: "עבור אילו ערכי x הפונקציה חיובית?", taskIds: ["pos"] },
+            { label: "ב", text: "האם הערך הגדול ביותר של הפונקציה הוא 9 או 5? הסבירו.", taskIds: ["maxpick"] },
+            { label: "ג", text: "מהו תחום הערכים שהפונקציה f(x) יכולה לקבל?", taskIds: ["range"] },
+            { label: "ד", text: "עבור אילו ערכי x הפונקציה עולה?", taskIds: ["inc"] },
+            { label: "ה", text: "עבור אילו ערכים של k הישר y = k:", taskIds: ["k1", "k2", "k0"] },
+          ],
+          tasks: [
+            { id: "pos", kind: "fnSign", only: "pos" },
+            { id: "maxpick", kind: "fnExtremumPick", options: [9, 5], pole: "high" },
+            { id: "range", kind: "fnRange" },
+            { id: "inc", kind: "fnMono", only: "inc" },
+            { id: "k1", kind: "fnLevel", hits: 1, prompt: "(1) חותך את גרף הפונקציה בנקודה אחת." },
+            { id: "k2", kind: "fnLevel", hits: 2, prompt: "(2) חותך את גרף הפונקציה בשתי נקודות." },
+            { id: "k0", kind: "fnLevel", hits: 0, prompt: "(3) אינו חותך את גרף הפונקציה." },
+          ],
+        },
+        {
+          id: "calc-quad-1-ex-a011",
+          n: 11,
+          fn: "(x-5)^2-16",
+          stem: "נתונה הפונקציה y = (x − 5)² − 16.",
+          parts: [
+            { label: "א", text: "מצאו את שיעורי נקודת קודקוד הפרבולה.", taskIds: ["vertex"] },
+            { label: "ב", text: "מצאו את נקודות האפס.", taskIds: ["zeros"] },
+            { label: "ג", text: "מצאו את נקודת החיתוך עם ציר ה־y.", taskIds: ["y0"] },
+            { label: "ד", text: "שרטטו סקיצה של גרף הפונקציה.", taskIds: ["sketch"] },
+            { label: "ה", text: "מצאו עבור אילו x הפונקציה עולה ושלילית.", taskIds: ["upneg"] },
+            { label: "ו", text: "מצאו עבור אילו x הפונקציה יורדת וחיובית.", taskIds: ["downpos"] },
+            { label: "ז", text: "קבעו אם הטענה נכונה או לא.", taskIds: ["c1", "c2"] },
+          ],
+          tasks: [
+            { id: "vertex", kind: "fnVertex", want: "point" },
+            { id: "zeros", kind: "fnZero", points: true },
+            { id: "y0", kind: "fnPoint", at: 0 },
+            { id: "sketch", kind: "fnSketch" },
+            { id: "upneg", kind: "fnBoth", trend: "inc", sign: "neg" },
+            { id: "downpos", kind: "fnBoth", trend: "dec", sign: "pos" },
+            { id: "c1", kind: "fnRangeClaim", cmp: ">", bound: -16, prompt: "(1) לכל x ערך הפונקציה גדול מ־−16." },
+            { id: "c2", kind: "fnRangeClaim", cmp: ">=", bound: -16, prompt: "(2) לכל x ערך הפונקציה גדול או שווה ל־−16." },
+          ],
+        },
+        {
+          id: "calc-quad-1-ex-a012",
+          n: 12,
+          fn: "(x+4)(x-2)",
+          stem: "נתונה הפונקציה f(x) = (x + 4)(x − 2).",
+          parts: [
+            { label: "א", text: "מצאו את נקודות החיתוך של גרף הפונקציה עם הצירים.", taskIds: ["axes"] },
+            { label: "ב", text: "מצאו את נקודת הקיצון וקבעו את סוג הקיצון.", taskIds: ["ext"] },
+            { label: "ג", text: "שרטטו סקיצה של גרף הפונקציה.", taskIds: ["sketch"] },
+            { label: "ד", text: "עבור אילו x הפונקציה יורדת וחיובית?", taskIds: ["downpos"] },
+            { label: "ה", text: "עבור אילו x הפונקציה עולה ושלילית?", taskIds: ["upneg"] },
+            { label: "ו", text: "מהו תחום הערכים שהפונקציה f(x) יכולה לקבל?", taskIds: ["range"] },
+            { label: "ז", text: "לאילו ערכי k הישר y = k חותך את הפונקציה בנקודה אחת?", taskIds: ["k1"] },
+          ],
+          tasks: [
+            { id: "axes", kind: "fnIntercepts" },
+            { id: "ext", kind: "fnVertex", want: "point", classify: true },
+            { id: "sketch", kind: "fnSketch" },
+            { id: "downpos", kind: "fnBoth", trend: "dec", sign: "pos" },
+            { id: "upneg", kind: "fnBoth", trend: "inc", sign: "neg" },
+            { id: "range", kind: "fnRange" },
+            { id: "k1", kind: "fnLevel", hits: 1 },
+          ],
+        },
+      ],
+    },
+  ]);
+})(window);

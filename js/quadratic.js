@@ -3040,11 +3040,17 @@
         var lin = parseLinearFactor(String(cur).replace(/=.*$/, ""));
         var val = "0";
         if (lin && Math.abs(lin.b) >= EPS) val = fmtLinNum(-lin.b / lin.a);
-        return { eq: "x = " + val, hint: "בודדו את x.", which: k };
+        return {
+          eq: "x = " + val,
+          hint: "בודדו את x.",
+          explain: "מסיימים את הבידוד של x.",
+          which: k,
+        };
       }
       return {
         eq: "x = 0, x = " + fmt(pack.otherF),
         hint: "רשמו את שני הפתרונות.",
+        explain: "אלה שני הפתרונות של המשוואה.",
         solved: true,
       };
     }
@@ -4434,6 +4440,7 @@
         path: "factor",
         eq: pack.factor.factored,
         hint: mixedHintFor(pack, eqText),
+        explain: "מוציאים גורם משותף.",
       };
     }
     if (nat === "sqrt") {
@@ -4442,6 +4449,7 @@
         path: "sqrt",
         eq: isoWant,
         hint: mixedHintFor(pack, eqText),
+        explain: "בודדים את x² כדי להוציא שורש.",
       };
     }
     return {

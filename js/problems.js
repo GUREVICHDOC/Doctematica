@@ -28,6 +28,7 @@
     { id: "systems-sub", label: "מערכת משוואות" },
     { id: "percents", label: "אחוזים" },
     { id: "analytic", label: "גאומטריה אנליטית" },
+    { id: "calculus", label: "חשבון דיפרנציאלי" },
     { id: "statistics", label: "סטטיסטיקה" },
   ];
 
@@ -40,6 +41,9 @@
       { id: "segments", label: "אורכי קטעים" },
       { id: "areas", label: "שטחים והיקפים" },
       { id: "line", label: "הישר" },
+    ],
+    calculus: [
+      { id: "intro", label: "מבוא" },
     ],
     percents: [
       { id: "find-part", label: "מציאת כמות עבור אחוז" },

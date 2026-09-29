@@ -52,6 +52,13 @@
   var sysKnownEl = document.getElementById("sys-known");
   var solveWrap = document.getElementById("solve-wrap");
   var geoBoardEl = document.getElementById("geo-board");
+  var fnBoardEl = document.getElementById("fn-board");
+  var fnSketchSlot = document.getElementById("fn-sketch-slot");
+  var fnBoardHomeNext = fnBoardEl ? fnBoardEl.nextSibling : null;
+  var fnDomainsEl = document.getElementById("fn-domains");
+  var fnAxesEl = document.getElementById("fn-axes");
+  var fnChoiceEl = document.getElementById("fn-choice");
+  var fnSketch = fnBoardEl && window.DoctematicaFnSketch ? DoctematicaFnSketch.mount(fnBoardEl) : null;
   var geoPartEl = document.getElementById("geo-part");
   var freqTableEl = document.getElementById("freq-table");
   var freqAskEl = document.getElementById("freq-ask");
@@ -182,6 +189,10 @@
     return state.topic === "equations" && (state.subtopic === "basic" || state.subtopic === "denom");
   }
 
+  function eqNotesActive() {
+    return isStepMode() || (isQuadraticTopic() && !geoEqSolveActive());
+  }
+
   var API_ROOT =
     (typeof window !== "undefined" && window.DOCTEMATICA_API) ||
     (typeof location !== "undefined" && location.protocol === "file:"
@@ -194,6 +205,7 @@
   var GEOMETRY_URL = API_ROOT + "/api/geometry";
   var STATISTICS_URL = API_ROOT + "/api/statistics";
   var PERCENTS_URL = API_ROOT + "/api/percents";
+  var FUNCTIONS_URL = API_ROOT + "/api/functions";
   var equationsCheckBusy = false;
 
   function isBasicEqServerMode() {
@@ -227,7 +239,7 @@
   }
 
   function quadraticSubtopic() {
-    if (isMixedServerMode() || geoEqSolveActive()) return "mixed";
+    if (isMixedServerMode() || geoEqSolveActive() || fnQuadSolveActive() || fnFormulaActive()) return "mixed";
     if (isFactorServerMode()) return "factor";
     if (isFormulaServerMode()) return "formula";
     if (isSqrtServerMode()) return "sqrt";
@@ -379,6 +391,15 @@
         start: chain.start,
         history: chain.history,
         previous: chain.history.length ? chain.history[chain.history.length - 1] : chain.start,
+      });
+    }
+    if (fnQuadSolveActive() || fnFormulaActive()) {
+      var fnChain = fnQuadChain();
+      payload = Object.assign({}, payload, {
+        subtopic: "mixed",
+        start: fnChain.start,
+        history: fnChain.history,
+        previous: fnChain.start,
       });
     }
     equationsCheckBusy = true;
@@ -959,6 +980,10 @@
     return isSystemQuadMode() && mixedPath() === "formula";
   }
 
+  function sysQuadFactorActive() {
+    return isSystemQuadMode() && mixedPath() === "factor";
+  }
+
   function isHighPowerTopic() {
     return state.topic === "high-power";
   }
@@ -981,6 +1006,18 @@
 
   function isPercentMode() {
     return !!(state.problem && state.problem.mode === "percent");
+  }
+
+  function isCalculusTopic() {
+    return state.topic === "calculus";
+  }
+
+  function isFnMode() {
+    return !!(state.problem && state.problem.mode === "fn");
+  }
+
+  function emptyFnProgress() {
+    return { done: {}, phase: {}, eq: {}, rootKnown: false, axes: {}, regions: {} };
   }
 
   function emptyFreqProgress() {
@@ -2272,6 +2309,692 @@
     if (!requestPercent({ intent: "solution" }, applyFreqRemote)) showBasicEqServerUnavailable();
   }
 
+  function requestFunctions(payload, onResult) {
+    if (!isFnMode()) return false;
+    if (equationsCheckBusy) return true;
+    equationsCheckBusy = true;
+    var body = {
+      intent: payload.intent,
+      levelId: (state.problem && state.problem.levelId) || state.levelId,
+      exerciseId: state.problem && state.problem.exerciseId,
+      n: state.problem && state.problem.n,
+      exerciseIndex: state.exerciseIndex,
+      progress: (state.fn && state.fn.progress) || emptyFnProgress(),
+      history: state.history || [],
+    };
+    if (payload.typed != null) body.typed = payload.typed;
+    if (payload.axis) body.axis = payload.axis;
+    if (payload.domains) body.domains = payload.domains;
+    if (payload.sketch) body.sketch = payload.sketch;
+    if (payload.point) body.point = payload.point;
+    fetch(FUNCTIONS_URL, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(function (res) {
+        return res.text().then(function (text) {
+          var data = null;
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch (err) {
+            data = null;
+          }
+          if (!res.ok || data == null) throw new Error("functions");
+          return data;
+        });
+      })
+      .then(function (remote) {
+        equationsCheckBusy = false;
+        try {
+          onResult(remote || {});
+        } catch (err) {
+          showServerProcessingError();
+        }
+      })
+      .catch(function () {
+        equationsCheckBusy = false;
+        showBasicEqServerUnavailable();
+      });
+    return true;
+  }
+
+  function fnProse(text) {
+    if (window.DoctematicaMath && DoctematicaMath.proseHTML) return DoctematicaMath.proseHTML(text);
+    return String(text || "");
+  }
+
+  function fnDomainPair(line) {
+    var bits = String(line || "").replace(/\s+/g, " ").trim().split(/\s*,\s*/);
+    var named = {};
+    bits.forEach(function (bit) {
+      var match = bit.match(/^(חיובי|שלילי|עולה|יורדת)\s*:\s*(.+)$/);
+      if (match) named[match[1]] = match[2].trim();
+    });
+    if (named["חיובי"] && named["שלילי"]) {
+      return [
+        { label: "תחומי חיוביות", value: named["חיובי"] },
+        { label: "תחומי שליליות", value: named["שלילי"] },
+      ];
+    }
+    if (named["עולה"] && named["יורדת"]) {
+      return [
+        { label: "תחומי עלייה", value: named["עולה"] },
+        { label: "תחומי ירידה", value: named["יורדת"] },
+      ];
+    }
+    return null;
+  }
+
+  function renderFnSteps() {
+    stepsEl.innerHTML = "";
+    if (!(state.history || []).length) {
+      stepsEl.classList.add("hidden");
+      return;
+    }
+    stepsEl.classList.remove("hidden");
+    var stepNum = 0;
+    var axisCard = 0;
+    state.history.forEach(function (line, index) {
+      if (line === "⌘axes") {
+        var card = (state.fn && state.fn.axisCards && state.fn.axisCards[axisCard]) || { y: [], x: [] };
+        axisCard += 1;
+        stepsEl.appendChild(buildAxisCard(card));
+        return;
+      }
+      var li = document.createElement("li");
+      var n = document.createElement("span");
+      n.className = "n";
+      var body = document.createElement("span");
+      if (isGeoTaskHeader(line)) {
+        n.textContent = "▸";
+        body.textContent = geoTaskHeaderLabel(line);
+        li.classList.add("geo-section-row", "geo-task-row");
+      } else if (/^§/.test(String(line || ""))) {
+        n.textContent = String(line).slice(1);
+        var part = state.fnView && state.fnView.part;
+        var parts = (state.problem && state.problem.parts) || [];
+        var found = parts.filter(function (item) {
+          return item.label === String(line).slice(1);
+        })[0];
+        body.innerHTML = fnProse((found && found.text) || (part && part.label === String(line).slice(1) ? part.text : ""));
+        li.classList.add("geo-section-row", "geo-part-row");
+      } else {
+        stepNum += 1;
+        n.textContent = String(stepNum);
+        var domainPair = fnDomainPair(line);
+        if (domainPair) {
+          body = document.createElement("div");
+          body.className = "fn-domain-table-wrap";
+          var table = document.createElement("table");
+          table.className = "fn-domain-table";
+          table.dir = "ltr";
+          var head = document.createElement("tr");
+          var values = document.createElement("tr");
+          domainPair.forEach(function (item) {
+            var th = document.createElement("th");
+            th.textContent = item.label;
+            var td = document.createElement("td");
+            td.dir = /[<>≤≥=xX]/.test(item.value) ? "ltr" : "rtl";
+            td.innerHTML = fnProse(item.value);
+            head.appendChild(th);
+            values.appendChild(td);
+          });
+          var thead = document.createElement("thead");
+          var tbody = document.createElement("tbody");
+          thead.appendChild(head);
+          tbody.appendChild(values);
+          table.appendChild(thead);
+          table.appendChild(tbody);
+          body.appendChild(table);
+        } else {
+          body.innerHTML = /[\u0590-\u05FF]/.test(String(line))
+            ? fnProse(line)
+            : DoctematicaMath.toHTML(String(line).replace(/-/g, "−"));
+        }
+        var fnReason = state.fn && state.fn.reasons && state.fn.reasons[index];
+        if (fnReason) {
+          appendSiteWhy(body, fnReason);
+          li.classList.add("has-why");
+        }
+      }
+      li.appendChild(n);
+      li.appendChild(body);
+      stepsEl.appendChild(li);
+    });
+  }
+
+  function placeFnBoard(where) {
+    if (!fnBoardEl) return;
+    if (where === "work" && fnSketchSlot) {
+      if (fnBoardEl.parentNode !== fnSketchSlot) fnSketchSlot.appendChild(fnBoardEl);
+      return;
+    }
+    if (fnBoardEl.parentNode !== solveWrap && solveWrap) {
+      if (fnBoardHomeNext && fnBoardHomeNext.parentNode === solveWrap) solveWrap.insertBefore(fnBoardEl, fnBoardHomeNext);
+      else solveWrap.insertBefore(fnBoardEl, solveWrap.firstChild);
+    }
+  }
+
+  function fnSketchHooks(locked) {
+    return {
+      model: (state.fn && state.fn.sketch) || { points: [], line: null },
+      family: (state.fnView && state.fnView.family) || "",
+      locked: !!locked,
+      onCheck: locked ? null : submitFnSketch,
+      onPoint: function (point, model, done) {
+        if (!requestFunctions({ intent: "sketch-point", point: point, sketch: model }, function (remote) {
+          done(!!(remote && remote.ok), (remote && remote.message) || "");
+        })) done(false, "הבדיקה לא זמינה כרגע.");
+      },
+      onChange: function (model) {
+        state.fn = state.fn || { progress: emptyFnProgress() };
+        state.fn.sketch = model;
+      },
+    };
+  }
+
+  function keptFnSketch() {
+    var keptBoard = state.fn && state.fn.sketch;
+    var drawn = state.fn && state.fn.sketchDone && keptBoard && (keptBoard.line || (keptBoard.curve && keptBoard.curve.length));
+    var view = state.fnView;
+    return !!(drawn && view && !view.sketch && !view.figure && !view.reference);
+  }
+
+  function renderFnBoard() {
+    if (!fnSketch) return;
+    var view = state.fnView;
+    if (!isFnMode() || !view) {
+      placeFnBoard("home");
+      fnSketch.hide();
+      syncFnFigureLayout();
+      return;
+    }
+    if (view.sketch) {
+      placeFnBoard("work");
+      syncFnFigureLayout();
+      fnSketch.showSketch(fnSketchHooks(false));
+      return;
+    }
+    if (keptFnSketch()) {
+      placeFnBoard("work");
+      syncFnFigureLayout();
+      fnSketch.showSketch(fnSketchHooks(true));
+      return;
+    }
+    if (view.figure && view.reference) {
+      placeFnBoard("work");
+      syncFnFigureLayout();
+      fnSketch.showFigure(view.figure, {
+        reference: true,
+        model: (state.fn && state.fn.sketch) || { points: [], line: null, refs: [] },
+        onChange: function (model) {
+          state.fn = state.fn || { progress: emptyFnProgress() };
+          state.fn.sketch = model;
+        },
+      });
+      return;
+    }
+    placeFnBoard("home");
+    if (state.fn && state.fn.sketch && (state.fn.sketch.refs || []).length) {
+      state.fn.sketch = { points: [], line: null, refs: [], curve: [] };
+    }
+    if (view.figure) fnSketch.showFigure(view.figure);
+    else fnSketch.hide();
+    syncFnFigureLayout();
+  }
+
+  function syncFnFigureLayout() {
+    var view = state.fnView;
+    var figure = !!(isFnMode() && view && view.figure && !view.sketch && !view.reference && !keptFnSketch());
+    var sketch = !!(isFnMode() && ((view && (view.sketch || view.reference)) || keptFnSketch()));
+    if (solveWrap) {
+      solveWrap.classList.toggle("has-fn-figure", figure);
+      solveWrap.classList.remove("has-fn-sketch");
+    }
+    if (fnBoardEl) {
+      fnBoardEl.classList.toggle("is-figure", figure);
+      fnBoardEl.classList.toggle("is-sketch", sketch);
+    }
+  }
+
+  function emptyAxisLive() {
+    return { y: [], x: [] };
+  }
+
+  function fnAxisHTML(text) {
+    var line = String(text || "");
+    if (/[\u0590-\u05FF]/.test(line)) return fnProse(line);
+    return DoctematicaMath.toHTML(line.replace(/-/g, "−"));
+  }
+
+  function fillAxisTrail(trail, steps) {
+    trail.innerHTML = "";
+    (steps || []).forEach(function (step, i) {
+      var row = document.createElement("div");
+      row.className = "fn-axis-step";
+      var n = document.createElement("span");
+      n.className = "n";
+      n.textContent = String(i + 1);
+      var body = document.createElement("span");
+      body.innerHTML = fnAxisHTML(step.show);
+      if (step.why) appendSiteWhy(body, step.why);
+      row.appendChild(n);
+      row.appendChild(body);
+      trail.appendChild(row);
+    });
+  }
+
+  function buildAxisCard(card) {
+    var li = document.createElement("li");
+    li.className = "fn-axis-card";
+    ["y", "x"].forEach(function (axis) {
+      var col = document.createElement("div");
+      col.className = "fn-axis-col";
+      var title = document.createElement("h3");
+      title.textContent = axis === "y" ? "חיתוך עם ציר y" : "חיתוך עם ציר x";
+      var trail = document.createElement("div");
+      fillAxisTrail(trail, card[axis]);
+      col.appendChild(title);
+      col.appendChild(trail);
+      li.appendChild(col);
+    });
+    return li;
+  }
+
+  function renderFnAxes(on) {
+    if (!fnAxesEl) return;
+    if (!on) {
+      fnAxesEl.classList.add("hidden");
+      fnAxesEl.innerHTML = "";
+      return;
+    }
+    if (!fnAxesEl.querySelector(".fn-axis-col")) {
+      ["y", "x"].forEach(function (axis) {
+        var col = document.createElement("div");
+        col.className = "fn-axis-col";
+        col.setAttribute("data-col", axis);
+        var title = document.createElement("h3");
+        title.textContent = axis === "y" ? "חיתוך עם ציר y" : "חיתוך עם ציר x";
+        var trail = document.createElement("div");
+        trail.className = "fn-axis-trail";
+        var input = document.createElement("input");
+        input.className = "fn-axis-input";
+        input.setAttribute("data-axis", axis);
+        input.dir = "ltr";
+        input.autocomplete = "off";
+        input.placeholder = axis === "y" ? "x = 0" : "המשוואה";
+        input.addEventListener("focus", function () {
+          state.fn = state.fn || {};
+          state.fn.axisFocus = axis;
+        });
+        input.addEventListener("keydown", function (event) {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            submitFnAxis(axis);
+          }
+        });
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "fn-axis-check";
+        btn.textContent = "בדיקה";
+        btn.addEventListener("click", function () {
+          submitFnAxis(axis);
+        });
+        col.appendChild(title);
+        col.appendChild(trail);
+        col.appendChild(input);
+        col.appendChild(btn);
+        fnAxesEl.appendChild(col);
+      });
+    }
+    var live = (state.fn && state.fn.axisLive) || emptyAxisLive();
+    var done = (state.fn && state.fn.axisDone) || {};
+    ["y", "x"].forEach(function (axis) {
+      var col = fnAxesEl.querySelector("[data-col='" + axis + "']");
+      if (!col) return;
+      col.classList.toggle("is-done", !!done[axis]);
+      fillAxisTrail(col.querySelector(".fn-axis-trail"), live[axis]);
+    });
+    fnAxesEl.classList.remove("hidden");
+  }
+
+  function focusedFnAxis() {
+    var active = document.activeElement;
+    if (active && active.getAttribute) {
+      var axis = active.getAttribute("data-axis");
+      if (axis === "y" || axis === "x") return axis;
+    }
+    if (state.fn && (state.fn.axisFocus === "y" || state.fn.axisFocus === "x")) return state.fn.axisFocus;
+    return "y";
+  }
+
+  function submitFnAxis(axis) {
+    if (!fnAxesEl) return;
+    var input = fnAxesEl.querySelector("input[data-axis='" + axis + "']");
+    var text = input ? input.value : "";
+    if (!String(text || "").trim()) {
+      showFeedback(false, "<strong>עוד לא.</strong> כתבו שלב בתיבה.");
+      if (input) input.focus();
+      return;
+    }
+    applyFnTyped(text, axis);
+  }
+
+  function freezeAxisCard() {
+    if (!state.fn) return;
+    var live = state.fn.axisLive || emptyAxisLive();
+    if ((live.y && live.y.length) || (live.x && live.x.length)) {
+      state.fn.axisCards = state.fn.axisCards || [];
+      state.fn.axisCards.push({ y: (live.y || []).slice(), x: (live.x || []).slice() });
+      state.history.push("⌘axes");
+    }
+    state.fn.axisLive = emptyAxisLive();
+    state.fn.axisDone = { y: false, x: false };
+  }
+
+  function renderFnDomains(fields) {
+    if (!fnDomainsEl) return;
+    if (!fields || !fields.length) {
+      fnDomainsEl.classList.add("hidden");
+      fnDomainsEl.innerHTML = "";
+      return;
+    }
+    var existing = fnDomainsEl.querySelectorAll("input[data-domain]");
+    var same = existing.length === fields.length && !fnDomainsEl.classList.contains("hidden");
+    var i;
+    for (i = 0; same && i < fields.length; i++) {
+      if (existing[i].getAttribute("data-domain") !== fields[i].id) same = false;
+    }
+    if (same) return;
+    fnDomainsEl.innerHTML = "";
+    fields.forEach(function (field) {
+      var row = document.createElement("label");
+      row.className = "fn-domain-row";
+      var title = document.createElement("span");
+      title.textContent = field.label || "";
+      var input = document.createElement("input");
+      input.type = "text";
+      input.setAttribute("data-domain", field.id);
+      input.dir = "ltr";
+      input.autocomplete = "off";
+      input.placeholder = "x > 3 או אין";
+      row.appendChild(title);
+      row.appendChild(input);
+      fnDomainsEl.appendChild(row);
+    });
+    fnDomainsEl.classList.remove("hidden");
+  }
+
+  function readFnDomains() {
+    var out = {};
+    if (!fnDomainsEl) return out;
+    fnDomainsEl.querySelectorAll("input[data-domain]").forEach(function (input) {
+      out[input.getAttribute("data-domain")] = input.value || "";
+    });
+    return out;
+  }
+
+  function renderFnChoice(choices) {
+    if (!fnChoiceEl) return;
+    if (!choices || !choices.length) {
+      fnChoiceEl.classList.add("hidden");
+      fnChoiceEl.innerHTML = "";
+      return;
+    }
+    var sig = choices.map(function (item) { return item.id + ":" + item.text; }).join("|");
+    if (fnChoiceEl.getAttribute("data-sig") === sig) {
+      fnChoiceEl.classList.remove("hidden");
+      return;
+    }
+    fnChoiceEl.setAttribute("data-sig", sig);
+    fnChoiceEl.innerHTML = "";
+    fnChoiceEl.classList.remove("hidden");
+    choices.forEach(function (item) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "fn-choice-btn";
+      btn.textContent = "(" + item.id + ") " + item.text;
+      btn.addEventListener("click", function () {
+        applyFnTyped(item.text || String(item.id));
+      });
+      fnChoiceEl.appendChild(btn);
+    });
+  }
+
+  function syncFnAsk() {
+    var ask = state.fnView && state.fnView.ask;
+    var sketch = state.fnView && state.fnView.input === "sketch";
+    var choice = isFnMode() && state.fnView && state.fnView.input === "choice";
+    var domainFields = isFnMode() && state.fnView && state.fnView.input === "domains" ? state.fnView.domains : null;
+    var axisBoard = isFnMode() && state.fnView && state.fnView.input === "axes";
+    renderFnDomains(domainFields);
+    renderFnAxes(axisBoard);
+    renderFnChoice(choice ? state.fnView.choices : null);
+    if (yesnoAskEl) {
+      if (ask && ask.stage === "yesno") {
+        yesnoAskEl.classList.remove("hidden");
+        if (yesnoQEl) yesnoQEl.textContent = ask.question || "ענו כן או לא.";
+      } else if (!isGeoLengthMode()) {
+        yesnoAskEl.classList.add("hidden");
+      }
+    }
+    var formulaOpen = formulaWorkActive();
+    if (mathWrap) mathWrap.classList.toggle("hidden", !!sketch || !!domainFields || !!choice || !!axisBoard || formulaOpen);
+    if (mathKeysEl) mathKeysEl.classList.toggle("hidden", !!sketch || !!domainFields || !!choice || formulaOpen);
+    if (answerRowEl && isFnMode()) answerRowEl.classList.toggle("hidden", !!sketch || !!choice || formulaOpen);
+    if (answerLabelEl && isFnMode()) {
+      answerLabelEl.textContent = domainFields ? "התחומים" : "הצעד הבא";
+      answerLabelEl.classList.toggle("hidden", !!domainFields || !!sketch || !!choice || !!axisBoard);
+    }
+    if (hintEl && state.fnView && state.fnView.hint) hintEl.textContent = state.fnView.hint;
+  }
+
+  function renderFnPart() {
+    if (!geoPartEl) return;
+    var view = state.fnView;
+    if (!isFnMode() || !view || !view.part) {
+      if (isFnMode()) {
+        geoPartEl.classList.add("hidden");
+        geoPartEl.innerHTML = "";
+      }
+      return;
+    }
+    if (view.part.label) {
+      var partMark = "§" + view.part.label;
+      if ((state.history || []).indexOf(partMark) < 0) state.history.push(partMark);
+      geoPartEl.classList.add("hidden");
+      geoPartEl.innerHTML = "";
+      return;
+    }
+    geoPartEl.classList.remove("hidden");
+    geoPartEl.innerHTML = fnProse(view.part.text || "");
+  }
+
+  function applyFnRemote(remote) {
+    if (!remote || remote.ok === false) {
+      var bad = remote && remote.message ? remote.message : "עוד לא.";
+      showFeedback(false, "<strong>עוד לא.</strong> " + fnProse(bad));
+      return;
+    }
+    if (remote.sketch && !remote.show) {
+      showFeedback(true, "<strong>רמז.</strong> " + fnProse(remote.hint || "שרטטו את הגרף על מערכת הצירים."), "tip");
+      return;
+    }
+    state.stats.try += 1;
+    saveStats();
+    renderStats();
+    var wasSketch = state.fnView && state.fnView.input === "sketch";
+    var partBefore = state.fnView && state.fnView.part && state.fnView.part.label;
+    if (remote.progress) {
+      state.fn = state.fn || {};
+      state.fn.progress = remote.progress;
+    }
+    if (remote.axis === "y" || remote.axis === "x") {
+      state.fn = state.fn || {};
+      state.fn.axisLive = state.fn.axisLive || emptyAxisLive();
+      var axisWhy = String(remote.message || "").replace(/^נכון\.\s*/, "").trim();
+      state.fn.axisLive[remote.axis].push({
+        show: remote.show || "",
+        why: axisWhy && axisWhy !== "נכון" ? axisWhy : "",
+      });
+      if (remote.axisDone) state.fn.axisDone = remote.axisDone;
+      if (!(remote.view && remote.view.input === "axes")) freezeAxisCard();
+      if (remote.view) state.fnView = remote.view;
+      if (fnAxesEl) {
+        var axisBox = fnAxesEl.querySelector("input[data-axis='" + remote.axis + "']");
+        if (axisBox) axisBox.value = "";
+      }
+      renderFnPart();
+      renderFnBoard();
+      syncFnAsk();
+      renderFnSteps();
+      if (remote.hint && hintEl) hintEl.textContent = remote.hint;
+      if (remote.solved) {
+        markSolved();
+        if (mathField) mathField.setDisabled(true);
+        checkBtn.disabled = true;
+        nextAfterSolveBtn.classList.remove("hidden");
+        showFeedback(true, "<strong>כל הכבוד.</strong> " + fnProse(remote.message || "סיימתם את התרגיל."));
+        return;
+      }
+      showFeedback(true, "<strong>נכון.</strong> " + fnProse(remote.message || ""));
+      return;
+    }
+    if (remote.board) {
+      state.fn = state.fn || {};
+      state.fn.sketch = remote.board;
+    }
+    var sketchBoardDone = !remote.board || remote.board.line || (remote.board.curve && remote.board.curve.length);
+    if (wasSketch && remote.show && sketchBoardDone) {
+      state.fn = state.fn || {};
+      state.fn.sketchDone = true;
+    }
+    if (remote.view) state.fnView = remote.view;
+    if (remote.show) {
+      var partLabel = partBefore;
+      if (partLabel) {
+        var mark = "§" + partLabel;
+        if ((state.history || []).indexOf(mark) < 0) state.history.push(mark);
+      }
+      ensureFnTaskHeader(remote.heading);
+      state.history.push(remote.show);
+      var fnReason = String(remote.message || "").replace(/^נכון\.\s*/, "").trim();
+      if (fnReason && fnReason !== "נכון") {
+        state.fn = state.fn || {};
+        state.fn.reasons = state.fn.reasons || {};
+        state.fn.reasons[state.history.length - 1] = fnReason;
+      }
+      var nextPart = remote.view && remote.view.part && remote.view.part.label;
+      if (nextPart && nextPart !== partBefore) {
+        var nextMark = "§" + nextPart;
+        if ((state.history || []).indexOf(nextMark) < 0) state.history.push(nextMark);
+      }
+      ensureFnTaskHeader(remote.view && remote.view.pointHeading);
+    }
+    renderFnPart();
+    renderFnBoard();
+    syncFnAsk();
+    renderFnSteps();
+    if (remote.hint && hintEl) hintEl.textContent = remote.hint;
+    if (mathField && state.fnView && state.fnView.input !== "sketch" && state.fnView.input !== "domains") mathField.clear();
+    if (remote.solved) {
+      markSolved();
+      if (mathField) mathField.setDisabled(true);
+      checkBtn.disabled = true;
+      nextAfterSolveBtn.classList.remove("hidden");
+      showFeedback(true, "<strong>כל הכבוד.</strong> " + fnProse(remote.message || "סיימתם את התרגיל."));
+      return;
+    }
+    showFeedback(true, "<strong>נכון.</strong> " + fnProse(remote.message || ""));
+    updateFormulaBtn();
+    if (state.fnView && state.fnView.input === "domains" && fnDomainsEl) {
+      var nextDomain = fnDomainsEl.querySelector("input");
+      if (nextDomain) nextDomain.focus();
+    } else if (mathField && state.fnView && state.fnView.input !== "sketch") mathField.focus();
+  }
+
+  function submitFnSketch() {
+    applyFnTyped("");
+  }
+
+  function applyFnTyped(typed, axis) {
+    if (state.locked) return;
+    var view = state.fnView;
+    if (view && view.input === "sketch") {
+      var model = fnSketch ? fnSketch.getModel() : { points: [], line: null };
+      if (!model.line && !(model.curve && model.curve.length)) {
+        showFeedback(false, "<strong>עוד לא.</strong> שרטטו את הגרף על מערכת הצירים.");
+        return;
+      }
+      if (!requestFunctions({ intent: "sketch", sketch: model }, applyFnRemote)) showBasicEqServerUnavailable();
+      return;
+    }
+    if (view && view.input === "domains") {
+      if (!requestFunctions({ intent: "check", domains: readFnDomains() }, applyFnRemote)) showBasicEqServerUnavailable();
+      return;
+    }
+    if (!String(typed || "").trim()) {
+      showFeedback(false, "<strong>עוד לא.</strong> כתבו שלב.");
+      return;
+    }
+    var fnBody = { intent: "check", typed: typed };
+    if (axis) fnBody.axis = axis;
+    if (!requestFunctions(fnBody, applyFnRemote)) showBasicEqServerUnavailable();
+  }
+
+  function fnHint() {
+    if (!requestFunctions({ intent: "hint" }, function (remote) {
+      if (!remote || remote.ok === false) {
+        showFeedback(false, "<strong>עוד לא.</strong> " + fnProse((remote && remote.message) || ""));
+        return;
+      }
+      showFeedback(true, "<strong>רמז.</strong> " + fnProse(remote.hint || ""), "tip");
+    })) showBasicEqServerUnavailable();
+  }
+
+  function abandonFnFormula() {
+    if (!isFnMode() || !fnFormulaActive()) return;
+    state.fnFormula = false;
+    state.mixed = state.mixed || emptyMixedState();
+    state.mixed.path = null;
+    state.mixed.md53 = false;
+    state.quad = null;
+    hideQuadGuide();
+    setQuadInput(true);
+    updateFormulaBtn();
+    setModeUi();
+  }
+
+  function fnOneStep() {
+    abandonFnFormula();
+    if (!requestFunctions({ intent: "one-step" }, applyFnRemote)) showBasicEqServerUnavailable();
+  }
+
+  function ensureFnTaskHeader(heading) {
+    if (!heading) return;
+    var marker = "משימה:" + heading;
+    if ((state.history || []).indexOf(marker) >= 0) return;
+    state.history.push(marker);
+  }
+
+  function fnSolution() {
+    if (!requestFunctions({ intent: "solution" }, function (remote) {
+      if (!remote || remote.ok === false) {
+        showFeedback(false, "<strong>עוד לא.</strong> " + fnProse((remote && remote.message) || ""));
+        return;
+      }
+      showEqSolution("פתרון מלא", {
+        always: true,
+        steps: remote.steps || [],
+        notes: remote.notes || [],
+        withNotes: true,
+        footer: "",
+      });
+    })) showBasicEqServerUnavailable();
+  }
+
   function isGeoLengthMode() {
     var level = currentLevel();
     return (
@@ -2426,14 +3149,21 @@
     }
   }
 
-  function appendFactorTrail(which, eq) {
+  function appendFactorTrail(which, eq, reason) {
     if (which !== 0 && which !== 1) return;
     var trail = state.factor.trails[which];
     if (!trail) {
       state.factor.trails[which] = [eq];
+      trail = state.factor.trails[which];
+    } else if (trail[trail.length - 1] !== eq) {
+      trail.push(eq);
+    } else {
       return;
     }
-    if (trail[trail.length - 1] !== eq) trail.push(eq);
+    if (reason && eqNotesActive()) {
+      state.factor.why = state.factor.why || {};
+      state.factor.why[which + ":" + (trail.length - 1)] = reason;
+    }
   }
 
   function geoDistUnkTask() {
@@ -2548,6 +3278,68 @@
     return /\([^()]*\)/.test(s) && /=0$/.test(s);
   }
 
+  function fnQuadText(text) {
+    return String(text || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/²/g, "^2")
+      .replace(/\s+/g, "");
+  }
+
+  function fnLooksArrangedQuadratic(eq) {
+    var s = fnQuadText(eq);
+    if (!/=/.test(s) || /√|sqrt|\(|\)/.test(s)) return false;
+    var parts = s.split("=");
+    if (parts.length !== 2) return false;
+    var live = parts[1] === "0" ? parts[0] : parts[0] === "0" ? parts[1] : "";
+    if (!live || !/x\^2/i.test(live)) return false;
+    return (live.match(/x\^2/gi) || []).length === 1;
+  }
+
+  function fnLastMathLine() {
+    var hist = state.history || [];
+    var i;
+    for (i = hist.length - 1; i >= 0; i--) {
+      if (/^§/.test(String(hist[i] || ""))) continue;
+      return String(hist[i] || "");
+    }
+    return "";
+  }
+
+  function fnQuadSolveActive() {
+    if (!isFnMode() || state.locked || mixedPath() === "formula") return false;
+    return fnLooksArrangedQuadratic(fnLastMathLine());
+  }
+
+  function fnFormulaActive() {
+    return isFnMode() && mixedPath() === "formula";
+  }
+
+  function fnQuadChain() {
+    var eq = fnQuadText(fnLastMathLine());
+    return { start: eq, history: [eq] };
+  }
+
+  function finishEqSolveForFn(answer) {
+    if (!state.fnFormula || !isFnMode()) return false;
+    var text = String(answer || "").trim();
+    state.fnFormula = false;
+    state.mixed = state.mixed || emptyMixedState();
+    state.mixed.path = null;
+    state.mixed.md53 = false;
+    state.quad = null;
+    state.factor = emptyFactorState();
+    hideQuadGuide();
+    setQuadInput(true);
+    updateFormulaBtn();
+    setModeUi();
+    if (!text) {
+      showFeedback(false, "<strong>עוד לא.</strong> לא התקבל פתרון מהנוסחה.");
+      return true;
+    }
+    if (!requestFunctions({ intent: "check", typed: text }, applyFnRemote)) showBasicEqServerUnavailable();
+    return true;
+  }
+
   function geoEqSolveActive() {
     var t = geoDistUnkTask();
     if (!t) return false;
@@ -2625,6 +3417,7 @@
 
   function canSplitFactor() {
     if (state.locked) return false;
+    if (isSystemQuadMode() && state.offerSplit && mixedPath() !== "factor") return true;
     var ready = !!(state.factor && state.factor.canSplit);
     if (
       !ready &&
@@ -2650,6 +3443,7 @@
   function canUseMixedFormula() {
     if (state.locked || !state.problem) return false;
     if (sysQuadFormulaActive()) return false;
+    if (fnQuadSolveActive()) return true;
     if (isSystemQuadMode() && state.offerFormula) return true;
     if (!isMixedEqMode() && !geoEqSolveActive()) return false;
     if (mixedPath()) return false;
@@ -2849,8 +3643,10 @@
             n.textContent = baseNum + "." + k + "." + (letters[branchIdx] || String(branchIdx + 1));
             var body = document.createElement("span");
             body.innerHTML = DoctematicaMath.toHTML(entry.display);
+            appendSiteWhy(body, entry.reason);
             row.appendChild(n);
             row.appendChild(body);
+            if (!entry.reason) appendEqUserNote(row, "d:" + branchIdx + ":" + k);
             if (solved && isLast) {
               var ok = document.createElement("span");
               ok.className = "factor-eq-n";
@@ -2888,8 +3684,10 @@
       }
       var body = document.createElement("span");
       body.innerHTML = DoctematicaMath.toHTML(entry.display);
+      appendSiteWhy(body, entry.reason);
       row.appendChild(num);
       row.appendChild(body);
+      if (!entry.reason) appendEqUserNote(row, "d:" + k);
       stepsEl.appendChild(row);
     });
   }
@@ -3000,13 +3798,15 @@
     if (splitDomainBtn) splitDomainBtn.classList.add("hidden");
   }
 
-  function appendDomainTrail(text, parts) {
+  function appendDomainTrail(text, parts, reason) {
     if (!state.domain) return;
     state.domain.trail = state.domain.trail || [];
-    state.domain.trail.push({
+    var row = {
       display: text,
       parts: parts || null,
-    });
+    };
+    if (reason) row.reason = reason;
+    state.domain.trail.push(row);
   }
 
   function applyDomainDone(display, opts) {
@@ -3020,7 +3820,7 @@
         return t.display === state.domain.display;
       });
       if (!already) {
-        appendDomainTrail(state.domain.display, state.domain.info.parts);
+        appendDomainTrail(state.domain.display, state.domain.info.parts, opts.reason);
       }
     }
     updateDomainBtn();
@@ -3031,29 +3831,36 @@
     mathField.clear();
     showFeedback(
       true,
-      opts.message ||
-        "<strong>תחום הצבה:</strong> " +
-          state.domain.display +
-          ". עכשיו פתרו את המשוואה (אפשר מכנה משותף).",
+      opts.reason
+        ? "<strong>צעד של האתר.</strong> " + siteReasonHTML(opts.reason)
+        : opts.message ||
+          "<strong>תחום הצבה:</strong> " +
+            state.domain.display +
+            ". עכשיו פתרו את המשוואה (אפשר מכנה משותף).",
       "tip"
     );
     mathField.focus();
   }
 
-  function applyDomainRaw(display, parts, message) {
+  function applyDomainRaw(display, parts, message, reason) {
     if (!state.domain) return;
     state.domain.phase = "work";
     state.domain.rawDisplay = display;
     if (!domainMulti()) {
       var last = (state.domain.trail || [])[state.domain.trail.length - 1];
-      if (!last || last.display !== display) appendDomainTrail(display, parts);
+      if (!last || last.display !== display) appendDomainTrail(display, parts, reason);
+      else if (reason && !last.reason) last.reason = reason;
     }
     renderDomainGuide();
     renderSteps();
     setModeUi();
     updateDomainBtn();
     mathField.clear();
-    showFeedback(true, message || "עכשיו פשטו ל־x≠…", "tip");
+    showFeedback(
+      true,
+      reason ? "<strong>צעד של האתר.</strong> " + siteReasonHTML(reason) : message || "עכשיו פשטו ל־x≠…",
+      "tip"
+    );
     if (domainMulti()) focusActiveDomainInput();
     else mathField.focus();
   }
@@ -3087,15 +3894,21 @@
         {
           display: res.display || state.domain.info.display,
           parts: parts,
+          reason: res.reason || "",
         },
       ];
       applyDomainDone(res.display || state.domain.info.display, {
         skipTrail: true,
+        reason: res.reason || "",
         message: "<strong>נכון.</strong> תחום הצבה: " + (res.display || state.domain.info.display) + ".",
       });
       return;
     }
-    showFeedback(true, res.message || "המשיכו.", "tip");
+    showFeedback(
+      true,
+      res.reason ? "<strong>צעד של האתר.</strong> " + siteReasonHTML(res.reason) : res.message || "המשיכו.",
+      "tip"
+    );
     if (domainMulti()) focusActiveDomainInput();
     else mathField.focus();
   }
@@ -3179,15 +3992,17 @@
     if (res.done) {
       applyDomainDone(res.display || (state.domain.info && state.domain.info.display), {
         message: "<strong>נכון.</strong> תחום הצבה: " + (res.display || (state.domain.info && state.domain.info.display)) + ".",
+        reason: res.reason || "",
       });
       return;
     }
     if (res.phase === "raw" || res.phase === "work") {
-      applyDomainRaw(res.display, res.parts, res.message);
+      applyDomainRaw(res.display, res.parts, res.message, res.reason);
       return;
     }
     applyDomainDone(res.display || (state.domain.info && state.domain.info.display), {
       message: "<strong>נכון.</strong> תחום הצבה: " + (res.display || (state.domain.info && state.domain.info.display)) + ".",
+      reason: res.reason || "",
     });
   }
 
@@ -3640,6 +4455,10 @@
     var baseEq = lastHistoryEq();
     state.history.push(baseEq);
     state.lcdMarks[state.history.length - 1] = mark;
+    if (opts.reason) {
+      state.eqReasons = state.eqReasons || {};
+      state.eqReasons[state.history.length - 1] = opts.reason;
+    }
     renderSteps();
     renderLcdGuide();
     updateLcdBtn();
@@ -3696,10 +4515,14 @@
           }
           clearLcdAssist();
           pushLcdMarksStep(res.mark, {
+            reason: res.reason,
             message:
-              "<strong>צעד.</strong> מכנה משותף " +
-              res.mark.lcd +
-              " — המכפילים מעל כל איבר (כמו במחברת). הצעד הבא: כפלו והורידו מכנים.",
+              "<strong>צעד של האתר.</strong> " +
+              (res.reason
+                ? siteReasonHTML(res.reason)
+                : "מכנה משותף " +
+                  res.mark.lcd +
+                  " — המכפילים מעל כל איבר (כמו במחברת). הצעד הבא: כפלו והורידו מכנים."),
           });
         }
       );
@@ -3722,6 +4545,10 @@
   function doFactorSplit() {
     if (!canSplitFactor()) {
       showFeedback(false, "<strong>עוד לא.</strong> קודם הוציאו גורם משותף, למשל x(x−5)=0.");
+      return;
+    }
+    if (isSystemQuadMode()) {
+      enterSysSplit();
       return;
     }
     if (
@@ -3783,10 +4610,12 @@
     if (res.factored) {
       if (shownTyped && state.history[state.history.length - 1] !== shownTyped) {
         state.history.push(shownTyped);
+        rememberHistoryReason(res.reason);
       }
     } else if (res.rearrange) {
       if (shownTyped && state.history[state.history.length - 1] !== shownTyped) {
         state.history.push(shownTyped);
+        rememberHistoryReason(res.reason);
       }
     } else if (res.resplit) {
       if (res.eqs) state.factor.eqs = res.eqs;
@@ -3795,7 +4624,7 @@
       state.factor.canSplit = false;
       if (typeof res.which === "number") {
         if (res.trailAlso) appendFactorTrail(res.which, res.trailAlso);
-        if (res.eqs && res.eqs[res.which]) appendFactorTrail(res.which, res.eqs[res.which]);
+        if (res.eqs && res.eqs[res.which]) appendFactorTrail(res.which, res.eqs[res.which], res.reason);
       }
     } else if (res.split && !wasSplit) {
       var startEqs = res.eqs;
@@ -3804,6 +4633,7 @@
         if (p0) startEqs = [p0.e1, p0.e2];
       }
       if (startEqs && startEqs.length >= 2) startFactorTrails(startEqs[0], startEqs[1]);
+      if (res.reason && eqNotesActive()) state.factor.splitReason = res.reason;
     }
     if (!res.resplit && res.eqs) state.factor.eqs = res.eqs;
     if (!res.resplit && Array.isArray(res.solvedFlags)) state.factor.solved = res.solvedFlags;
@@ -3811,17 +4641,21 @@
     if (res.progress) state.factor.progress = res.progress;
     if (!res.resplit && typeof res.which === "number" && shownTyped) {
       if (res.trailAlso) appendFactorTrail(res.which, res.trailAlso);
-      appendFactorTrail(res.which, shownTyped);
+      appendFactorTrail(res.which, shownTyped, res.reason);
     } else if (res.solved === true && res.progress) {
-      if (res.progress.z) appendFactorTrail(0, "x = 0");
-      else if (res.progress.o) appendFactorTrail(1, shownTyped);
+      if (res.progress.z) appendFactorTrail(0, "x = 0", res.reason);
+      else if (res.progress.o) appendFactorTrail(1, shownTyped, res.reason);
     } else if (res.progress) {
-      if (res.progress.z && !wasSplit) appendFactorTrail(0, shownTyped);
-      if (res.progress.o) appendFactorTrail(1, shownTyped);
+      if (res.progress.z && !wasSplit) appendFactorTrail(0, shownTyped, res.reason);
+      if (res.progress.o) appendFactorTrail(1, shownTyped, res.reason);
     }
     renderSteps();
     renderFactorGuide();
     var done = res.solvedAll || res.solved === true;
+    if (done && sysQuadFactorActive()) {
+      finishFactorForSys(res);
+      return true;
+    }
     if (done) {
       if (geoDistUnkTask()) {
         var rootBits = [];
@@ -3851,12 +4685,12 @@
     }
     mathField.clear();
     if (!shownTyped && (res.split || res.resplit)) {
-      showFeedback(true, "<strong>חילקנו.</strong> " + msg, "tip");
+      showFeedback(true, siteStepMessage(res.reason, "<strong>חילקנו.</strong> " + msg), "tip");
       mathField.focus();
       return true;
     }
     var label = res.factored || res.solvedOne || res.solved ? "נכון" : "צעד חוקי";
-    showFeedback(true, "<strong>" + label + ".</strong> " + msg);
+    showFeedback(true, siteStepMessage(res.reason, "<strong>" + label + ".</strong> " + msg));
     mathField.focus();
     return true;
   }
@@ -3921,6 +4755,7 @@
       isAnalyticTopic() ||
       isStatisticsTopic() ||
       isPercentTopic() ||
+      isCalculusTopic() ||
       state.topic === "equations"
     );
   }
@@ -3932,7 +4767,8 @@
       state.topic === "analytic" ||
       state.topic === "statistics" ||
       state.topic === "percents" ||
-      state.topic === "systems-sub"
+      state.topic === "systems-sub" ||
+      state.topic === "calculus"
         ? state.subtopic
         : null;
     if (!state.topic) return all;
@@ -3943,6 +4779,7 @@
       if (state.topic === "statistics" && sub) return (item.subtopic || "freq-table") === sub;
       if (state.topic === "percents" && sub) return (item.subtopic || "find-part") === sub;
       if (state.topic === "systems-sub" && sub) return (item.subtopic || "sub") === sub;
+      if (state.topic === "calculus" && sub) return (item.subtopic || "intro") === sub;
       return true;
     });
   }
@@ -3973,6 +4810,7 @@
     if (id === "percents") return "pct";
     if (id === "analytic") return "geo";
     if (id === "statistics") return "stat";
+    if (id === "calculus") return "calc";
     return "eq";
   }
 
@@ -3996,6 +4834,9 @@
     }
     if (name === "geo") {
       return "<svg " + common + '><path d="M4 20V5"/><path d="M4 20h16"/><path d="M4 20 16 8"/></svg>';
+    }
+    if (name === "calc") {
+      return "<svg " + common + '><path d="M4 19V5"/><path d="M4 19h16"/><path d="M6 15c3-1 4-6 7-7s4 2 7 1"/></svg>';
     }
     if (name === "stat") {
       return "<svg " + common + '><path d="M5 19V11"/><path d="M10 19V6"/><path d="M15 19v-5"/><path d="M20 19V8"/><path d="M4 19h16"/></svg>';
@@ -4138,7 +4979,7 @@
     state.topic = topic.id;
     state.source = "worksheet";
     state.exerciseIndex = 0;
-    if (topic.id === "equations" || topic.id === "analytic" || topic.id === "statistics" || topic.id === "percents" || topic.id === "systems-sub") {
+    if (topic.id === "equations" || topic.id === "analytic" || topic.id === "statistics" || topic.id === "percents" || topic.id === "systems-sub" || topic.id === "calculus") {
       var subs = ((state.catalog && state.catalog.subtopics) || {})[topic.id] || [];
       state.subtopic = state.subtopic || (subs[0] && subs[0].id);
       if (!subs.some(function (s) { return s.id === state.subtopic; })) {
@@ -4383,6 +5224,7 @@
       state.topic === "analytic" ||
       state.topic === "statistics" ||
       state.topic === "percents" ||
+      state.topic === "calculus" ||
       (state.topic === "systems-sub" && (state.subtopic === "elim" || state.subtopic === "arrange"))
     ) {
       var subList =
@@ -4483,8 +5325,13 @@
     state.sys.view = view;
     state.sys.formulaEq = view.formulaEq || "";
     state.sys.formulaLetter = view.formulaLetter || "x";
+    state.sys.splitStart = view.splitStart || "";
+    state.sys.splitEq = view.splitEq || "";
+    state.sys.splitLetter = view.splitLetter || "x";
     state.offerFormula = !!view.offerFormula;
+    if (!sysQuadFactorActive()) state.offerSplit = !!view.offerSplit;
     updateFormulaBtn();
+    updateSplitBtn();
   }
 
   function beginWorkFromView(view) {
@@ -4680,7 +5527,7 @@
 
   function renderSysGuide() {
     renderSysKnown();
-    if (sysQuadFormulaActive()) {
+    if (sysQuadFormulaActive() || sysQuadFactorActive()) {
       sysGuideEl.classList.add("hidden");
       sysGuideEl.innerHTML = "";
       return;
@@ -5339,7 +6186,7 @@
       finishSystem(remote.kind);
       return;
     }
-    showFeedback(true, "<strong>צעד של האתר.</strong> " + (remote.reason || ""), "tip");
+    showFeedback(true, "<strong>צעד של האתר.</strong> " + siteReasonHTML(remote.reason || ""), "tip");
     if (remote.input) mathField.focus();
   }
 
@@ -5564,10 +6411,106 @@
     if (formulaWorkActive() && mathWrap) mathWrap.classList.add("hidden");
   }
 
+  function siteReasonHTML(text) {
+    if (!text) return "";
+    if (DoctematicaMath && DoctematicaMath.proseHTML) return DoctematicaMath.proseHTML(text);
+    return String(text);
+  }
+
+  function appendSiteWhy(body, text) {
+    if (!text) return;
+    var why = document.createElement("span");
+    why.className = "sys-step-why";
+    why.innerHTML = siteReasonHTML(text);
+    body.appendChild(why);
+  }
+
+  function rememberHistoryReason(reason) {
+    if (!reason || !eqNotesActive()) return;
+    state.eqReasons = state.eqReasons || {};
+    state.eqReasons[state.history.length - 1] = reason;
+  }
+
+  function siteStepMessage(reason, plain) {
+    if (reason && eqNotesActive()) return "<strong>צעד של האתר.</strong> " + siteReasonHTML(reason);
+    return plain;
+  }
+
+  function appendHistorySiteNote(li, body, index, isGiven) {
+    if (!eqNotesActive()) return;
+    if (state.eqReasons && state.eqReasons[index]) appendSiteWhy(body, state.eqReasons[index]);
+    if (!isGiven && !(state.eqReasons && state.eqReasons[index])) appendEqUserNote(li, String(index));
+  }
+
+  function appendQuadTrailNote(li, body, item, index) {
+    if (!eqNotesActive()) return;
+    if (item && item.reason) appendSiteWhy(body, item.reason);
+    else appendEqUserNote(li, "q:" + index);
+  }
+
+  function appendEqUserNote(parent, key) {
+    if (!eqNotesActive() || !key) return;
+    var saved = state.eqNotes && state.eqNotes[key];
+    if (!saved && state.locked) return;
+    var noteWrap = document.createElement("div");
+    noteWrap.className = "step-note";
+    if (saved) {
+      noteWrap.classList.add("has-text");
+      if (DoctematicaMath && DoctematicaMath.proseHTML) noteWrap.innerHTML = DoctematicaMath.proseHTML(saved);
+      else noteWrap.textContent = saved;
+    } else if (state.eqNoteOpen === key) {
+      var ta = document.createElement("textarea");
+      ta.rows = 2;
+      ta.dir = "rtl";
+      ta.className = "step-note-input";
+      ta.placeholder = "נימוק";
+      function saveNote() {
+        state.eqNotes = state.eqNotes || {};
+        var text = ta.value.trim();
+        if (text) state.eqNotes[key] = text;
+        else delete state.eqNotes[key];
+        state.eqNoteOpen = null;
+        renderSteps();
+      }
+      ta.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" && !ev.shiftKey) {
+          ev.preventDefault();
+          saveNote();
+        }
+      });
+      var saveBtn = document.createElement("button");
+      saveBtn.type = "button";
+      saveBtn.className = "step-note-save";
+      saveBtn.textContent = "שמירה";
+      saveBtn.addEventListener("click", saveNote);
+      noteWrap.appendChild(ta);
+      noteWrap.appendChild(saveBtn);
+      setTimeout(function () {
+        ta.focus();
+      }, 0);
+    } else {
+      var askBtn = document.createElement("button");
+      askBtn.type = "button";
+      askBtn.className = "step-note-ask";
+      askBtn.textContent = "לנמק?";
+      askBtn.addEventListener("click", function () {
+        state.eqNoteOpen = key;
+        renderSteps();
+      });
+      noteWrap.appendChild(askBtn);
+    }
+    parent.appendChild(noteWrap);
+    if (parent.tagName === "LI") parent.classList.add("has-step-note");
+  }
+
   function renderSteps() {
     stepsEl.innerHTML = "";
     if (state.problem && (state.problem.mode === "freq-table" || state.problem.mode === "percent")) {
       renderFreqSteps();
+      return;
+    }
+    if (state.problem && state.problem.mode === "fn") {
+      renderFnSteps();
       return;
     }
     if (state.problem && state.problem.mode === "geo-length" && state.history.length) {
@@ -5721,6 +6664,7 @@
           nQ.textContent = index === 0 ? "מקדמים" : String(index);
           var bodyQ = document.createElement("span");
           bodyQ.innerHTML = item.html;
+          appendQuadTrailNote(liQ, bodyQ, item, index);
           liQ.appendChild(nQ);
           liQ.appendChild(bodyQ);
           if (state.locked && index === liveTrail.length - 1) liQ.classList.add("solved-row");
@@ -5754,6 +6698,7 @@
           } else {
             body0.innerHTML = DoctematicaMath.toHTML(eq);
           }
+          appendHistorySiteNote(li0, body0, index, index === 0);
           li0.appendChild(n0);
           li0.appendChild(body0);
           stepsEl.appendChild(li0);
@@ -5767,6 +6712,7 @@
         n.textContent = index === 0 ? "מקדמים" : String(index);
         var body = document.createElement("span");
         body.innerHTML = item.html;
+        appendQuadTrailNote(li, body, item, index);
         li.appendChild(n);
         li.appendChild(body);
         if (state.locked && index === state.quad.trail.length - 1) li.classList.add("solved-row");
@@ -5809,11 +6755,9 @@
       }
       var whyText = state.sys && state.sys.reasons && state.sys.reasons[index];
       if (whyText && isSystemMode()) {
-        var why = document.createElement("span");
-        why.className = "sys-step-why";
-        why.textContent = whyText;
-        body.appendChild(why);
+        appendSiteWhy(body, whyText);
       }
+      appendHistorySiteNote(li, body, index, isGiven);
       li.appendChild(n);
       li.appendChild(body);
       var isKeep = state.sys && state.sys.keepAt && state.sys.keepAt.indexOf(index) !== -1;
@@ -5844,6 +6788,7 @@
         nF.textContent = index === 0 ? "מקדמים" : String(index);
         var bodyF = document.createElement("span");
         bodyF.innerHTML = item.html;
+        appendQuadTrailNote(liF, bodyF, item, index);
         liF.appendChild(nF);
         liF.appendChild(bodyF);
         stepsEl.appendChild(liF);
@@ -5861,6 +6806,12 @@
     var letters = ["א", "ב"];
     var wrap = document.createElement("li");
     wrap.className = "factor-fork";
+    if (st.splitReason && eqNotesActive()) {
+      var splitWhy = document.createElement("div");
+      splitWhy.className = "sys-step-why";
+      splitWhy.innerHTML = siteReasonHTML(st.splitReason);
+      wrap.appendChild(splitWhy);
+    }
     var i;
     for (i = 0; i < 2; i++) {
       var col = document.createElement("div");
@@ -5878,6 +6829,9 @@
         n.textContent = baseNum + k + "." + letters[i];
         var body = document.createElement("span");
         body.innerHTML = DoctematicaMath.toHTML(eq);
+        var branchWhy = st.why && st.why[i + ":" + k];
+        if (branchWhy) appendSiteWhy(body, branchWhy);
+        else if (!(k === 0 && st.splitReason)) appendEqUserNote(row, "f:" + i + ":" + k);
         row.appendChild(n);
         row.appendChild(body);
         if (st.solved[i] && isLast) {
@@ -6110,7 +7064,7 @@
     return wrap;
   }
 
-  function pushRootTrail(sign, numText, denText, valText) {
+  function pushRootTrail(sign, numText, denText, valText, reason) {
     var trail = state.quad.trail;
     var last = trail.length ? trail[trail.length - 1] : null;
     if (last && last.rootSign === sign) {
@@ -6125,13 +7079,16 @@
           row.appendChild(qFrac(qPlain(numText), qPlain(denText)));
         }
         last.html = row.outerHTML;
+        if (reason && eqNotesActive() && !last.reason) last.reason = reason;
         return;
       }
     }
-    trail.push({
+    var rootRow = {
       html: rootFracLine(sign, numText, denText, valText).outerHTML,
       rootSign: sign,
-    });
+    };
+    if (reason && eqNotesActive()) rootRow.reason = reason;
+    trail.push(rootRow);
   }
 
   function numNeedsSimplify(num) {
@@ -6156,9 +7113,13 @@
     pushRootTrail(sign, num, den);
   }
 
-  function pushTrailHtml(html) {
+  function pushTrailHtml(html, reason) {
     var trail = state.quad.trail;
-    if (!trail.length || trail[trail.length - 1].html !== html) trail.push({ html: html });
+    if (!trail.length || trail[trail.length - 1].html !== html) {
+      var item = { html: html };
+      if (reason && eqNotesActive()) item.reason = reason;
+      trail.push(item);
+    }
   }
 
   function startQuadSession() {
@@ -6459,7 +7420,7 @@
     return (
       isFormulaServerMode() ||
       sysQuadFormulaActive() ||
-      ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "formula")
+      ((isMixedServerMode() || geoEqSolveActive() || fnFormulaActive()) && mixedPath() === "formula")
     );
   }
 
@@ -6526,7 +7487,10 @@
       saveStats();
       renderStats();
       q.abcAt = res.nextLetter;
-      showFeedback(true, "<strong>נכון.</strong> " + (res.message || "עכשיו " + res.nextLetter + "."));
+      showFeedback(
+        true,
+        siteStepMessage(res.reason, "<strong>נכון.</strong> " + (res.message || "עכשיו " + res.nextLetter + "."))
+      );
       renderQuadGuide();
       return;
     }
@@ -6570,10 +7534,10 @@
         q.root.denDone = true;
       }
       if (parts.num && parts.num.more) q.root.lastNum = fields.num;
-      pushRootTrail(sign, q.root.lastNum, q.root.lastDen);
+      pushRootTrail(sign, q.root.lastNum, q.root.lastDen, null, res.reason);
       if (q.root.numDone && String(Q.numWant(want, sign) || "")) q.root.lastNum = String(Q.numWant(want, sign));
       if (q.root.denDone && String(Q.denWant(want) || "")) q.root.lastDen = String(Q.denWant(want));
-      showFeedback(true, "<strong>נכון.</strong> " + res.message);
+      showFeedback(true, siteStepMessage(res.reason, "<strong>נכון.</strong> " + res.message));
       renderQuadGuide();
       renderSteps();
       return;
@@ -6585,11 +7549,11 @@
       return;
     }
     var shown = slotVal("rval") || (res.fill && res.fill.rval) || "";
-    pushRootTrail(sign, q.root.lastNum, q.root.lastDen, shown);
+    pushRootTrail(sign, q.root.lastNum, q.root.lastDen, shown, res.reason);
     if (res.nextRoot === -1 || res.nextLetter === "x2") {
       q.root.plusDone = true;
       openRootChain(-1);
-      showFeedback(true, "<strong>נכון.</strong> עכשיו חשבו את x₂.");
+      showFeedback(true, siteStepMessage(res.reason, "<strong>נכון.</strong> עכשיו חשבו את x₂."));
       renderQuadGuide();
       renderSteps();
       return;
@@ -6625,7 +7589,9 @@
         if (progressed) {
           var snap = buildQuadFormula("progress").outerHTML;
           if (!q.trail.length || q.trail[q.trail.length - 1].html !== snap) {
-            q.trail.push({ html: snap });
+            var progItem = { html: snap };
+            if (result.reason && eqNotesActive()) progItem.reason = result.reason;
+            q.trail.push(progItem);
           }
           if (parts.disc && parts.disc.more) {
             q.compute.lastDisc = q.compute.disc;
@@ -6636,10 +7602,13 @@
         }
         showFeedback(
           true,
-          "<strong>נכון.</strong> " +
-            (progressed && q.compute.lastDisc
-              ? "עכשיו חשבו את " + prettyPart(q.compute.lastDisc) + "."
-              : result.message)
+          siteStepMessage(
+            result.reason,
+            "<strong>נכון.</strong> " +
+              (progressed && q.compute.lastDisc
+                ? "עכשיו חשבו את " + prettyPart(q.compute.lastDisc) + "."
+                : result.message)
+          )
         );
         renderQuadGuide();
         renderSteps();
@@ -6657,7 +7626,7 @@
     }
     if (q.phase === "abc") {
       q.gotAbc = true;
-      q.trail.push({
+      var abcItem = {
         html:
           '<span class="m-expr" dir="ltr">a = ' +
           String(want.a).replace(/-/g, "−") +
@@ -6666,7 +7635,9 @@
           ", c = " +
           String(want.c).replace(/-/g, "−") +
           "</span>",
-      });
+      };
+      if (result.reason && eqNotesActive()) abcItem.reason = result.reason;
+      q.trail.push(abcItem);
       if (state.mixed && state.mixed.md53) {
         renderQuadGuide();
         renderSteps();
@@ -6674,41 +7645,51 @@
         return;
       }
       q.phase = result.nextPhase || "plug";
-      showFeedback(true, "<strong>נכון.</strong> " + result.message);
+      showFeedback(true, siteStepMessage(result.reason, "<strong>נכון.</strong> " + result.message));
       renderQuadGuide();
       renderSteps();
       return;
     }
     if (q.phase === "plug") {
-      q.trail.push({ html: buildQuadFormula("plugged").outerHTML });
+      var plugItem = { html: buildQuadFormula("plugged").outerHTML };
+      if (result.reason && eqNotesActive()) plugItem.reason = result.reason;
+      q.trail.push(plugItem);
       q.phase = "compute";
       q.compute = {};
-      showFeedback(true, "<strong>נכון.</strong> " + result.message);
+      showFeedback(true, siteStepMessage(result.reason, "<strong>נכון.</strong> " + result.message));
       renderQuadGuide();
       renderSteps();
       return;
     }
     if (q.phase === "compute") {
       q.discDone = true;
-      q.trail.push({ html: buildQuadFormula("computed").outerHTML });
+      var compItem = { html: buildQuadFormula("computed").outerHTML };
+      if (result.reason && eqNotesActive()) compItem.reason = result.reason;
+      q.trail.push(compItem);
       q.phase = result.nextPhase || (want.kind === "none" ? "count" : "sqrt");
       q.compute = {};
-      showFeedback(true, "<strong>נכון.</strong> " + result.message);
+      showFeedback(true, siteStepMessage(result.reason, "<strong>נכון.</strong> " + result.message));
       renderQuadGuide();
       renderSteps();
       return;
     }
     if (q.phase === "sqrt") {
       q.sDone = true;
-      q.trail.push({ html: buildQuadFormula("rooted").outerHTML });
+      var rootItem = { html: buildQuadFormula("rooted").outerHTML };
+      if (result.reason && eqNotesActive()) rootItem.reason = result.reason;
+      q.trail.push(rootItem);
       q.phase = "count";
-      showFeedback(true, "<strong>נכון.</strong> " + result.message);
+      showFeedback(true, siteStepMessage(result.reason, "<strong>נכון.</strong> " + result.message));
       renderQuadGuide();
       renderSteps();
       return;
     }
     if (q.phase === "count") {
-      if (!result.skip) q.trail.push({ html: Q.kindLabel(want.kind) });
+      if (!result.skip) {
+        var kindItem = { html: Q.kindLabel(want.kind) };
+        if (result.reason && eqNotesActive()) kindItem.reason = result.reason;
+        q.trail.push(kindItem);
+      }
       if (want.kind === "none") {
         q.phase = "nosol";
       } else {
@@ -6716,13 +7697,13 @@
         q.root = { plusDone: false, minusDone: false };
         openRootChain(1);
       }
-      showFeedback(true, "<strong>נכון.</strong> " + result.message);
+      showFeedback(true, siteStepMessage(result.reason, "<strong>נכון.</strong> " + result.message));
       renderQuadGuide();
       renderSteps();
       return;
     }
     if (q.phase === "nosol") {
-      pushTrailHtml(Q.kindLabel("none"));
+      pushTrailHtml(Q.kindLabel("none"), result.reason);
       finishQuad(result.message);
       return;
     }
@@ -6743,6 +7724,7 @@
     renderQuadGuide();
     renderSteps();
     if (finishEqSolveForSys(ans)) return;
+    if (finishEqSolveForFn(ans)) return;
     if (finishEqSolveForGeo(ans || (state.problem.quad && state.problem.quad.answer))) return;
     markSolved();
     mathField.setDisabled(true);
@@ -6778,6 +7760,19 @@
 
   function clearGeoUi() {
     clearFreqUi();
+    if (fnSketch && !isFnMode()) fnSketch.hide();
+    if (solveWrap && !isFnMode()) {
+      solveWrap.classList.remove("has-fn-figure");
+      solveWrap.classList.remove("has-fn-sketch");
+    }
+    if (fnBoardEl && !isFnMode()) {
+      fnBoardEl.classList.remove("is-figure");
+      fnBoardEl.classList.remove("is-sketch");
+    }
+    if (answerRowEl && !isFnMode()) answerRowEl.classList.remove("hidden");
+    if (!isFnMode()) placeFnBoard("home");
+    if (!isFnMode()) renderFnDomains(null);
+    if (!isFnMode()) renderFnAxes(false);
     if (solveWrap) solveWrap.classList.remove("has-geo");
     if (coordBoard) coordBoard.clear();
     if (geoPartEl) {
@@ -7765,6 +8760,7 @@
     }
     if (res.progress) state.sqrtProg = res.progress;
     state.history.push(shownTyped);
+    rememberHistoryReason(res.reason);
     renderSteps();
     if (res.solved) {
       if (geoDistUnkTask() && finishEqSolveForGeo(shownTyped)) return;
@@ -7773,12 +8769,16 @@
       checkBtn.disabled = true;
       renderSteps();
       nextAfterSolveBtn.classList.remove("hidden");
-      showFeedback(true, "<strong>כל הכבוד.</strong> " + res.message);
+      showFeedback(true, siteStepMessage(res.reason, "<strong>כל הכבוד.</strong> " + res.message));
       return;
     }
     mathField.clear();
     var label = res.isolated || res.kind === "both" || res.kind === "finish" ? "נכון" : "צעד חוקי";
-    showFeedback(true, "<strong>" + label + ".</strong> " + res.message, res.solved ? undefined : "tip");
+    showFeedback(
+      true,
+      siteStepMessage(res.reason, "<strong>" + label + ".</strong> " + res.message),
+      "tip"
+    );
     mathField.focus();
   }
 
@@ -7863,6 +8863,162 @@
     return false;
   }
 
+  function sysFactorHistory() {
+    var start = (state.sys && state.sys.splitStart) || "";
+    var eq = (state.sys && state.sys.splitEq) || start;
+    if (!start) return [];
+    if (eq && eq !== start) return [start, eq];
+    return [start];
+  }
+
+  function factorAnswerLine(res) {
+    var eqs = (res && res.eqs) || [];
+    var bits = [];
+    eqs.forEach(function (eq) {
+      var s = String(eq || "").replace(/\s+/g, "");
+      if (/^x=/i.test(s)) bits.push(String(eq).trim());
+    });
+    return bits.join(", ");
+  }
+
+  function finishFactorForSys(res) {
+    if (!sysQuadFactorActive()) return false;
+    var letter = (state.sys && state.sys.splitLetter) || "x";
+    var typed = factorAnswerLine(res);
+    if (letter === "y") typed = typed.replace(/x/gi, "y");
+    state.mixed = emptyMixedState();
+    state.factor = emptyFactorState();
+    state.offerSplit = false;
+    updateSplitBtn();
+    renderSysGuide();
+    setModeUi();
+    if (!typed) {
+      showFeedback(false, "<strong>עוד לא.</strong> לא התקבלו שני הפתרונות.");
+      return true;
+    }
+    if (
+      !requestSystemsAction(
+        {
+          intent: "check",
+          typed: typed,
+          history: state.history || [],
+          choices: (state.sys && state.sys.choices) || [],
+        },
+        function (remote) {
+          applySysCheckView(typed, remote);
+        }
+      )
+    ) {
+      showBasicEqServerUnavailable();
+    }
+    return true;
+  }
+
+  function enterSysSplit() {
+    var start = state.sys && state.sys.splitStart;
+    var eq = state.sys && state.sys.splitEq;
+    if (!start || !eq) return;
+    state.mixed = emptyMixedState();
+    state.mixed.path = "factor";
+    state.factor = emptyFactorState();
+    state.offerSplit = false;
+    updateSplitBtn();
+    renderSysGuide();
+    if (
+      !requestQuadraticAction(
+        {
+          subtopic: "factor",
+          intent: "split",
+          start: start,
+          history: sysFactorHistory(),
+          factor: { split: false, trails: [[], []] },
+        },
+        function (res) {
+          if (!res || res.ok === false) {
+            state.mixed = emptyMixedState();
+            state.offerSplit = true;
+            updateSplitBtn();
+            renderSysGuide();
+            setModeUi();
+            showFeedback(false, "<strong>עוד לא.</strong> " + ((res && res.message) || ""));
+            return;
+          }
+          applyFactorServerResult("", res);
+        }
+      )
+    ) {
+      state.mixed = emptyMixedState();
+      state.offerSplit = true;
+      updateSplitBtn();
+      showBasicEqServerUnavailable();
+    }
+  }
+
+  function applySysFactorTyped(typed) {
+    typed = String(typed || "").trim();
+    if (!typed) {
+      showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
+      return;
+    }
+    if (
+      !requestQuadraticAction(
+        {
+          subtopic: "factor",
+          intent: "check",
+          start: state.sys.splitStart,
+          history: sysFactorHistory(),
+          previous: state.sys.splitEq,
+          typed: typed,
+          factor: factorPayload(),
+        },
+        function (res) {
+          applyFactorServerResult(typed, res);
+        }
+      )
+    ) {
+      showBasicEqServerUnavailable();
+    }
+  }
+
+  function sysFactorHint() {
+    requestQuadraticAction(
+      {
+        subtopic: "factor",
+        intent: "hint",
+        start: state.sys.splitStart,
+        history: sysFactorHistory(),
+        factor: factorPayload(),
+      },
+      function (remote) {
+        showFeedback(true, "<strong>רמז.</strong> " + ((remote && remote.hint) || "פתרו כל גורם בנפרד."), "tip");
+      }
+    );
+  }
+
+  function sysFactorOneStep() {
+    requestQuadraticAction(
+      {
+        subtopic: "factor",
+        intent: "one-step",
+        start: state.sys.splitStart,
+        history: sysFactorHistory(),
+        factor: factorPayload(),
+      },
+      function (remote) {
+        if (!remote) return;
+        if (remote.step) {
+          applyFactorServerResult(remote.step, remote);
+          return;
+        }
+        if (remote.split) {
+          applyFactorServerResult("", remote);
+          return;
+        }
+        showFeedback(true, "<strong>רמז.</strong> " + (remote.hint || "התרגיל כבר פתור."), "tip");
+      }
+    );
+  }
+
   function finishEqSolveForSys(answer) {
     if (!sysQuadFormulaActive()) return false;
     var letter = (state.sys && state.sys.formulaLetter) || "x";
@@ -7913,6 +9069,7 @@
     state.mixed = state.mixed || emptyMixedState();
     state.mixed.path = "formula";
     state.mixed.md53 = !!(md53 || res.md53);
+    if (isFnMode()) state.fnFormula = true;
     startQuadSession();
     if (res.view) mergeQuadView(res.view);
     renderQuadGuide();
@@ -7959,7 +9116,7 @@
       enterSysFormula(false);
       return;
     }
-    if (isMixedServerMode() || geoEqSolveActive()) {
+    if (isMixedServerMode() || geoEqSolveActive() || fnQuadSolveActive()) {
       requestQuadraticAction(
         {
           intent: "formula-enter",
@@ -7982,7 +9139,7 @@
       enterSysFormula(true);
       return;
     }
-    if (isMixedServerMode() || geoEqSolveActive()) {
+    if (isMixedServerMode() || geoEqSolveActive() || fnQuadSolveActive()) {
       requestQuadraticAction(
         {
           intent: "formula-enter",
@@ -8087,17 +9244,18 @@
         return;
       }
       state.history.push(shownTyped);
+      rememberHistoryReason(res.reason);
       renderSteps();
       if (res.solved) {
         markSolved();
         mathField.setDisabled(true);
         checkBtn.disabled = true;
         nextAfterSolveBtn.classList.remove("hidden");
-        showFeedback(true, "<strong>כל הכבוד.</strong> " + res.message);
+        showFeedback(true, siteStepMessage(res.reason, "<strong>כל הכבוד.</strong> " + res.message));
         return;
       }
       mathField.clear();
-      showFeedback(true, "<strong>נכון.</strong> " + res.message);
+      showFeedback(true, siteStepMessage(res.reason, "<strong>נכון.</strong> " + res.message));
       mathField.focus();
       setModeUi();
       return;
@@ -8111,21 +9269,23 @@
     }
     if (res.solved) {
       state.history.push(shownTyped);
+      rememberHistoryReason(res.reason);
       markSolved();
       mathField.setDisabled(true);
       checkBtn.disabled = true;
       renderSteps();
       nextAfterSolveBtn.classList.remove("hidden");
-      showFeedback(true, "<strong>כל הכבוד.</strong> " + res.message);
+      showFeedback(true, siteStepMessage(res.reason, "<strong>כל הכבוד.</strong> " + res.message));
       return;
     }
     clearLcdAssist();
     state.history.push(shownTyped);
+    rememberHistoryReason(res.reason);
     renderSteps();
     mathField.clear();
     updateSplitBtn();
     updateFormulaBtn();
-    showFeedback(true, "<strong>צעד חוקי.</strong> " + (res.message || ""));
+    showFeedback(true, siteStepMessage(res.reason, "<strong>צעד חוקי.</strong> " + (res.message || "")));
     mathField.focus();
   }
 
@@ -8293,9 +9453,21 @@
         ".</div></li>";
     }
     var i;
+    var stepNo = 0;
     for (i = 0; i < steps.length; i++) {
       var step = steps[i];
       var src = step && typeof step === "object" && step.eq != null ? step.eq : step;
+      if (/^משימה:/.test(String(src || ""))) {
+        var taskLabel = String(src).replace(/^משימה:/, "");
+        lines +=
+          '<li class="sol-task-row" value="' +
+          stepNo +
+          '">▸ ' +
+          taskLabel.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") +
+          "</li>";
+        continue;
+      }
+      stepNo += 1;
       var sysHtml = sysStepHTML(src, opts.lcdHats && opts.lcdHats[i]);
       var body = sysHtml
         ? sysHtml
@@ -8626,23 +9798,28 @@
     }
         if (maybeApplyLcdMarksOneStep()) return;
     var cur = lastHistoryEq();
-    function applySiteStep(actEq, actHint, result) {
+    function applySiteStep(actEq, actHint, result, reason) {
       if (!result.ok) {
         showFeedback(false, "<strong>לא הצלחתי לבצע את הצעד.</strong> " + result.message);
         return;
       }
       state.history.push(actEq);
+      if (reason) {
+        state.eqReasons = state.eqReasons || {};
+        state.eqReasons[state.history.length - 1] = reason;
+      }
       renderSteps();
       mathField.clear();
+      var said = reason ? siteReasonHTML(reason) : actHint || result.message;
       if (result.solved) {
         markSolved();
         mathField.setDisabled(true);
         checkBtn.disabled = true;
         nextAfterSolveBtn.classList.remove("hidden");
-        showFeedback(true, "<strong>צעד של האתר.</strong> " + (actHint || result.message));
+        showFeedback(true, "<strong>צעד של האתר.</strong> " + said);
         renderSteps();
       } else {
-        showFeedback(true, "<strong>צעד של האתר.</strong> " + (actHint || result.message), "tip");
+        showFeedback(true, "<strong>צעד של האתר.</strong> " + said, "tip");
         mathField.focus();
       }
     }
@@ -8660,7 +9837,7 @@
             return;
           }
           clearLcdAssist();
-          applySiteStep(remote.step, remote.hint, snapshotLinearCheck(remote));
+          applySiteStep(remote.step, remote.hint, snapshotLinearCheck(remote), remote.reason);
         }
       )
     ) {
@@ -8690,6 +9867,16 @@
         showSolution: percentSolution,
       };
     }
+    if (isFnMode()) {
+      return {
+        work: true,
+        buttons: true,
+        hintText: (state.fnView && state.fnView.hint) || "הציבו, חשבו, ורשמו נקודה או תחום.",
+        hint: fnHint,
+        oneStep: fnOneStep,
+        showSolution: fnSolution,
+      };
+    }
     if (isSystemMode()) {
       return {
         work: true,
@@ -8698,6 +9885,10 @@
         hint: function () {
           if (sysQuadFormulaActive()) {
             quadHint();
+            return;
+          }
+          if (sysQuadFactorActive()) {
+            sysFactorHint();
             return;
           }
           if (!state.sys) return;
@@ -8723,6 +9914,10 @@
         oneStep: function () {
           if (sysQuadFormulaActive()) {
             fillQuadStep();
+            return;
+          }
+          if (sysQuadFactorActive()) {
+            sysFactorOneStep();
             return;
           }
           if (!state.sys) return;
@@ -9537,6 +10732,12 @@
           state.freqView = null;
           state.view = null;
           if (window.DoctematicaUI) window.DoctematicaUI.view = null;
+        } else if (data.problem && data.problem.mode === "fn") {
+          state.fnView = data.view || null;
+          state.percentView = null;
+          state.freqView = null;
+          state.view = null;
+          if (window.DoctematicaUI) window.DoctematicaUI.view = null;
         } else if (data.view) applyGeoView(data.view);
         else {
           state.view = null;
@@ -9551,6 +10752,9 @@
   }
 
   function presentLoadedProblem() {
+    state.eqReasons = {};
+    state.eqNotes = {};
+    state.eqNoteOpen = null;
     if (isSystemMode()) {
       startSystemSession(state.problem);
       state.history = [];
@@ -9583,6 +10787,19 @@
       state.freqWorkDrafts = {};
       state.freqCellCursor = null;
       state.freqFocus = null;
+      clearLcdAssist();
+      clearGeoUi();
+    } else if (isFnMode()) {
+      state.sys = null;
+      state.quad = null;
+      state.factor = emptyFactorState();
+      state.mixed = emptyMixedState();
+      state.lcdMarks = {};
+      state.domain = null;
+      state.history = [];
+      state.freq = { step: "", done: false, found: {} };
+      state.fn = { progress: emptyFnProgress(), sketch: { points: [], line: null }, reasons: {}, axisLive: emptyAxisLive(), axisCards: [], axisDone: { y: false, x: false } };
+      state.fnFormula = false;
       clearLcdAssist();
       clearGeoUi();
     } else if (isPercentMode()) {
@@ -9627,6 +10844,7 @@
         isAnalyticTopic() ||
         isStatisticsTopic() ||
         isPercentTopic() ||
+        isCalculusTopic() ||
         (state.topic === "systems-sub" && (state.subtopic === "elim" || state.subtopic === "arrange"))
           ? currentTopicLabel() + " · "
           : "") +
@@ -9688,6 +10906,34 @@
       renderFreqPart(state.percentView);
       renderSteps();
       mathField.focus();
+      return;
+    }
+    if (isFnMode()) {
+      var fnStem = (state.fnView && state.fnView.stem) || state.problem.stem || state.problem.prompt || "";
+      promptEl.classList.remove("hidden");
+      promptEl.innerHTML = fnProse(fnStem);
+      mathWrap.classList.remove("hidden");
+      mathKeysEl.classList.remove("hidden");
+      checkBtn.classList.remove("hidden");
+      answerLabelEl.classList.remove("hidden");
+      if (freqAnswerEl) freqAnswerEl.classList.add("hidden");
+      mathField.setDisabled(false);
+      mathField.clear();
+      renderFnPart();
+      renderFnBoard();
+      syncFnAsk();
+      var openingPart = state.fnView && state.fnView.part && state.fnView.part.label;
+      if (openingPart) {
+        var openingMark = "§" + openingPart;
+        if ((state.history || []).indexOf(openingMark) < 0) state.history.push(openingMark);
+      }
+      ensureFnTaskHeader(state.fnView && state.fnView.pointHeading);
+      renderFnSteps();
+      if (mathWrap && !mathWrap.classList.contains("hidden")) mathField.focus();
+      else if (fnDomainsEl && !fnDomainsEl.classList.contains("hidden")) {
+        var firstDomain = fnDomainsEl.querySelector("input");
+        if (firstDomain) firstDomain.focus();
+      }
       return;
     }
     if (isSystemMode()) {
@@ -9954,6 +11200,19 @@
       return;
     }
 
+    if (isFnMode()) {
+      if (mixedPath() === "formula") {
+        handleQuadSubmit();
+        return;
+      }
+      if (state.fnView && state.fnView.input === "axes") {
+        submitFnAxis(focusedFnAxis());
+        return;
+      }
+      applyFnTyped(typedAnswer());
+      return;
+    }
+
     if (reasonBoxEl && !reasonBoxEl.classList.contains("hidden")) {
       applyRequiredReason(reasonInput ? reasonInput.value : "");
       return;
@@ -9961,6 +11220,11 @@
 
     if (isSystemMode() && sysQuadFormulaActive()) {
       handleQuadSubmit();
+      return;
+    }
+
+    if (isSystemMode() && sysQuadFactorActive()) {
+      applySysFactorTyped(typedAnswer());
       return;
     }
 
@@ -10130,6 +11394,10 @@
         applyFreqTyped("כן");
         return;
       }
+      if (isFnMode()) {
+        applyFnTyped("כן");
+        return;
+      }
       applyGeoTyped("כן");
     });
   }
@@ -10137,6 +11405,10 @@
     noBtn.addEventListener("click", function () {
       if (isFreqTableMode()) {
         applyFreqTyped("לא");
+        return;
+      }
+      if (isFnMode()) {
+        applyFnTyped("לא");
         return;
       }
       applyGeoTyped("לא");

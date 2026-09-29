@@ -179,6 +179,7 @@ function handleFactorOneStep(engine, body) {
   if (act.split) {
     var spl = handleFactorSplit(engine, body);
     spl.hint = String(act.hint || spl.message || "");
+    spl.reason = String(act.explain || "מכפלה שווה אפס רק אם אחד הגורמים אפס.");
     return spl;
   }
   if (!act.eq) {
@@ -186,6 +187,7 @@ function handleFactorOneStep(engine, body) {
   }
   var check = Q.checkFactorTyped(rec.prev, act.eq, rec.pack, cloneSt(rec.st));
   var out = snapshotFactor(check, { step: act.eq, hint: act.hint, canSplit: false, split: false });
+  if (check && check.ok) out.reason = String(act.explain || "");
   if (act.which != null) out.which = act.which;
   if (check && check.ok && (check.factored || check.rearrange)) {
     var found = lastProduct(Q, rec.pack, (body.history || []).concat([act.eq]));
