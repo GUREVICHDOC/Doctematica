@@ -1,0 +1,590 @@
+(function (global) {
+  var C = global.DoctematicaCurriculum;
+  if (!C || !C.levels) return;
+
+  function curve(pairs) {
+    return pairs.map(function (pair) {
+      return { qx: pair[0], qy: pair[1] };
+    });
+  }
+
+  function mark(qx, label) {
+    return { qx: qx, label: label };
+  }
+
+  var task = "רשמו את תחומי החיוביות ואת תחומי השליליות של הפונקציה.";
+
+  C.levels = C.levels.concat([
+    {
+      id: "calc-sign-1",
+      topic: "calculus",
+      subtopic: "pre",
+      mode: "fn",
+      title: "חיוביות ושליליות של פונקציה",
+      instruction:
+        "לפניכם סקיצה של גרף. נקודות החיתוך עם ציר ה־x מסומנות. רשמו את תחומי החיוביות ואת תחומי השליליות.",
+      exercises: [
+        {
+          id: "calc-sign-1-ex-a001",
+          n: 1,
+          signGraph: true,
+          stem: task,
+          parts: [{ text: task }],
+          zeros: [{ x: 2, kind: "cross" }],
+          regions: [
+            { from: "-inf", to: 2, property: "pos" },
+            { from: 2, to: "inf", property: "neg" },
+          ],
+          figure: {
+            curve: curve([
+              [-0.82, 0.58],
+              [-0.55, 0.46],
+              [-0.28, 0.32],
+              [0, 0.2],
+              [0.2, 0.08],
+              [0.4, 0],
+              [0.58, -0.16],
+              [0.78, -0.38],
+            ]),
+            marks: [mark(0.4, "2")],
+          },
+        },
+        {
+          id: "calc-sign-1-ex-a002",
+          n: 2,
+          signGraph: true,
+          stem: task,
+          parts: [{ text: task }],
+          zeros: [
+            { x: 3, kind: "cross" },
+            { x: 6, kind: "cross" },
+          ],
+          regions: [
+            { from: "-inf", to: 3, property: "pos" },
+            { from: 3, to: 6, property: "neg" },
+            { from: 6, to: "inf", property: "pos" },
+          ],
+          figure: {
+            curve: curve([
+              [-0.78, 0.55],
+              [-0.45, 0.36],
+              [-0.12, 0.16],
+              [0.08, 0],
+              [0.22, -0.22],
+              [0.32, -0.36],
+              [0.42, -0.22],
+              [0.55, 0],
+              [0.7, 0.24],
+              [0.86, 0.46],
+            ]),
+            marks: [mark(0.08, "3"), mark(0.55, "6")],
+          },
+        },
+        {
+          id: "calc-sign-1-ex-a003",
+          n: 3,
+          signGraph: true,
+          stem: task,
+          parts: [{ text: task }],
+          zeros: [{ x: -3, kind: "touch" }],
+          regions: [
+            { from: "-inf", to: -3, property: "pos" },
+            { from: -3, to: "inf", property: "pos" },
+          ],
+          figure: {
+            curve: curve([
+              [-0.86, 0.58],
+              [-0.7, 0.28],
+              [-0.56, 0.1],
+              [-0.46, 0.02],
+              [-0.4, 0],
+              [-0.34, 0.02],
+              [-0.22, 0.12],
+              [0, 0.34],
+              [0.28, 0.5],
+              [0.58, 0.58],
+              [0.82, 0.6],
+            ]),
+            marks: [mark(-0.4, "−3")],
+          },
+        },
+        {
+          id: "calc-sign-1-ex-a004",
+          n: 4,
+          signGraph: true,
+          stem: task,
+          parts: [{ text: task }],
+          zeros: [],
+          regions: [{ from: "-inf", to: "inf", property: "neg" }],
+          figure: {
+            curve: curve([
+              [-0.72, -0.62],
+              [-0.5, -0.38],
+              [-0.3, -0.26],
+              [-0.12, -0.2],
+              [0.08, -0.26],
+              [0.3, -0.4],
+              [0.52, -0.56],
+              [0.74, -0.7],
+            ]),
+            marks: [],
+          },
+        },
+        {
+          id: "calc-sign-1-ex-a005",
+          n: 5,
+          signGraph: true,
+          stem: task,
+          parts: [{ text: task }],
+          zeros: [{ x: -2, kind: "cross" }],
+          regions: [
+            { from: "-inf", to: -2, property: "neg" },
+            { from: -2, to: "inf", property: "pos" },
+          ],
+          figure: {
+            curve: curve([
+              [-0.82, -0.46],
+              [-0.64, -0.2],
+              [-0.46, 0],
+              [-0.28, 0.26],
+              [-0.08, 0.4],
+              [0.1, 0.2],
+              [0.26, 0.14],
+              [0.46, 0.32],
+              [0.66, 0.5],
+              [0.84, 0.62],
+            ]),
+            marks: [mark(-0.46, "−2")],
+          },
+        },
+        {
+          id: "calc-sign-1-ex-a006",
+          n: 6,
+          signGraph: true,
+          stem: task,
+          parts: [{ text: task }],
+          zeros: [
+            { x: 0, kind: "cross" },
+            { x: 4, kind: "cross" },
+            { x: 8, kind: "cross" },
+          ],
+          regions: [
+            { from: "-inf", to: 0, property: "neg" },
+            { from: 0, to: 4, property: "pos" },
+            { from: 4, to: 8, property: "neg" },
+            { from: 8, to: "inf", property: "pos" },
+          ],
+          figure: {
+            curve: curve([
+              [-0.7, -0.42],
+              [-0.38, -0.24],
+              [-0.14, -0.1],
+              [0, 0],
+              [0.14, 0.28],
+              [0.26, 0.36],
+              [0.4, 0],
+              [0.52, -0.26],
+              [0.62, -0.36],
+              [0.74, 0],
+              [0.86, 0.32],
+            ]),
+            marks: [mark(0, "0"), mark(0.4, "4"), mark(0.74, "8")],
+          },
+        },
+        {
+          id: "calc-sign-1-ex-a007",
+          n: 7,
+          signGraph: true,
+          stem: task,
+          parts: [{ text: task }],
+          zeros: [
+            { x: -2, kind: "cross" },
+            { x: 0, kind: "cross" },
+            { x: 2, kind: "cross" },
+          ],
+          regions: [
+            { from: "-inf", to: -2, property: "pos" },
+            { from: -2, to: 0, property: "neg" },
+            { from: 0, to: 2, property: "pos" },
+            { from: 2, to: "inf", property: "neg" },
+          ],
+          figure: {
+            curve: curve([
+              [-0.82, 0.48],
+              [-0.64, 0.22],
+              [-0.48, 0],
+              [-0.28, -0.3],
+              [-0.12, -0.16],
+              [0, 0],
+              [0.16, 0.28],
+              [0.32, 0.4],
+              [0.48, 0],
+              [0.66, -0.26],
+              [0.84, -0.46],
+            ]),
+            marks: [mark(-0.48, "−2"), mark(0, "0"), mark(0.48, "2")],
+          },
+        },
+        {
+          id: "calc-sign-1-ex-a008",
+          n: 8,
+          signGraph: true,
+          stem: task,
+          parts: [{ text: task }],
+          zeros: [
+            { x: -3, kind: "cross" },
+            { x: -1, kind: "cross" },
+            { x: 3, kind: "cross" },
+            { x: 5, kind: "cross" },
+          ],
+          regions: [
+            { from: "-inf", to: -3, property: "neg" },
+            { from: -3, to: -1, property: "pos" },
+            { from: -1, to: 3, property: "neg" },
+            { from: 3, to: 5, property: "pos" },
+            { from: 5, to: "inf", property: "neg" },
+          ],
+          figure: {
+            curve: curve([
+              [-0.86, -0.4],
+              [-0.74, -0.16],
+              [-0.62, 0],
+              [-0.48, 0.3],
+              [-0.36, 0.14],
+              [-0.28, 0],
+              [-0.08, -0.28],
+              [0.12, -0.36],
+              [0.28, 0],
+              [0.4, 0.28],
+              [0.5, 0.14],
+              [0.62, 0],
+              [0.74, -0.2],
+              [0.86, -0.4],
+            ]),
+            marks: [mark(-0.62, "−3"), mark(-0.28, "−1"), mark(0.28, "3"), mark(0.62, "5")],
+          },
+        },
+        {
+          id: "calc-sign-1-ex-a009",
+          n: 9,
+          signGraph: true,
+          stem: task,
+          parts: [{ text: task }],
+          zeros: [
+            { x: 0, kind: "cross" },
+            { x: 4, kind: "touch" },
+          ],
+          regions: [
+            { from: "-inf", to: 0, property: "neg" },
+            { from: 0, to: 4, property: "pos" },
+            { from: 4, to: "inf", property: "pos" },
+          ],
+          figure: {
+            curve: curve([
+              [-0.62, -0.48],
+              [-0.32, -0.22],
+              [-0.1, -0.06],
+              [0, 0],
+              [0.14, 0.34],
+              [0.26, 0.44],
+              [0.36, 0.16],
+              [0.44, 0.03],
+              [0.5, 0],
+              [0.58, 0.14],
+              [0.72, 0.4],
+              [0.86, 0.6],
+            ]),
+            marks: [mark(0, "0"), mark(0.5, "4")],
+          },
+        },
+        {
+          id: "calc-sign-1-ex-a010",
+          n: 10,
+          signGraph: true,
+          stem: task,
+          parts: [{ text: task }],
+          zeros: [
+            { x: -3, kind: "touch" },
+            { x: 3, kind: "touch" },
+          ],
+          regions: [
+            { from: "-inf", to: -3, property: "pos" },
+            { from: -3, to: 3, property: "pos" },
+            { from: 3, to: "inf", property: "pos" },
+          ],
+          figure: {
+            curve: curve([
+              [-0.84, 0.55],
+              [-0.64, 0.2],
+              [-0.5, 0.04],
+              [-0.42, 0],
+              [-0.28, 0.24],
+              [-0.08, 0.44],
+              [0.08, 0.44],
+              [0.28, 0.24],
+              [0.42, 0],
+              [0.5, 0.04],
+              [0.64, 0.2],
+              [0.84, 0.55],
+            ]),
+            marks: [mark(-0.42, "−3"), mark(0.42, "3")],
+          },
+        },
+        {
+          id: "calc-sign-1-ex-a011",
+          n: 11,
+          freeSketch: true,
+          stem: "הפונקציה f(x) מוגדרת לכל x, ומתקיים f(2)=6. שרטטו סקיצה אפשרית של גרף הפונקציה בכל מקרה.",
+          constraints: [
+            { type: "DOMAIN", all: true },
+            { type: "KNOWN_POINT", x: 2, y: 6 },
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "לפונקציה אין נקודות אפס.",
+              constraints: [
+                { type: "ZERO_COUNT", count: 0 },
+                { type: "HAS_NEGATIVE", value: false },
+              ],
+              tasks: [{ id: "sketch-a", kind: "freeSketch" }],
+            },
+            {
+              label: "ב",
+              text: "לפונקציה יש נקודת אפס אחת ויש לה גם ערכים שליליים.",
+              constraints: [
+                { type: "ZERO_COUNT", count: 1 },
+                { type: "HAS_NEGATIVE", value: true },
+              ],
+              tasks: [{ id: "sketch-b", kind: "freeSketch" }],
+            },
+            {
+              label: "ג",
+              text: "לפונקציה יש נקודת אפס אחת ואין לה ערכים שליליים.",
+              constraints: [
+                { type: "ZERO_COUNT", count: 1 },
+                { type: "HAS_NEGATIVE", value: false },
+              ],
+              tasks: [{ id: "sketch-c", kind: "freeSketch" }],
+            },
+          ],
+        },
+        {
+          id: "calc-sign-1-ex-a012",
+          n: 12,
+          freeSketch: true,
+          stem: "הפונקציה f(x) מוגדרת לכל x, ומתקיים f(0)=4, f(−3)=−1.",
+          constraints: [
+            { type: "DOMAIN", all: true },
+            { type: "KNOWN_POINT", x: -3, y: -1 },
+            { type: "KNOWN_POINT", x: 0, y: 4 },
+          ],
+          parts: [
+            {
+              label: "א(1)",
+              text: "שרטטו סקיצה אפשרית של גרף הפונקציה, אם יש לה שתי נקודות אפס.",
+              constraints: [{ type: "ZERO_COUNT", count: 2 }],
+              tasks: [{ id: "sketch-two", kind: "freeSketch" }],
+            },
+            {
+              label: "א(2)",
+              text: "שרטטו סקיצה אפשרית של גרף הפונקציה, אם יש לה נקודת אפס אחת.",
+              constraints: [{ type: "ZERO_COUNT", count: 1 }],
+              tasks: [{ id: "sketch-one", kind: "freeSketch" }],
+            },
+            {
+              label: "ב",
+              text: "האם ייתכן שלפונקציה אין נקודות אפס? נמקו.",
+              tasks: [{
+                id: "no-zero",
+                kind: "feasible",
+                prompt: "האם ייתכן שלפונקציה אין נקודות אפס?",
+                claim: { type: "zeros", count: 0 },
+                reason: "signChange",
+              }],
+            },
+          ],
+        },
+        {
+          id: "calc-sign-1-ex-a013",
+          n: 13,
+          freeSketch: true,
+          stem: "הפונקציה f(x) מוגדרת בתחום 0≤x≤6. היא חיובית בתחום 2<x≤6 ושלילית בתחום 0≤x<2.",
+          constraints: [
+            { type: "DOMAIN", min: 0, max: 6, includeMin: true, includeMax: true },
+            { type: "NEGATIVE_INTERVAL", from: 0, to: 2, includeFrom: true, includeTo: false },
+            { type: "POSITIVE_INTERVAL", from: 2, to: 6, includeFrom: false, includeTo: true },
+            { type: "ZERO_AT_X", x: 2 },
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "כתבו את שיעורי נקודות האפס של הפונקציה.",
+              tasks: [{ id: "zeros-2", kind: "zeros", xs: [2] }],
+            },
+            {
+              label: "ב(1)",
+              text: "האם ייתכן ש־f(6)>f(5)? אם כן, שרטטו גרף מתאים.",
+              constraints: [{ type: "VALUE_RELATION", x1: 6, x2: 5, op: ">" }],
+              tasks: [
+                { id: "gt-ask", kind: "feasible", prompt: "האם ייתכן ש־f(6)>f(5)?", claim: { type: "relation", x1: 6, x2: 5, op: ">" } },
+                { id: "gt-sketch", kind: "freeSketch" },
+              ],
+            },
+            {
+              label: "ב(2)",
+              text: "האם ייתכן ש־f(6)<f(5)? אם כן, שרטטו גרף מתאים.",
+              constraints: [{ type: "VALUE_RELATION", x1: 6, x2: 5, op: "<" }],
+              tasks: [
+                { id: "lt-ask", kind: "feasible", prompt: "האם ייתכן ש־f(6)<f(5)?", claim: { type: "relation", x1: 6, x2: 5, op: "<" } },
+                { id: "lt-sketch", kind: "freeSketch" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "calc-sign-1-ex-a014",
+          n: 14,
+          freeSketch: true,
+          stem: "הפונקציה f(x) מוגדרת בתחום −3≤x≤4. היא חיובית בתחום 0<x<3, ושלילית עבור x<0 או x>3 בתוך תחום ההגדרה.",
+          constraints: [
+            { type: "DOMAIN", min: -3, max: 4, includeMin: true, includeMax: true },
+            { type: "NEGATIVE_INTERVAL", from: -3, to: 0, includeFrom: true, includeTo: false },
+            { type: "POSITIVE_INTERVAL", from: 0, to: 3, includeFrom: false, includeTo: false },
+            { type: "NEGATIVE_INTERVAL", from: 3, to: 4, includeFrom: false, includeTo: true },
+            { type: "ZERO_AT_X", x: 0 },
+            { type: "ZERO_AT_X", x: 3 },
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "מהם שיעורי נקודות האפס של הפונקציה?",
+              tasks: [{ id: "zeros-03", kind: "zeros", xs: [0, 3] }],
+            },
+            {
+              label: "ב(1)",
+              text: "שרטטו סקיצה אפשרית כך ש־f(−3)<f(−2).",
+              constraints: [{ type: "VALUE_RELATION", x1: -3, x2: -2, op: "<" }],
+              tasks: [{ id: "low-sketch", kind: "freeSketch" }],
+            },
+            {
+              label: "ב(2)",
+              text: "שרטטו סקיצה אפשרית כך ש־f(−3)>f(−2).",
+              constraints: [{ type: "VALUE_RELATION", x1: -3, x2: -2, op: ">" }],
+              tasks: [{ id: "high-sketch", kind: "freeSketch" }],
+            },
+          ],
+        },
+        {
+          id: "calc-sign-1-ex-a015",
+          n: 15,
+          freeSketch: true,
+          stem: "הפונקציה f(x) מוגדרת לכל x. נתון ש־f(x)>0 עבור x>5 או −6<x<1, ו־f(x)<0 עבור 1<x<5 או x<−6.",
+          constraints: [
+            { type: "DOMAIN", all: true },
+            { type: "NEGATIVE_INTERVAL", from: "-inf", to: -6, includeTo: false },
+            { type: "POSITIVE_INTERVAL", from: -6, to: 1, includeFrom: false, includeTo: false },
+            { type: "NEGATIVE_INTERVAL", from: 1, to: 5, includeFrom: false, includeTo: false },
+            { type: "POSITIVE_INTERVAL", from: 5, to: "inf", includeFrom: false },
+            { type: "ZERO_AT_X", x: -6 },
+            { type: "ZERO_AT_X", x: 1 },
+            { type: "ZERO_AT_X", x: 5 },
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "מהם שיעורי נקודות האפס של הפונקציה?",
+              tasks: [{ id: "zeros-15", kind: "zeros", xs: [-6, 1, 5] }],
+            },
+            {
+              label: "ב",
+              text: "שרטטו סקיצה אפשרית של גרף הפונקציה.",
+              tasks: [{ id: "sketch-15", kind: "freeSketch" }],
+            },
+            {
+              label: "ג(1)",
+              text: "האם ייתכן ש־f(−4)<0?",
+              tasks: [{
+                id: "neg4",
+                kind: "feasible",
+                prompt: "האם ייתכן ש־f(−4)<0?",
+                askMode: "can",
+                claim: { type: "signBound", x: -4, op: "<", value: 0 },
+              }],
+            },
+            {
+              label: "ג(2)",
+              text: "האם ייתכן ש־f(3)>f(−3)?",
+              tasks: [{
+                id: "cmp-3",
+                kind: "feasible",
+                prompt: "האם ייתכן ש־f(3)>f(−3)?",
+                askMode: "can",
+                claim: { type: "relation", x1: 3, x2: -3, op: ">" },
+              }],
+            },
+            {
+              label: "ג(3)",
+              text: "האם ייתכן ש־f(60)<10?",
+              tasks: [{
+                id: "sixty",
+                kind: "feasible",
+                prompt: "האם ייתכן ש־f(60)<10?",
+                askMode: "can",
+                claim: { type: "signBound", x: 60, op: "<", value: 10 },
+              }],
+            },
+          ],
+        },
+        {
+          id: "calc-sign-1-ex-a016",
+          n: 16,
+          freeSketch: true,
+          stem: "הפונקציה f(x) מוגדרת לכל x, גם ב־x=5. נתון ש־f(x)>0 עבור x>0 פרט ל־x=5, ו־f(x)<0 עבור x<0.",
+          constraints: [
+            { type: "DOMAIN", all: true },
+            { type: "NEGATIVE_INTERVAL", from: "-inf", to: 0, includeTo: false },
+            { type: "POSITIVE_INTERVAL", from: 0, to: 5, includeFrom: false, includeTo: false },
+            { type: "POSITIVE_INTERVAL", from: 5, to: "inf", includeFrom: false },
+            { type: "ZERO_AT_X", x: 0 },
+            { type: "SIGN_EXCEPTION", x: 5 },
+          ],
+          parts: [
+            {
+              label: "א",
+              text: "מהם שיעורי נקודות האפס של הפונקציה?",
+              tasks: [{ id: "zeros-16", kind: "zeros", xs: [0] }],
+            },
+            {
+              label: "ב",
+              text: "שרטטו סקיצה אפשרית של גרף הפונקציה.",
+              tasks: [{ id: "sketch-16", kind: "freeSketch" }],
+            },
+            {
+              label: "ג(1)",
+              text: "האם בהכרח f(5)=f(0)?",
+              tasks: [{
+                id: "must-eq",
+                kind: "feasible",
+                prompt: "האם בהכרח f(5)=f(0)?",
+                askMode: "must",
+                claim: { type: "relation", x1: 5, x2: 0, op: "=" },
+              }],
+            },
+            {
+              label: "ג(2)",
+              text: "האם ייתכן ש־f(5)>f(0)?",
+              tasks: [{
+                id: "can-gt",
+                kind: "feasible",
+                prompt: "האם ייתכן ש־f(5)>f(0)?",
+                askMode: "can",
+                claim: { type: "relation", x1: 5, x2: 0, op: ">" },
+              }],
+            },
+          ],
+        },
+      ],
+    },
+  ]);
+})(typeof window !== "undefined" ? window : global);

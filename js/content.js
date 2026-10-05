@@ -1,5 +1,36 @@
 (function (global) {
   function buildProblem(ex, level) {
+    if (level.mode === "meet" && ex.parts && ex.tasks) {
+      return {
+        mode: "fn",
+        compare: true,
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction,
+        stem: ex.stem || "",
+        prompt: ex.stem || level.instruction || "",
+        parts: (ex.parts || []).map(function (part) {
+          return { label: part.label || "", text: part.text || "" };
+        }),
+        explain: "השוו בין הגרפים. נקודות מפגש שכבר נמצאו נשמרות לסעיפים הבאים.",
+      };
+    }
+    if (level.mode === "meet" && ex.eq1 && ex.eq2) {
+      return {
+        mode: "meet",
+        stage: ex.stage || "points",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction,
+        eq1: ex.eq1,
+        eq2: ex.eq2,
+        explain: "מצאו את נקודות המפגש: זוג סדור (x, y) לכל נקודה, או אין נקודת מפגש.",
+      };
+    }
     if (ex.eq1 && ex.eq2) {
       var elim = level.mode === "system-elim";
       var arrange = level.mode === "system-arrange";
@@ -35,6 +66,34 @@
         explain: "הוציאו גורם משותף x (ואפשר גם מספר), ואז פתרו כל גורם כמשוואה ששווה לאפס.",
       };
     }
+    if (level.mode === "biquad") {
+      return {
+        mode: "biquad",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction,
+        prompt: ex.start,
+        startEquation: ex.start,
+        explain:
+          "אם החזקות קשורות ביחס 2n ו־n, מציבים t=xⁿ, פותרים משוואה ריבועית ב־t, וחוזרים ל־x בכל ערך.",
+      };
+    }
+    if (level.mode === "high-chain") {
+      return {
+        mode: level.mode,
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction,
+        prompt: ex.start,
+        startEquation: ex.start,
+        explain:
+          "סדרו לאגף אחד, הוציאו חזקה משותפת של x, פצלו, ופתרו כל ענף לפי הסוג שלו. אוספים את כל הפתרונות בלי כפילויות.",
+      };
+    }
     if (level.mode === "high-factor") {
       return {
         mode: level.mode,
@@ -47,6 +106,74 @@
         startEquation: ex.start,
         explain:
           "העבירו לאגף אחד אם צריך, הוציאו חזקה משותפת של x, פצלו לשתי משוואות, ופתרו — ייתכן שענף אחד ריבועי.",
+      };
+    }
+    if (level.mode === "fn" && ex.levelProbe) {
+      return {
+        mode: "fn",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction || "",
+        prompt: ex.stem || "",
+        stem: ex.stem || "",
+        levelProbe: true,
+        parts: (ex.parts || []).map(function (part) {
+          return { label: part.label || "", text: part.text || "" };
+        }),
+        explain: "הגרף נתון. הוסיפו ישר אופקי y=k וספרו בכמה נקודות הוא פוגש את הגרף. f(x)=k הוא אותו ישר.",
+      };
+    }
+    if (level.mode === "fn" && ex.freeSketch) {
+      return {
+        mode: "fn",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction || "",
+        prompt: ex.stem || "",
+        stem: ex.stem || "",
+        freeSketch: true,
+        parts: (ex.parts || []).map(function (part) {
+          return { label: part.label || "", text: part.text || "" };
+        }),
+        explain: "סמנו את הנקודות שנובעות מהנתונים, ושרטטו סקיצה אפשרית שעומדת בכל האילוצים.",
+      };
+    }
+    if (level.mode === "fn" && ex.monoGraph) {
+      return {
+        mode: "fn",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction || "",
+        prompt: ex.stem || "",
+        stem: ex.stem || "",
+        monoGraph: true,
+        parts: (ex.parts || []).map(function (part) {
+          return { label: part.label || "", text: part.text || "" };
+        }),
+        explain: "קבעו מינימום או מקסימום לפי שינוי כיוון הגרף, ואז רשמו את תחומי העלייה והירידה לפי x.",
+      };
+    }
+    if (level.mode === "fn" && ex.signGraph) {
+      return {
+        mode: "fn",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction || "",
+        prompt: ex.stem || "",
+        stem: ex.stem || "",
+        signGraph: true,
+        parts: (ex.parts || []).map(function (part) {
+          return { label: part.label || "", text: part.text || "" };
+        }),
+        explain: "קראו מהסקיצה איפה הגרף מעל ציר ה־x ואיפה מתחתיו. נקודת אפס אינה חלק מהתחום.",
       };
     }
     if (level.mode === "fn") {
@@ -269,6 +396,81 @@
         explain: "",
       };
     }
+    if (level.mode === "param" && ex.param) {
+      var paramPack = global.DoctematicaFn && DoctematicaFn.prepare(ex);
+      return {
+        mode: "fn",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: ex.instruction || level.instruction,
+        prompt: ex.stem || "",
+        stem: ex.stem || "",
+        fn: paramPack,
+        explain: "הציבו את הנקודה בפונקציה, מצאו את הפרמטר, ואז המשיכו עם הפונקציה שהתקבלה.",
+      };
+    }
+    if (level.mode === "ineq-quad") {
+      return {
+        mode: "ineq-quad",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: ex.instruction || level.instruction,
+        prompt: ex.start,
+        startEquation: ex.start,
+        explain: "מוצאים את נקודות האפס, קובעים את הסימן בכל תחום, וכותבים את הפתרון.",
+      };
+    }
+    if (level.mode === "ineq-and" || level.mode === "ineq-or") {
+      var union = level.mode === "ineq-or";
+      return {
+        mode: level.mode,
+        op: union ? "union" : "intersection",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: ex.instruction || level.instruction,
+        prompt: (ex.conds || []).join(union ? " או " : " וגם "),
+        conds: ex.conds || [],
+        explain: union
+          ? "במערכת «או» מחפשים את הערכים שמקיימים לפחות אחד מהתנאים."
+          : "במערכת «וגם» מחפשים את הערכים שמקיימים את כל התנאים בו־זמנית.",
+      };
+    }
+    if (level.mode === "ineq") {
+      return {
+        mode: "ineq",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: ex.instruction || level.instruction,
+        prompt: ex.start,
+        startEquation: ex.start,
+        explain: "בודדו את x. כשמחלקים או כופלים במספר שלילי, כיוון אי־השוויון מתהפך.",
+      };
+    }
+    if (level.mode === "param") {
+      return {
+        mode: "param",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: ex.instruction || level.instruction,
+        prompt: ex.start,
+        startEquation: ex.start,
+        solveFor: ex.solveFor || null,
+        given: ex.given || null,
+        explain: ex.given
+          ? "הציבו את הערך הנתון של x, ואז בודדו את a."
+          : "בודדו את x. שאר האותיות נשארות פרמטרים בביטוי, למשל x = 12 − m.",
+      };
+    }
     if ((level.subtopic || "basic") === "basic") {
       return {
         mode: "steps",
@@ -403,6 +605,9 @@
         }
         if (topicId === "calculus" && subtopicId) {
           return (item.subtopic || "intro") === subtopicId;
+        }
+        if (topicId === "inequalities" && subtopicId) {
+          return (item.subtopic || "linear") === subtopicId;
         }
         return true;
       });

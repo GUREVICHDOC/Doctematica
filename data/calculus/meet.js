@@ -1,0 +1,136 @@
+(function (global) {
+  var C = global.DoctematicaCurriculum;
+  if (!C || !C.levels) return;
+  C.levels = C.levels.concat([
+    {
+      id: "calc-meet-1",
+      topic: "calculus",
+      subtopic: "intro",
+      mode: "meet",
+      title: "נקודות מפגש ואי שוויונים",
+      instruction: "מצאו את נקודות המפגש של שני הגרפים. רשמו כל נקודה כזוג סדור.",
+      exercises: [
+        { id: "calc-meet-1-ex-a001", n: 1, stage: "points", eq1: "y=x+5", eq2: "y=2x+4" },
+        { id: "calc-meet-1-ex-a002", n: 2, stage: "points", eq1: "y=-4x+40", eq2: "y=3x+5" },
+        { id: "calc-meet-1-ex-a003", n: 3, stage: "points", eq1: "y=x^2-3", eq2: "y=2x" },
+        { id: "calc-meet-1-ex-a004", n: 4, stage: "points", eq1: "y=2x^2-3x", eq2: "2x+y=3" },
+        { id: "calc-meet-1-ex-a005", n: 5, stage: "points", eq1: "y=x^2+18", eq2: "y=-x^2+12x" },
+        { id: "calc-meet-1-ex-a006", n: 6, stage: "points", eq1: "4x^2-5y=-6", eq2: "3x^2+2y=-3.4" },
+        {
+          id: "calc-meet-1-ex-a007",
+          n: 7,
+          stage: "compare",
+          stem: "בציור מתוארים שני ישרים. f(x) = 2x − 3 ו־g(x) = −x + 6.",
+          f: "2x-3",
+          g: "-x+6",
+          parts: [
+            { label: "א", text: "מצאו את שיעורי נקודת המפגש P של f(x) עם g(x).", taskIds: ["meet"] },
+            { label: "ב", text: "עבור איזה ערך של x מתקיים f(x) = g(x)?", taskIds: ["eqx"] },
+            { label: "ג", text: "מצאו ערך כלשהו של x שעבורו f(x) > g(x).", taskIds: ["sample"] },
+            { label: "ד", text: "מצאו על פי הציור עבור אילו ערכי x מתקיים f(x) > g(x), ועבור אילו מתקיים f(x) < g(x).", taskIds: ["both"] },
+          ],
+          tasks: [
+            { id: "meet", kind: "meetPoint" },
+            { id: "eqx", kind: "meetX" },
+            { id: "sample", kind: "example", rel: "gt" },
+            { id: "both", kind: "comparePair" },
+          ],
+        },
+        {
+          id: "calc-meet-1-ex-a008",
+          n: 8,
+          stage: "compare",
+          stem: "בציור מתוארים הגרפים. f(x) = (1/2)x + 1 ו־g(x) = 2x − 2.",
+          f: "(1/2)x+1",
+          g: "2x-2",
+          parts: [
+            { label: "א", text: "לאיזה ערך של x מתקיים f(x) = g(x)?", taskIds: ["eqx"] },
+            { label: "ב", text: "מצאו עבור אילו ערכי x מתקיים f(x) > g(x), ועבור אילו מתקיים f(x) < g(x).", taskIds: ["both"] },
+            { label: "ג", text: "מצאו על פי הציור עבור אילו ערכי x מתקיים g(x) ≤ f(x).", taskIds: ["le"] },
+            { label: "ה", text: "מצאו על פי הציור עבור אילו ערכי x מתקיים g(x) > 0.", taskIds: ["pos"] },
+          ],
+          tasks: [
+            { id: "eqx", kind: "meetX" },
+            { id: "both", kind: "comparePair" },
+            { id: "le", kind: "compare", who: "f", include: true },
+            { id: "pos", kind: "positivity", fn: "g" },
+          ],
+        },
+        {
+          id: "calc-meet-1-ex-a009",
+          n: 9,
+          stage: "compare",
+          stem: "הגרף של הישר f(x) והפרבולה g(x) שבציור נחתכים בנקודות (2, 4) ו־(6, 7).",
+          fRole: "line",
+          gRole: "parabola",
+          gOpens: "down",
+          points: [{ x: 2, y: 4 }, { x: 6, y: 7 }],
+          parts: [
+            { label: "א", text: "ערך של איזו פונקציה, f(x) או g(x), גדול יותר עבור x = 7?", taskIds: ["which"] },
+            { label: "ב", text: "תנו דוגמה לערך x שעבורו ערך הישר קטן מערך הפרבולה.", taskIds: ["sample"] },
+            { label: "ג", text: "לאילו ערכים של x מתקיים f(x) < g(x)?", taskIds: ["lt"] },
+            { label: "ד", text: "לאילו ערכים של x מתקיים f(x) > g(x)?", taskIds: ["gt"] },
+          ],
+          tasks: [
+            { id: "which", kind: "whichFn", at: 7 },
+            { id: "sample", kind: "example", rel: "lt" },
+            { id: "lt", kind: "compare", who: "g", include: false },
+            { id: "gt", kind: "compare", who: "f", include: false },
+          ],
+        },
+        {
+          id: "calc-meet-1-ex-a010",
+          n: 10,
+          stage: "compare",
+          stem: "בציור משורטטים הגרפים. f(x) = x² − 6x + 9 ו־g(x) = x + 3.",
+          f: "x^2-6x+9",
+          g: "x+3",
+          parts: [
+            { label: "א", text: "לאילו ערכי x מתקיים f(x) = g(x)?", taskIds: ["eqx"] },
+            { label: "ב", text: "לאילו ערכי x מתקיים f(x) > g(x)?", taskIds: ["gt"] },
+            { label: "ג", text: "לאילו ערכי x מתקיים f(x) < g(x)?", taskIds: ["lt"] },
+            { label: "ה", text: "לאילו ערכי x הישר אינו מעל הפרבולה?", taskIds: ["not"] },
+          ],
+          tasks: [
+            { id: "eqx", kind: "meetX" },
+            { id: "gt", kind: "compare", who: "f", include: false },
+            { id: "lt", kind: "compare", who: "g", include: false },
+            { id: "not", kind: "compare", who: "f", include: true, notAbove: true, subject: "g" },
+          ],
+        },
+        {
+          id: "calc-meet-1-ex-a011",
+          n: 11,
+          stage: "compare",
+          stem: "לפניכם גרפים של שתי פונקציות. f(x) = x² + 3 ו־g(x) = x + 1.",
+          f: "x^2+3",
+          g: "x+1",
+          parts: [
+            { label: "א", text: "הראו בדרך אלגברית שהגרפים אינם נפגשים.", taskIds: ["meet"] },
+            { label: "ב", text: "מצאו עבור אילו ערכי x מתקיים f(x) > g(x), ועבור אילו מתקיים f(x) < g(x).", taskIds: ["both"] },
+          ],
+          tasks: [
+            { id: "meet", kind: "meetPoint" },
+            { id: "both", kind: "comparePair" },
+          ],
+        },
+        {
+          id: "calc-meet-1-ex-a012",
+          n: 12,
+          stage: "compare",
+          stem: "לפניכם גרפים של שתי פונקציות. f(x) = −x² + 2x + 2 ו־g(x) = −2x + 6.",
+          f: "-x^2+2x+2",
+          g: "-2x+6",
+          parts: [
+            { label: "א", text: "לאיזה ערך של x מתקיים f(x) = g(x)?", taskIds: ["eqx"] },
+            { label: "ב", text: "מצאו עבור אילו ערכי x מתקיים f(x) > g(x), ועבור אילו מתקיים f(x) < g(x).", taskIds: ["both"] },
+          ],
+          tasks: [
+            { id: "eqx", kind: "meetX" },
+            { id: "both", kind: "comparePair" },
+          ],
+        },
+      ],
+    },
+  ]);
+})(typeof globalThis !== "undefined" ? globalThis : this);

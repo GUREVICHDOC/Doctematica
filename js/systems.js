@@ -352,7 +352,7 @@
         continue;
       }
       var inside = s.slice(open + 1, close);
-      if (!parenHasSum(inside)) {
+      if (!parenHasSum(inside) || /^\d+\+\d+\/\d+$/.test(inside)) {
         i = close + 1;
         continue;
       }

@@ -22,6 +22,8 @@
   var eqActions = document.getElementById("eq-actions");
   var showSolutionBtn = document.getElementById("show-solution");
   var hintBtn = document.getElementById("hint-btn");
+  var nlineBtn = document.getElementById("nline-btn");
+  var nlineEl = document.getElementById("number-line");
   var oneStepBtn = document.getElementById("one-step-btn");
   var nextAfterSolveBtn = document.getElementById("next-after-solve");
   var modelEl = document.getElementById("model");
@@ -56,6 +58,7 @@
   var fnSketchSlot = document.getElementById("fn-sketch-slot");
   var fnBoardHomeNext = fnBoardEl ? fnBoardEl.nextSibling : null;
   var fnDomainsEl = document.getElementById("fn-domains");
+  var fnExtremaEl = document.getElementById("fn-extrema");
   var fnAxesEl = document.getElementById("fn-axes");
   var fnChoiceEl = document.getElementById("fn-choice");
   var fnSketch = fnBoardEl && window.DoctematicaFnSketch ? DoctematicaFnSketch.mount(fnBoardEl) : null;
@@ -98,6 +101,7 @@
     problem: null,
     locked: false,
     streak: 0,
+    streakSeen: {},
     history: [],
     mixed: { path: null },
     lcd: null,
@@ -189,8 +193,107 @@
     return state.topic === "equations" && (state.subtopic === "basic" || state.subtopic === "denom");
   }
 
+  function isIneqMode() {
+    return !!(state.problem && state.problem.mode === "ineq");
+  }
+
+  function isAndMode() {
+    return !!(state.problem && state.problem.mode === "ineq-and");
+  }
+
+  function isOrMode() {
+    return !!(state.problem && state.problem.mode === "ineq-or");
+  }
+
+  function isIntervalMode() {
+    return isAndMode() || isOrMode();
+  }
+
+  function isQuadIneqMode() {
+    return !!(state.problem && state.problem.mode === "ineq-quad");
+  }
+
+  function quadIneqSnap() {
+    var board = window.DoctematicaQuadIneq && DoctematicaQuadIneq.isOpen() ? DoctematicaQuadIneq.snapshot() : { open: false, regions: [], parabola: { open: false } };
+    return {
+      sign: { open: !!(board.open && board.mode !== "parabola"), regions: board.regions || [] },
+      parabola: board.parabola || { open: false },
+    };
+  }
+
+  function noteQuadIneqPhase(res) {
+    if (!isQuadIneqMode() || !res) return;
+    state.quadIneq = state.quadIneq || { phase: "zeros" };
+    if (res.phase) state.quadIneq.phase = res.phase;
+    if (res.roots) state.quadIneq.roots = res.roots;
+    if (res.regions) state.quadIneq.regions = res.regions;
+    if (res.offerFormula != null) state.offerFormula = !!res.offerFormula;
+    if (res.phase === "equation" && !mixedPath()) state.offerFormula = true;
+    if (res.rootsFound) state.quadIneq.phase = "signs";
+    if (res.canSplit) {
+      state.factor = state.factor || emptyFactorState();
+      state.factor.canSplit = true;
+      updateSplitBtn();
+    }
+    renderQuadIneqPanel();
+    updateFormulaBtn();
+  }
+
+  function softenQuadIneqSolve(res) {
+    if (!isQuadIneqMode() || !res || !res.solved) return res;
+    var next = Object.assign({}, res, { solved: false, rootsFound: true, phase: "signs" });
+    var tail = " מצאתם את נקודות האפס. עכשיו אפשר לכתוב את הפתרון, לשרטט פרבולה, או לבדוק סימנים.";
+    next.message = (next.message || "") + tail;
+    if (next.reason) next.reason = next.reason + tail;
+    noteQuadIneqPhase(next);
+    return next;
+  }
+
+  function renderQuadIneqPanel() {
+    if (!window.DoctematicaQuadIneq) return;
+    var el = document.getElementById("quad-ineq");
+    if (!el) return;
+    DoctematicaQuadIneq.mount(el);
+    if (!isQuadIneqMode() || !state.quadIneq || state.quadIneq.phase !== "signs") {
+      DoctematicaQuadIneq.close();
+      return;
+    }
+    DoctematicaQuadIneq.setModel({ roots: state.quadIneq.roots || [], regions: state.quadIneq.regions || [] });
+    DoctematicaQuadIneq.setCommit(checkSignCell);
+    if (!DoctematicaQuadIneq.isOpen()) DoctematicaQuadIneq.open("signs");
+  }
+
+  function checkSignCell(cell, done) {
+    if (equationsCheckBusy) {
+      done({ ok: false, field: cell.field, message: "רגע, הבדיקה הקודמת עוד רצה." });
+      return;
+    }
+    requestQuadIneq({
+      intent: "sign-check",
+      signRow: {
+        index: cell.index,
+        field: cell.field,
+        x: cell.x,
+        expr: cell.expr,
+        value: cell.value,
+        sign: cell.sign,
+        from: cell.from,
+        to: cell.to,
+        fromText: cell.fromText,
+        toText: cell.toText,
+      },
+    }, function (remote) {
+      done(remote);
+      showFeedback(!!remote.ok, (remote.ok ? "<strong>נכון.</strong> " : "<strong>עוד לא.</strong> ") + siteReasonHTML(remote.message || ""));
+    });
+  }
+
+  function isParamEqMode() {
+    return !!(state.problem && state.problem.mode === "param");
+  }
+
   function eqNotesActive() {
-    return isStepMode() || (isQuadraticTopic() && !geoEqSolveActive());
+    return isStepMode() || isIntervalMode() || isQuadIneqMode() || (isQuadraticTopic() && !geoEqSolveActive());
   }
 
   var API_ROOT =
@@ -199,8 +302,11 @@
       ? "http://127.0.0.1:8787"
       : "");
   var EQUATIONS_URL = API_ROOT + "/api/equations";
+  var INTERVALS_URL = API_ROOT + "/api/intervals";
   var QUADRATIC_URL = API_ROOT + "/api/quadratic";
+  var QUAD_INEQ_URL = API_ROOT + "/api/quad-ineq";
   var HIGH_POWER_URL = API_ROOT + "/api/high-power";
+  var BIQUAD_URL = API_ROOT + "/api/biquad";
   var SYSTEMS_URL = API_ROOT + "/api/systems";
   var GEOMETRY_URL = API_ROOT + "/api/geometry";
   var STATISTICS_URL = API_ROOT + "/api/statistics";
@@ -209,7 +315,11 @@
   var equationsCheckBusy = false;
 
   function isBasicEqServerMode() {
-    return state.topic === "equations" && state.subtopic === "basic" && !geoEqSolveActive();
+    return (
+      (state.topic === "equations" && state.subtopic === "basic" && !geoEqSolveActive()) ||
+      isParamEqMode() ||
+      isIneqMode()
+    );
   }
 
   function isDenomServerMode() {
@@ -239,6 +349,7 @@
   }
 
   function quadraticSubtopic() {
+    if (isQuadIneqMode() && (!state.quadIneq || state.quadIneq.phase !== "signs")) return "mixed";
     if (isMixedServerMode() || geoEqSolveActive() || fnQuadSolveActive() || fnFormulaActive()) return "mixed";
     if (isFactorServerMode()) return "factor";
     if (isFormulaServerMode()) return "formula";
@@ -264,9 +375,20 @@
     );
   }
 
+  function isHighChainServerMode() {
+    var level = currentLevel();
+    return (
+      isHighPowerTopic() &&
+      !!level &&
+      level.mode === "high-chain" &&
+      !geoEqSolveActive()
+    );
+  }
+
   function highPowerSubtopic() {
     if (isHighRootServerMode()) return "root";
     if (isHighFactorServerMode()) return "factor";
+    if (isHighChainServerMode()) return "chain";
     return null;
   }
 
@@ -342,13 +464,15 @@
     equationsCheckBusy = true;
     var body = {
       topic: "equations",
-      subtopic: state.subtopic,
+      subtopic: isParamEqMode() || isIneqMode() ? "basic" : state.subtopic,
       intent: intent,
       start: payload.start,
       history: payload.history,
       previous: payload.previous,
       typed: payload.typed,
     };
+    if (state.problem && state.problem.solveFor) body.solveFor = state.problem.solveFor;
+    if (state.problem && state.problem.given) body.given = state.problem.given;
     if (isDenomServerMode()) {
       body.domain = payload.domain || denomDomainPayload();
       if (payload.lcd) body.lcd = payload.lcd;
@@ -381,6 +505,43 @@
     return true;
   }
 
+  function requestIntervals(payload, onResult) {
+    if (!isIntervalMode()) return false;
+    if (equationsCheckBusy) return true;
+    equationsCheckBusy = true;
+    var body = {
+      intent: payload.intent,
+      conds: (state.problem && state.problem.conds) || [],
+      op: (state.problem && state.problem.op) || "intersection",
+      typed: payload.typed || "",
+      history: payload.history || state.history || [],
+      drawing: payload.drawing || null,
+    };
+    fetch(INTERVALS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          var httpErr = new Error("intervals http " + res.status);
+          httpErr.status = res.status;
+          throw httpErr;
+        }
+        return res.json();
+      })
+      .then(function (remote) {
+        equationsCheckBusy = false;
+        onResult(remote || {});
+      })
+      .catch(function (err) {
+        equationsCheckBusy = false;
+        if (err && err.status >= 500) showServerProcessingError();
+        else showBasicEqServerUnavailable();
+      });
+    return true;
+  }
+
   function requestQuadraticAction(payload, onResult) {
     var subtopic = payload.subtopic || quadraticSubtopic();
     if (!subtopic) return false;
@@ -403,8 +564,9 @@
       });
     }
     equationsCheckBusy = true;
+    var quadIneqCall = isQuadIneqMode();
     var body = {
-      topic: "quadratic",
+      topic: quadIneqCall ? "inequalities" : "quadratic",
       subtopic: subtopic,
       intent: payload.intent,
       start: payload.start,
@@ -412,6 +574,10 @@
       previous: payload.previous,
       typed: payload.typed,
     };
+    if (quadIneqCall) {
+      body.engine = "mixed";
+      body.ineq = (state.problem && state.problem.startEquation) || "";
+    }
     if (payload.factor) body.factor = payload.factor;
     if (payload.phase) body.phase = payload.phase;
     if (payload.letter) body.letter = payload.letter;
@@ -424,16 +590,19 @@
     if (payload.lcd) body.lcd = payload.lcd;
     if (payload.termIndex != null) body.termIndex = payload.termIndex;
     if (payload.lcdMarks) body.lcdMarks = true;
-    fetch(QUADRATIC_URL, {
+    fetch(quadIneqCall ? QUAD_INEQ_URL : QUADRATIC_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     })
       .then(function (res) {
         if (!res.ok) {
-          var httpErr = new Error("quadratic http " + res.status);
-          httpErr.status = res.status;
-          throw httpErr;
+          return res.json().catch(function () { return null; }).then(function (body) {
+            var httpErr = new Error("quadratic http " + res.status);
+            httpErr.status = res.status;
+            httpErr.body = body;
+            throw httpErr;
+          });
         }
         return res.json();
       })
@@ -446,6 +615,11 @@
       })
       .catch(function (err) {
         equationsCheckBusy = false;
+        if (err && err.body && err.body.message && err.status && err.status < 500) {
+          onResult({ ok: false, message: String(err.body.message) });
+          updateFormulaBtn();
+          return;
+        }
         if (err && err.status >= 500) showServerProcessingError();
         else showBasicEqServerUnavailable();
       });
@@ -863,7 +1037,9 @@
     equationsCheckBusy = true;
     var body = {
       topic:
-        state.problem && state.problem.mode === "system-elim"
+        state.problem && state.problem.mode === "meet"
+          ? "calculus-meet"
+          : state.problem && state.problem.mode === "system-elim"
           ? "systems-elim"
           : state.problem && state.problem.mode === "system-arrange"
             ? "systems-arrange"
@@ -918,6 +1094,13 @@
       history: payload.history,
       previous: payload.previous,
       typed: payload.typed,
+      phase: payload.phase,
+      letter: payload.letter,
+      slots: payload.slots,
+      root: payload.root,
+      compute: payload.compute,
+      md53: payload.md53,
+      formulaBranch: payload.formulaBranch,
     };
     if (payload.factor) body.factor = payload.factor;
     fetch(HIGH_POWER_URL, {
@@ -945,6 +1128,241 @@
     return true;
   }
 
+  function biquadBody(payload) {
+    var st = state.factor || emptyFactorState();
+    var body = {
+      topic: "biquad",
+      intent: payload.intent,
+      start: payload.start,
+      history: payload.history,
+      previous: payload.previous,
+      typed: payload.typed,
+      hintLevel: state.biquadHints || 0,
+      factor: {
+        split: !!st.split,
+        trails: (st.trails || []).map(function (t) {
+          return (t || []).map(String);
+        }),
+      },
+      phase: payload.phase,
+      letter: payload.letter,
+      slots: payload.slots,
+      root: payload.root,
+      compute: payload.compute,
+      md53: payload.md53,
+    };
+    if (payload.branch != null && payload.branch !== "") body.branch = payload.branch;
+    return body;
+  }
+
+  function requestBiquadAction(payload, onResult) {
+    if (!isBiquadMode()) return false;
+    if (equationsCheckBusy) return true;
+    equationsCheckBusy = true;
+    fetch(BIQUAD_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(biquadBody(payload)),
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          var httpErr = new Error("biquad http " + res.status);
+          httpErr.status = res.status;
+          throw httpErr;
+        }
+        return res.json();
+      })
+      .then(function (remote) {
+        equationsCheckBusy = false;
+        onResult(remote || {});
+      })
+      .catch(function (err) {
+        equationsCheckBusy = false;
+        if (err && err.status >= 500) showServerProcessingError();
+        else showBasicEqServerUnavailable();
+      });
+    return true;
+  }
+
+  function applyBiquadFactor(res) {
+    if (!res || !res.trails) return;
+    state.factor = state.factor || emptyFactorState();
+    state.factor.split = true;
+    if (res.eqs) state.factor.eqs = res.eqs.slice();
+    if (res.solvedFlags) state.factor.solved = res.solvedFlags.slice();
+    state.factor.trails = res.trails.map(function (t) {
+      return (t || []).slice();
+    });
+    if (res.heads) state.factor.heads = res.heads.slice();
+    state.factor.canSplit = false;
+    state.factor.offerFormula = false;
+    if (res.split) {
+      state.mixed = emptyMixedState();
+      state.quad = null;
+      hideQuadGuide();
+      if (sysKnownEl) {
+        sysKnownEl.classList.add("hidden");
+        sysKnownEl.innerHTML = "";
+      }
+      if (solveWrap) solveWrap.classList.remove("is-system");
+      updateFormulaBtn();
+    }
+  }
+
+  function applyBiquadServerResult(shownTyped, res, keepBranch) {
+    res = res || {};
+    state.biquadOffer = !!res.offerFormula;
+    if (res.formulaEq) state.biquadFormulaEq = res.formulaEq;
+    if (!res.ok) {
+      state.stats.try += 1;
+      saveStats();
+      renderStats();
+      showFeedback(false, "<strong>עוד לא.</strong> " + (res.message || ""));
+      return;
+    }
+    if (shownTyped && res.branch == null && state.history[state.history.length - 1] !== shownTyped) {
+      state.history.push(shownTyped);
+    }
+    applyBiquadFactor(res);
+    updateFormulaBtn();
+    renderSteps();
+    if (res.solved) {
+      markSolved();
+      mathField.setDisabled(true);
+      checkBtn.disabled = true;
+      nextAfterSolveBtn.classList.remove("hidden");
+      showFeedback(true, "<strong>כל הכבוד.</strong> " + (res.message || ""));
+      return;
+    }
+    if (shownTyped) mathField.clear();
+    showFeedback(true, siteStepMessage(res.reason, "<strong>נכון.</strong> " + (res.message || "")), "tip");
+    if (keepBranch != null && focusBiquadField(keepBranch)) return;
+    if (!(state.factor && state.factor.split)) mathField.focus();
+  }
+
+  function biquadStartPayload() {
+    var prev = lastHistoryEq();
+    return {
+      start: (state.problem && state.problem.startEquation) || prev,
+      history: state.history && state.history.length ? state.history : [prev],
+      previous: prev,
+    };
+  }
+
+  function applyBiquadTyped(typed, sourceBranch) {
+    if (!typed) {
+      showFeedback(false, "<strong>עוד לא.</strong> כתבו את הצעד הבא.");
+      return false;
+    }
+    if (equationsCheckBusy) return true;
+    if (
+      !requestBiquadAction(
+        Object.assign({ intent: "check", typed: typed, branch: sourceBranch }, biquadStartPayload()),
+        function (res) {
+          var keep = null;
+          if (res && res.ok) {
+            clearBiquadField(sourceBranch);
+            if (res.branch != null) clearBiquadField(res.branch);
+            if (!res.solved) {
+              if (sourceBranch != null && !(res.branchSolved && res.branch === sourceBranch)) keep = sourceBranch;
+              else if (res.branch != null && !res.branchSolved) keep = res.branch;
+            }
+          }
+          applyBiquadServerResult(typed, res, keep);
+        }
+      )
+    ) {
+      showBasicEqServerUnavailable();
+    }
+    return true;
+  }
+
+  function biquadHint() {
+    if (
+      !requestBiquadAction(Object.assign({ intent: "hint", branch: biquadChosenBranch() }, biquadStartPayload()), function (res) {
+        state.biquadHints = (state.biquadHints || 0) + 1;
+        state.biquadOffer = !!res.offerFormula;
+        updateFormulaBtn();
+        showFeedback(true, "<strong>רמז.</strong> " + (res.hint || res.message || ""), "tip");
+      })
+    ) {
+      showBasicEqServerUnavailable();
+    }
+  }
+
+  function biquadShowSolution() {
+    requestBiquadAction(Object.assign({ intent: "solution" }, biquadStartPayload()), function (remote) {
+      showEqSolution("פתרון מלא — משוואה דו־ריבועית", {
+        always: true,
+        steps: (remote.steps || []).map(function (s) {
+          return s.eq;
+        }),
+        notes: (remote.steps || []).map(function (s) {
+          return s.explain || "";
+        }),
+        withNotes: true,
+        footer: remote.answer ? "קבוצת הפתרונות: " + remote.answer : "",
+      });
+    });
+  }
+
+  function biquadOneStep() {
+    var pending = biquadPending();
+    if (pending.text) {
+      applyBiquadTyped(pending.text, pending.branch);
+      return;
+    }
+    if (biquadColumnsOpen() && pending.branch == null) {
+      showFeedback(true, "<strong>בחרו עמודה.</strong> אפשר להתחיל מכל אחת.", "tip");
+      return;
+    }
+    if (
+      !requestBiquadAction(Object.assign({ intent: "one-step", branch: pending.branch }, biquadStartPayload()), function (res) {
+        if (!res || res.ok === false) {
+          showFeedback(false, "<strong>עוד לא.</strong> " + ((res && res.message) || ""));
+          return;
+        }
+        if (res.enter === "formula" || res.path === "formula") {
+          if (state.factor && state.factor.split) {
+            showFeedback(true, "<strong>הענפים כבר פתוחים.</strong> המשיכו בכל עמודה.", "tip");
+            return;
+          }
+          beginMixedFormulaFromServer(res, !!res.md53);
+          return;
+        }
+        if (state.factor && state.factor.split && res.branch == null && !res.split) {
+          showFeedback(true, "<strong>הענפים כבר פתוחים.</strong> המשיכו בכל עמודה: רשמו את המשוואה של x, או את הפתרון.", "tip");
+          return;
+        }
+        applyBiquadServerResult(res.branch == null ? res.step || "" : "", res, res.branch);
+      })
+    ) {
+      showBasicEqServerUnavailable();
+    }
+  }
+
+  function enterBiquadFormula(md53) {
+    requestBiquadAction(
+      Object.assign({ intent: "formula-enter", md53: !!md53 }, biquadStartPayload()),
+      function (res) {
+        beginMixedFormulaFromServer(res, !!md53);
+      }
+    );
+  }
+
+  function finishBiquadFormula(ans) {
+    requestBiquadAction(
+      Object.assign({ intent: "absorb", typed: ans || "" }, biquadStartPayload()),
+      function (res) {
+        state.mixed = emptyMixedState();
+        state.quad = null;
+        updateFormulaBtn();
+        setModeUi();
+        applyBiquadServerResult((res && res.step) || "", res || {});
+      }
+    );
+  }
+
   function requestDomainLcdAction(payload, onResult) {
     if (isDenomServerMode()) return requestBasicEqAction(payload, onResult);
     if (isMixedServerMode()) return requestQuadraticAction(payload, onResult);
@@ -969,11 +1387,16 @@
   }
 
   function isSystemMode() {
-    return state.topic === "systems-sub";
+    if (state.topic === "systems-sub") return true;
+    return state.topic === "calculus" && !!(state.problem && state.problem.mode === "meet");
   }
 
   function isSystemQuadMode() {
-    return !!(state.problem && state.problem.mode === "system-quad");
+    if (state.problem && state.problem.mode === "system-quad") return true;
+    if (!(state.problem && state.problem.mode === "meet")) return false;
+    if (state.offerFormula || state.offerSplit) return true;
+    var path = state.mixed && state.mixed.path;
+    return path === "formula" || path === "factor";
   }
 
   function sysQuadFormulaActive() {
@@ -986,6 +1409,10 @@
 
   function isHighPowerTopic() {
     return state.topic === "high-power";
+  }
+
+  function isBiquadMode() {
+    return !!(state.problem && state.problem.mode === "biquad");
   }
 
   function isAnalyticTopic() {
@@ -2319,14 +2746,22 @@
       exerciseId: state.problem && state.problem.exerciseId,
       n: state.problem && state.problem.n,
       exerciseIndex: state.exerciseIndex,
-      progress: (state.fn && state.fn.progress) || emptyFnProgress(),
+      progress: payload.progress || (state.fn && state.fn.progress) || emptyFnProgress(),
       history: state.history || [],
     };
     if (payload.typed != null) body.typed = payload.typed;
     if (payload.axis) body.axis = payload.axis;
     if (payload.domains) body.domains = payload.domains;
+    if (payload.extrema) body.extrema = payload.extrema;
     if (payload.sketch) body.sketch = payload.sketch;
+    if (!body.sketch && state.fnView && state.fnView.family === "free" && fnSketch && fnSketch.getModel) {
+      body.sketch = fnSketch.getModel();
+    }
     if (payload.point) body.point = payload.point;
+    if (payload.probe) body.probe = payload.probe;
+    if (!body.probe && state.fnView && state.fnView.family === "probe" && fnSketch && fnSketch.getProbe) {
+      body.probe = fnSketch.getProbe();
+    }
     fetch(FUNCTIONS_URL, {
       method: "POST",
       credentials: "same-origin",
@@ -2341,7 +2776,11 @@
           } catch (err) {
             data = null;
           }
-          if (!res.ok || data == null) throw new Error("functions");
+          if (data == null) throw new Error("functions");
+          if (!res.ok) {
+            if (data.message && res.status < 500) return Object.assign({ ok: false }, data);
+            throw new Error("functions");
+          }
           return data;
         });
       })
@@ -2356,6 +2795,9 @@
       .catch(function () {
         equationsCheckBusy = false;
         showBasicEqServerUnavailable();
+        try {
+          onResult({ ok: false, unavailable: true });
+        } catch (err) { /* the banner already explains the outage */ }
       });
     return true;
   }
@@ -2367,40 +2809,81 @@
 
   function fnDomainPair(line) {
     var bits = String(line || "").replace(/\s+/g, " ").trim().split(/\s*,\s*/);
-    var named = {};
+    var compared = {};
     bits.forEach(function (bit) {
-      var match = bit.match(/^(חיובי|שלילי|עולה|יורדת)\s*:\s*(.+)$/);
-      if (match) named[match[1]] = match[2].trim();
+      var found = bit.match(/^(f\(x\)\s*>\s*g\(x\)|f\(x\)\s*<\s*g\(x\))\s*:\s*(.+)$/);
+      if (found) compared[found[1].replace(/\s+/g, "")] = found[2].trim();
     });
-    if (named["חיובי"] && named["שלילי"]) {
+    if (compared["f(x) > g(x)"] && compared["f(x) < g(x)"]) {
       return [
-        { label: "תחומי חיוביות", value: named["חיובי"] },
-        { label: "תחומי שליליות", value: named["שלילי"] },
+        { label: "f(x) > g(x)", value: compared["f(x) > g(x)"] },
+        { label: "f(x) < g(x)", value: compared["f(x) < g(x)"] },
       ];
     }
-    if (named["עולה"] && named["יורדת"]) {
+    var named = {};
+    bits.forEach(function (bit) {
+      var match = bit.match(/^(חיובי|שלילי|עולה|יורדת)\s*:\s*(.*)$/);
+      if (match) named[match[1]] = match[2].trim();
+    });
+    if ("חיובי" in named || "שלילי" in named) {
       return [
-        { label: "תחומי עלייה", value: named["עולה"] },
-        { label: "תחומי ירידה", value: named["יורדת"] },
+        { label: "תחומי חיוביות", value: named["חיובי"] || "" },
+        { label: "תחומי שליליות", value: named["שלילי"] || "" },
+      ];
+    }
+    if ("עולה" in named || "יורדת" in named) {
+      return [
+        { label: "תחומי עלייה", value: named["עולה"] || "" },
+        { label: "תחומי ירידה", value: named["יורדת"] || "" },
       ];
     }
     return null;
   }
 
+  function domainFamily(line) {
+    var text = String(line || "");
+    if (/חיובי\s*:|שלילי\s*:/.test(text)) return "sign";
+    if (/עולה\s*:|יורדת\s*:/.test(text)) return "mono";
+    return "";
+  }
+
   function renderFnSteps() {
+    var followEl = document.getElementById("steps-follow");
+    if (followEl) {
+      followEl.innerHTML = "";
+      followEl.classList.add("hidden");
+    }
     stepsEl.innerHTML = "";
     if (!(state.history || []).length) {
       stepsEl.classList.add("hidden");
       return;
     }
+    var splitAt = -1;
+    var solveMain = solveWrap && solveWrap.querySelector(".solve-main");
+    if (solveMain && solveMain.classList.contains("fn-follow")) {
+      var partMarks = 0;
+      state.history.forEach(function (line, index) {
+        if (splitAt >= 0 || !/^§/.test(String(line || ""))) return;
+        partMarks += 1;
+        if (partMarks === 2) splitAt = index;
+      });
+    }
     stepsEl.classList.remove("hidden");
     var stepNum = 0;
     var axisCard = 0;
+    var sketchCardAt = 0;
     state.history.forEach(function (line, index) {
+      var host = splitAt >= 0 && index >= splitAt && followEl ? followEl : stepsEl;
       if (line === "⌘axes") {
         var card = (state.fn && state.fn.axisCards && state.fn.axisCards[axisCard]) || { y: [], x: [] };
         axisCard += 1;
-        stepsEl.appendChild(buildAxisCard(card));
+        host.appendChild(buildAxisCard(card));
+        return;
+      }
+      if (line === "⌘sketch") {
+        var sketchCard = (state.fn && state.fn.sketchCards && state.fn.sketchCards[sketchCardAt]) || null;
+        sketchCardAt += 1;
+        host.appendChild(buildSketchCard(sketchCard));
         return;
       }
       var li = document.createElement("li");
@@ -2426,28 +2909,37 @@
         var domainPair = fnDomainPair(line);
         if (domainPair) {
           body = document.createElement("div");
-          body.className = "fn-domain-table-wrap";
-          var table = document.createElement("table");
-          table.className = "fn-domain-table";
-          table.dir = "ltr";
-          var head = document.createElement("tr");
-          var values = document.createElement("tr");
+          body.className = "fn-domain-history";
           domainPair.forEach(function (item) {
-            var th = document.createElement("th");
-            th.textContent = item.label;
-            var td = document.createElement("td");
-            td.dir = /[<>≤≥=xX]/.test(item.value) ? "ltr" : "rtl";
-            td.innerHTML = fnProse(item.value);
-            head.appendChild(th);
-            values.appendChild(td);
+            var col = document.createElement("div");
+            col.className = "fn-domain-col";
+            var title = document.createElement("span");
+            title.innerHTML = fnProse(item.label);
+            var lines = document.createElement("div");
+            lines.className = "fn-domain-lines";
+            String(item.value || "").split(/\s+או\s+/).forEach(function (piece) {
+              var bit = piece.trim();
+              if (!bit) return;
+              var value = document.createElement("strong");
+              var allPhrase = /^(?:כל|לכל)\s+x$/i.test(bit);
+              var math = !allPhrase && /[<>≤≥]/.test(bit) && !/[\u0590-\u05FF]/.test(bit);
+              if (allPhrase) {
+                value.className = "fn-all-x";
+                value.dir = "rtl";
+                value.textContent = bit;
+              }
+              else if (math && window.DoctematicaMath && DoctematicaMath.toHTML) {
+                value.dir = "ltr";
+                value.innerHTML = DoctematicaMath.toHTML(bit);
+              }
+              else value.innerHTML = fnProse(bit);
+              lines.appendChild(value);
+            });
+            col.appendChild(title);
+            col.appendChild(lines);
+            body.appendChild(col);
           });
-          var thead = document.createElement("thead");
-          var tbody = document.createElement("tbody");
-          thead.appendChild(head);
-          tbody.appendChild(values);
-          table.appendChild(thead);
-          table.appendChild(tbody);
-          body.appendChild(table);
+          li.classList.add("fn-domain-step");
         } else {
           body.innerHTML = /[\u0590-\u05FF]/.test(String(line))
             ? fnProse(line)
@@ -2461,8 +2953,10 @@
       }
       li.appendChild(n);
       li.appendChild(body);
-      stepsEl.appendChild(li);
+      host.appendChild(li);
     });
+    if (!stepsEl.children.length) stepsEl.classList.add("hidden");
+    if (followEl && followEl.children.length) followEl.classList.remove("hidden");
   }
 
   function placeFnBoard(where) {
@@ -2477,27 +2971,75 @@
     }
   }
 
+  function fnServerPart() {
+    return (state.fnView && state.fnView.part && state.fnView.part.label) || "";
+  }
+
+  function fnSketchPartKey() {
+    return (state.fn && state.fn.viewPart) || fnServerPart();
+  }
+
+  function fnReviewingSketch() {
+    var key = fnSketchPartKey();
+    var server = fnServerPart();
+    return !!(key && server && key !== server);
+  }
+
+  function fnViewedPartIndex() {
+    var parts = (state.fnView && state.fnView.parts) || [];
+    var key = fnSketchPartKey();
+    var i;
+    for (i = 0; i < parts.length; i++) {
+      if (parts[i].label === key) return i;
+    }
+    return (state.fn && state.fn.progress && state.fn.progress.partIndex) || 0;
+  }
+
+  function fnProgressForView() {
+    var base = (state.fn && state.fn.progress) || emptyFnProgress();
+    if (!fnReviewingSketch()) return base;
+    return Object.assign({}, base, { partIndex: fnViewedPartIndex(), taskIndex: 0 });
+  }
+
   function fnSketchHooks(locked) {
+    var key = fnSketchPartKey();
+    var saved = state.fn && state.fn.partSketches && state.fn.partSketches[key];
+    var reviewing = fnReviewingSketch();
+    var emptySketch = { points: [], strokes: [], line: null };
+    var model = reviewing ? ((saved && saved.model) || emptySketch) : ((state.fn && state.fn.sketch) || emptySketch);
     return {
-      model: (state.fn && state.fn.sketch) || { points: [], line: null },
+      model: model,
+      undo: saved && saved.undo ? saved.undo : [],
+      partKey: key,
+      problemKey: (state.problem && state.problem.exerciseId) || "",
       family: (state.fnView && state.fnView.family) || "",
+      helperLine: (state.fnView && state.fnView.helperLine) || null,
+      allowCheck: !locked && (!state.fnView || !state.fnView.input || state.fnView.input === "sketch"),
       locked: !!locked,
-      onCheck: locked ? null : submitFnSketch,
+      onCheck: locked || reviewing ? null : submitFnSketch,
+      domain: (state.fnView && state.fnView.domain) || null,
       onPoint: function (point, model, done) {
-        if (!requestFunctions({ intent: "sketch-point", point: point, sketch: model }, function (remote) {
-          done(!!(remote && remote.ok), (remote && remote.message) || "");
+        if (!requestFunctions({ intent: "sketch-point", point: point, sketch: model, progress: fnProgressForView() }, function (remote) {
+          if (remote && remote.unavailable) {
+            done(false, "הבדיקה לא זמינה כרגע.");
+            return;
+          }
+          done(!!(remote && remote.ok), (remote && remote.message) || "", remote || null);
         })) done(false, "הבדיקה לא זמינה כרגע.");
       },
       onChange: function (model) {
         state.fn = state.fn || { progress: emptyFnProgress() };
-        state.fn.sketch = model;
+        state.fn.partSketches = state.fn.partSketches || {};
+        var snap = fnSketch && fnSketch.snapshot ? fnSketch.snapshot() : { model: model, undo: [] };
+        if (key) state.fn.partSketches[key] = snap;
+        if (!reviewing) state.fn.sketch = snap.model;
       },
     };
   }
 
   function keptFnSketch() {
     var keptBoard = state.fn && state.fn.sketch;
-    var drawn = state.fn && state.fn.sketchDone && keptBoard && (keptBoard.line || (keptBoard.curve && keptBoard.curve.length));
+    var drawn = state.fn && state.fn.sketchDone && keptBoard && (keptBoard.line || (keptBoard.curve && keptBoard.curve.length) || (keptBoard.strokes && keptBoard.strokes.length));
     var view = state.fnView;
     return !!(drawn && view && !view.sketch && !view.figure && !view.reference);
   }
@@ -2509,18 +3051,42 @@
       placeFnBoard("home");
       fnSketch.hide();
       syncFnFigureLayout();
+      renderFnPartNav();
+      return;
+    }
+    if (state.fn && state.fn.sketchArchived) {
+      placeFnBoard("home");
+      fnSketch.hide();
+      syncFnFigureLayout();
+      renderFnPartNav();
       return;
     }
     if (view.sketch) {
       placeFnBoard("work");
       syncFnFigureLayout();
       fnSketch.showSketch(fnSketchHooks(false));
+      renderFnPartNav();
       return;
     }
     if (keptFnSketch()) {
       placeFnBoard("work");
       syncFnFigureLayout();
       fnSketch.showSketch(fnSketchHooks(true));
+      renderFnPartNav();
+      return;
+    }
+    if (view.figure && view.probe) {
+      placeFnBoard("work");
+      syncFnFigureLayout();
+      fnSketch.showFigure(view.figure, {
+        probe: view.probe,
+        partKey: (view.part && view.part.label) || "",
+        problemKey: (state.problem && state.problem.exerciseId) || "",
+        onCheck: function () {
+          if (!requestFunctions({ intent: "probe-check" }, applyFnRemote)) showBasicEqServerUnavailable();
+        },
+      });
+      renderFnPartNav();
       return;
     }
     if (view.figure && view.reference) {
@@ -2534,6 +3100,7 @@
           state.fn.sketch = model;
         },
       });
+      renderFnPartNav();
       return;
     }
     placeFnBoard("home");
@@ -2543,6 +3110,31 @@
     if (view.figure) fnSketch.showFigure(view.figure);
     else fnSketch.hide();
     syncFnFigureLayout();
+    renderFnPartNav();
+  }
+
+  function renderFnPartNav() {
+    var existing = document.getElementById("fn-part-nav");
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+  }
+
+  function givenSketch(model) {
+    return {
+      points: ((model && model.points) || []).filter(function (point) {
+        return point && point.role === "given";
+      }).map(function (point) {
+        return { x: point.x, y: point.y, qx: point.qx, qy: point.qy, role: "given" };
+      }),
+      strokes: [],
+      line: null,
+    };
+  }
+
+  function buildSketchCard(model) {
+    var wrap = document.createElement("li");
+    wrap.className = "fn-history-sketch";
+    if (fnSketch && fnSketch.card) wrap.appendChild(fnSketch.card(model || { points: [], strokes: [] }));
+    return wrap;
   }
 
   function syncFnFigureLayout() {
@@ -2552,6 +3144,12 @@
     if (solveWrap) {
       solveWrap.classList.toggle("has-fn-figure", figure);
       solveWrap.classList.remove("has-fn-sketch");
+      var solveMain = solveWrap.querySelector(".solve-main");
+      if (solveMain) {
+        var multiSketch = !!(view && view.parts && view.parts.length > 1);
+        var follow = sketch && view && view.family === "free" && view.input !== "sketch" && !multiSketch;
+        solveMain.classList.toggle("fn-follow", !!follow);
+      }
     }
     if (fnBoardEl) {
       fnBoardEl.classList.toggle("is-figure", figure);
@@ -2699,39 +3297,222 @@
     if (!fields || !fields.length) {
       fnDomainsEl.classList.add("hidden");
       fnDomainsEl.innerHTML = "";
+      fnDomainsEl.removeAttribute("data-problem");
+      fnDomainsEl.removeAttribute("data-sig");
       return;
     }
-    var existing = fnDomainsEl.querySelectorAll("input[data-domain]");
-    var same = existing.length === fields.length && !fnDomainsEl.classList.contains("hidden");
-    var i;
-    for (i = 0; same && i < fields.length; i++) {
-      if (existing[i].getAttribute("data-domain") !== fields[i].id) same = false;
+    var problemKey = (state.problem && state.problem.exerciseId) || "";
+    if (fnDomainsEl.getAttribute("data-problem") !== problemKey) {
+      fnDomainsEl.setAttribute("data-problem", problemKey);
+      fnDomainsEl.innerHTML = "";
+      fnDomainsEl.removeAttribute("data-sig");
     }
-    if (same) return;
+    var sig = fields.map(function (field) {
+      var rows = field.rows && field.rows.length ? field.rows : [{ locked: !!field.locked, value: field.locked ? field.value || "" : "" }];
+      return field.id + "=" + rows.map(function (row) {
+        return (row.locked ? "L" : "o") + (row.locked ? row.value || "" : "");
+      }).join(",");
+    }).join(";");
+    if (fnDomainsEl.getAttribute("data-sig") === sig && !fnDomainsEl.classList.contains("hidden")) {
+      fnDomainsEl.querySelectorAll("input[data-domain]").forEach(function (input) {
+        if (state.locked) {
+          input.disabled = true;
+          input.classList.add("is-locked");
+        }
+      });
+      fnDomainsEl.classList.remove("hidden");
+      return;
+    }
+    var kept = {};
+    fnDomainsEl.querySelectorAll("input[data-domain]").forEach(function (input) {
+      if (input.disabled) return;
+      var id = input.getAttribute("data-domain");
+      kept[id] = input.value;
+    });
+    fnDomainsEl.setAttribute("data-sig", sig);
     fnDomainsEl.innerHTML = "";
     fields.forEach(function (field) {
-      var row = document.createElement("label");
-      row.className = "fn-domain-row";
+      var column = document.createElement("label");
+      var pieces = field.rows && field.rows.length ? field.rows : [{ locked: !!field.locked, value: field.value || "" }];
+      var columnLocked = pieces.every(function (piece) { return piece.locked; });
+      column.className = "fn-domain-row" + (columnLocked ? " is-locked" : "");
       var title = document.createElement("span");
-      title.textContent = field.label || "";
-      var input = document.createElement("input");
-      input.type = "text";
-      input.setAttribute("data-domain", field.id);
-      input.dir = "ltr";
-      input.autocomplete = "off";
-      input.placeholder = "x > 3 או אין";
-      row.appendChild(title);
-      row.appendChild(input);
-      fnDomainsEl.appendChild(row);
+      title.innerHTML = fnProse(field.label || "");
+      column.appendChild(title);
+      pieces.forEach(function (piece, index) {
+        var input = document.createElement("input");
+        input.type = "text";
+        input.setAttribute("data-domain", field.id);
+        input.dir = "ltr";
+        input.autocomplete = "off";
+        var lockField = !!piece.locked || !!state.locked;
+        if (!lockField) input.placeholder = "x > 3 או אין";
+        if (lockField) {
+          input.value = piece.value || "";
+          input.disabled = true;
+          input.classList.add("is-locked");
+        } else if (piece.value) input.value = piece.value;
+        else if (pieces.length === 1 && kept[field.id]) input.value = kept[field.id];
+        input.addEventListener("input", function () {
+          var caret = input.selectionStart;
+          var polished = String(input.value || "").replace(/<=/g, "≤").replace(/>=/g, "≥");
+          if (polished === input.value) return;
+          var drop = input.value.length - polished.length;
+          input.value = polished;
+          var pos = Math.max(0, (caret == null ? polished.length : caret) - drop);
+          try { input.setSelectionRange(pos, pos); } catch (err) {}
+        });
+        if (index > 0) input.classList.add("is-next");
+        column.appendChild(input);
+      });
+      fnDomainsEl.appendChild(column);
     });
     fnDomainsEl.classList.remove("hidden");
+    var opened = fnDomainsEl.querySelector("input.is-next:not(:disabled)") || fnDomainsEl.querySelector("input:not(:disabled)");
+    if (opened) opened.focus();
   }
 
   function readFnDomains() {
     var out = {};
+    var lists = {};
     if (!fnDomainsEl) return out;
     fnDomainsEl.querySelectorAll("input[data-domain]").forEach(function (input) {
-      out[input.getAttribute("data-domain")] = input.value || "";
+      var id = input.getAttribute("data-domain");
+      var value = String(input.value || "").trim();
+      if (!value) return;
+      lists[id] = lists[id] || [];
+      lists[id].push(value);
+    });
+    Object.keys(lists).forEach(function (id) {
+      out[id] = lists[id].join(" או ");
+    });
+    return out;
+  }
+
+  function renderFnExtrema(cards) {
+    if (!fnExtremaEl) return;
+    if (!cards || !cards.length) {
+      fnExtremaEl.classList.add("hidden");
+      fnExtremaEl.innerHTML = "";
+      fnExtremaEl.removeAttribute("data-problem");
+      fnExtremaEl.removeAttribute("data-sig");
+      return;
+    }
+    var problemKey = (state.problem && state.problem.exerciseId) || "";
+    if (fnExtremaEl.getAttribute("data-problem") !== problemKey) {
+      fnExtremaEl.setAttribute("data-problem", problemKey);
+      fnExtremaEl.innerHTML = "";
+      fnExtremaEl.removeAttribute("data-sig");
+    }
+    var sig = cards.map(function (card) {
+      return card.id + (card.locked ? "L" + card.x + "," + card.y + "," + card.type : "o");
+    }).join(";");
+    if (fnExtremaEl.getAttribute("data-sig") === sig && !fnExtremaEl.classList.contains("hidden")) {
+      fnExtremaEl.querySelectorAll("input").forEach(function (input) {
+        if (state.locked) {
+          input.disabled = true;
+          input.classList.add("is-locked");
+        }
+      });
+      fnExtremaEl.classList.remove("hidden");
+      return;
+    }
+    var kept = [];
+    fnExtremaEl.querySelectorAll(".fn-extremum-card").forEach(function (cardEl, index) {
+      var x = cardEl.querySelector("[data-ex-x]");
+      var y = cardEl.querySelector("[data-ex-y]");
+      var type = cardEl.querySelector("[data-ex-type]");
+      if (x && x.disabled) return;
+      kept[index] = {
+        x: x ? x.value : "",
+        y: y ? y.value : "",
+        type: type ? type.value : "",
+      };
+    });
+    fnExtremaEl.setAttribute("data-sig", sig);
+    fnExtremaEl.innerHTML = "";
+    var list = document.createElement("datalist");
+    list.id = "fn-extremum-types";
+    ["מינימום", "מקסימום"].forEach(function (word) {
+      var option = document.createElement("option");
+      option.value = word;
+      list.appendChild(option);
+    });
+    fnExtremaEl.appendChild(list);
+    cards.forEach(function (card, index) {
+      var row = document.createElement("div");
+      row.className = "fn-extremum-card" + (card.locked ? " is-locked" : "");
+      row.setAttribute("data-ex-id", card.id || String(index));
+      var title = document.createElement("span");
+      title.className = "fn-extremum-k";
+      title.textContent = "נקודה";
+      row.appendChild(title);
+      var point = document.createElement("span");
+      point.className = "fn-extremum-point";
+      point.dir = "ltr";
+      function field(attr, value, placeholder) {
+        var input = document.createElement("input");
+        input.type = "text";
+        input.setAttribute(attr, "");
+        input.dir = "ltr";
+        input.autocomplete = "off";
+        input.placeholder = placeholder;
+        input.value = value || "";
+        if (card.locked || state.locked) {
+          input.disabled = true;
+          input.classList.add("is-locked");
+        }
+        input.addEventListener("input", function () {
+          var caret = input.selectionStart;
+          var polished = String(input.value || "").replace(/<=/g, "≤").replace(/>=/g, "≥");
+          if (polished === input.value) return;
+          var drop = input.value.length - polished.length;
+          input.value = polished;
+          var pos = Math.max(0, (caret == null ? polished.length : caret) - drop);
+          try { input.setSelectionRange(pos, pos); } catch (err) {}
+        });
+        return input;
+      }
+      var prior = kept[index] || {};
+      if (card.yKnown) {
+        point.appendChild(document.createTextNode("("));
+        point.appendChild(field("data-ex-x", card.locked ? card.x : prior.x || "", "x"));
+        point.appendChild(document.createTextNode(","));
+        point.appendChild(field("data-ex-y", card.locked ? card.y : prior.y || "", "y"));
+        point.appendChild(document.createTextNode(")"));
+      } else {
+        var eq = document.createElement("span");
+        eq.textContent = "x =";
+        point.appendChild(eq);
+        point.appendChild(field("data-ex-x", card.locked ? card.x : prior.x || "", "x"));
+      }
+      row.appendChild(point);
+      var kind = document.createElement("span");
+      kind.className = "fn-extremum-k";
+      kind.textContent = "סוג";
+      row.appendChild(kind);
+      var type = field("data-ex-type", card.locked ? card.type : prior.type || "", "מינימום או מקסימום");
+      type.setAttribute("list", "fn-extremum-types");
+      row.appendChild(type);
+      fnExtremaEl.appendChild(row);
+    });
+    fnExtremaEl.classList.remove("hidden");
+    var opened = fnExtremaEl.querySelector("input:not(:disabled)");
+    if (opened) opened.focus();
+  }
+
+  function readFnExtrema() {
+    var out = [];
+    if (!fnExtremaEl) return out;
+    fnExtremaEl.querySelectorAll(".fn-extremum-card").forEach(function (cardEl) {
+      var x = cardEl.querySelector("[data-ex-x]");
+      var y = cardEl.querySelector("[data-ex-y]");
+      var type = cardEl.querySelector("[data-ex-type]");
+      out.push({
+        x: x ? x.value : "",
+        y: y ? y.value : "",
+        type: type ? type.value : "",
+      });
     });
     return out;
   }
@@ -2768,8 +3549,15 @@
     var sketch = state.fnView && state.fnView.input === "sketch";
     var choice = isFnMode() && state.fnView && state.fnView.input === "choice";
     var domainFields = isFnMode() && state.fnView && state.fnView.input === "domains" ? state.fnView.domains : null;
+    var extremaCards = isFnMode() && state.fnView && state.fnView.input === "extrema" ? state.fnView.extrema : null;
+    if (domainFields && domainFields.length && domainFields.every(function (field) {
+      var rows = field.rows && field.rows.length ? field.rows : null;
+      if (rows) return rows.every(function (row) { return row.locked; });
+      return !!field.locked;
+    })) domainFields = null;
     var axisBoard = isFnMode() && state.fnView && state.fnView.input === "axes";
     renderFnDomains(domainFields);
+    renderFnExtrema(extremaCards);
     renderFnAxes(axisBoard);
     renderFnChoice(choice ? state.fnView.choices : null);
     if (yesnoAskEl) {
@@ -2781,12 +3569,12 @@
       }
     }
     var formulaOpen = formulaWorkActive();
-    if (mathWrap) mathWrap.classList.toggle("hidden", !!sketch || !!domainFields || !!choice || !!axisBoard || formulaOpen);
-    if (mathKeysEl) mathKeysEl.classList.toggle("hidden", !!sketch || !!domainFields || !!choice || formulaOpen);
+    if (mathWrap) mathWrap.classList.toggle("hidden", !!sketch || !!domainFields || !!extremaCards || !!choice || !!axisBoard || formulaOpen);
+    if (mathKeysEl) mathKeysEl.classList.toggle("hidden", !!sketch || !!domainFields || !!extremaCards || !!choice || formulaOpen);
     if (answerRowEl && isFnMode()) answerRowEl.classList.toggle("hidden", !!sketch || !!choice || formulaOpen);
     if (answerLabelEl && isFnMode()) {
-      answerLabelEl.textContent = domainFields ? "התחומים" : "הצעד הבא";
-      answerLabelEl.classList.toggle("hidden", !!domainFields || !!sketch || !!choice || !!axisBoard);
+      answerLabelEl.textContent = domainFields ? (domainFields.length === 1 ? "התחום" : "התחומים") : "הצעד הבא";
+      answerLabelEl.classList.toggle("hidden", !!domainFields || !!extremaCards || !!sketch || !!choice || !!axisBoard);
     }
     if (hintEl && state.fnView && state.fnView.hint) hintEl.textContent = state.fnView.hint;
     updateFormulaBtn();
@@ -2814,7 +3602,24 @@
   }
 
   function applyFnRemote(remote) {
+    if (remote && remote.probeMarkers && fnSketch && fnSketch.setProbeMarkers) {
+      state.fn = state.fn || {};
+      if (remote.progress) state.fn.progress = remote.progress;
+      if (remote.view) state.fnView = remote.view;
+      fnSketch.setProbeMarkers(remote.probeMarkers);
+      showFeedback(true, fnProse(remote.message || "הישר מוכן."), "tip");
+      return;
+    }
     if (!remote || remote.ok === false) {
+      if (remote && remote.progress && remote.view && (remote.view.input === "domains" || remote.view.input === "extrema" || remote.view.family === "probe")) {
+        state.fn = state.fn || {};
+        state.fn.progress = remote.progress;
+        state.fnView = remote.view;
+        syncFnAsk();
+        renderFnBoard();
+        var stayOn = (fnExtremaEl && fnExtremaEl.querySelector("input:not(:disabled)")) || (fnDomainsEl && fnDomainsEl.querySelector("input:not(:disabled)"));
+        if (stayOn) stayOn.focus();
+      }
       var bad = remote && remote.message ? remote.message : "עוד לא.";
       showFeedback(false, "<strong>עוד לא.</strong> " + fnProse(bad));
       return;
@@ -2855,6 +3660,7 @@
       if (remote.hint && hintEl) hintEl.textContent = remote.hint;
       if (remote.solved) {
         markSolved();
+        syncFnAsk();
         if (mathField) mathField.setDisabled(true);
         checkBtn.disabled = true;
         nextAfterSolveBtn.classList.remove("hidden");
@@ -2866,14 +3672,88 @@
     }
     if (remote.board) {
       state.fn = state.fn || {};
-      state.fn.sketch = remote.board;
+      state.fn.partSketches = state.fn.partSketches || {};
+      var nextLabel = remote.view && remote.view.part && remote.view.part.label;
+      var sharedParts = remote.view && remote.view.parts && remote.view.parts.length > 1 && remote.view.input === "sketch";
+      if (partBefore && nextLabel && partBefore !== nextLabel && sharedParts && wasSketch) {
+        var incomingInk = remote.board && ((remote.board.strokes && remote.board.strokes.length) || (remote.board.curve && remote.board.curve.length));
+        var finished = incomingInk ? { model: remote.board, undo: [] } : (fnSketch && fnSketch.snapshot ? fnSketch.snapshot() : { model: remote.board, undo: [] });
+        state.fn.partSketches[partBefore] = finished;
+        state.fn.pendingSketchCard = finished.model;
+        var seeded = givenSketch(finished.model);
+        if (!seeded.points.length && remote.board && remote.board.points && remote.board.points.length) seeded = remote.board;
+        state.fn.sketch = seeded;
+        state.fn.partSketches[nextLabel] = { model: seeded, undo: [] };
+        state.fn.viewPart = nextLabel;
+        state.fn.sketchArchived = false;
+      } else if (partBefore && nextLabel && partBefore !== nextLabel && sharedParts && remote.board) {
+        state.fn.sketch = remote.board;
+        state.fn.partSketches[nextLabel] = { model: remote.board, undo: [] };
+        state.fn.viewPart = nextLabel;
+        state.fn.sketchArchived = false;
+      } else if (wasSketch && partBefore && nextLabel && partBefore !== nextLabel && remote.view && remote.view.keepBoard && remote.board) {
+        var keptDrawn = { model: remote.board, undo: [] };
+        state.fn.partSketches[partBefore] = keptDrawn;
+        state.fn.partSketches[nextLabel] = { model: remote.board, undo: [] };
+        state.fn.sketch = remote.board;
+        state.fn.viewPart = nextLabel;
+        state.fn.sketchArchived = false;
+      } else if (wasSketch && partBefore && nextLabel && partBefore !== nextLabel && remote.board && (((remote.board.strokes && remote.board.strokes.length) || (remote.board.curve && remote.board.curve.length)))) {
+        state.fn.partSketches[partBefore] = { model: remote.board, undo: [] };
+        state.fn.pendingSketchCard = remote.board;
+        state.fn.sketchArchived = true;
+        state.fn.viewPart = nextLabel;
+        state.fn.sketch = { points: [], strokes: [], line: null };
+      } else if (wasSketch && remote.solved && partBefore && remote.view && remote.view.parts && remote.view.parts.length > 1) {
+        var finishedLast = fnSketch && fnSketch.snapshot ? fnSketch.snapshot() : { model: remote.board, undo: [] };
+        state.fn.partSketches[partBefore] = finishedLast;
+        state.fn.pendingSketchCard = (finishedLast && finishedLast.model) || remote.board;
+        state.fn.sketchArchived = true;
+      } else if (partBefore && nextLabel && partBefore !== nextLabel) {
+        state.fn.partSketches[partBefore] = fnSketch && fnSketch.snapshot ? fnSketch.snapshot() : { model: remote.board, undo: [] };
+        state.fn.viewPart = nextLabel;
+        var keptNext = state.fn.partSketches[nextLabel];
+        state.fn.sketch = keptNext && keptNext.model ? keptNext.model : { points: [], strokes: [], line: null };
+      } else {
+        state.fn.sketch = remote.board;
+        var stay = nextLabel || partBefore;
+        if (stay) state.fn.partSketches[stay] = { model: remote.board, undo: [] };
+      }
     }
-    var sketchBoardDone = !remote.board || remote.board.line || (remote.board.curve && remote.board.curve.length);
+    var sketchBoardDone = !remote.board || remote.board.line || (remote.board.curve && remote.board.curve.length) || (remote.board.strokes && remote.board.strokes.length);
     if (wasSketch && remote.show && sketchBoardDone) {
       state.fn = state.fn || {};
       state.fn.sketchDone = true;
     }
     if (remote.view) state.fnView = remote.view;
+    if (!remote.board && partBefore && fnServerPart() && partBefore !== fnServerPart()) {
+      state.fn = state.fn || {};
+      state.fn.partSketches = state.fn.partSketches || {};
+      var finishedSketch = fnSketch && fnSketch.snapshot ? fnSketch.snapshot() : null;
+      if (finishedSketch) state.fn.partSketches[partBefore] = finishedSketch;
+      var nextParts = state.fnView && state.fnView.parts && state.fnView.parts.length > 1 && state.fnView.input === "sketch";
+      if (nextParts && finishedSketch) {
+        state.fn.pendingSketchCard = finishedSketch.model;
+        var seededNext = givenSketch(finishedSketch.model);
+        state.fn.sketch = seededNext;
+        state.fn.partSketches[fnServerPart()] = { model: seededNext, undo: [] };
+        state.fn.sketchArchived = false;
+      } else if (finishedSketch && state.fnView && state.fnView.keepBoard) {
+        state.fn.sketch = finishedSketch.model;
+        state.fn.sketchArchived = false;
+        state.fn.partSketches[fnServerPart()] = finishedSketch;
+      } else if (finishedSketch && wasSketch && state.fnView && state.fnView.parts && state.fnView.parts.length > 1 && state.fnView.input !== "sketch") {
+        state.fn.pendingSketchCard = finishedSketch.model;
+        state.fn.sketchArchived = true;
+      } else if (finishedSketch && wasSketch && remote.solved && state.fnView && state.fnView.parts && state.fnView.parts.length > 1) {
+        state.fn.pendingSketchCard = finishedSketch.model;
+        state.fn.sketchArchived = true;
+      } else {
+        var arrivedSketch = state.fn.partSketches[fnServerPart()];
+        state.fn.sketch = arrivedSketch && arrivedSketch.model ? arrivedSketch.model : { points: [], strokes: [], line: null };
+      }
+      state.fn.viewPart = fnServerPart();
+    }
     if (remote.show) {
       var partLabel = partBefore;
       if (partLabel) {
@@ -2881,14 +3761,38 @@
         if ((state.history || []).indexOf(mark) < 0) state.history.push(mark);
       }
       ensureFnTaskHeader(remote.heading);
-      state.history.push(remote.show);
+      var domainKind = domainFamily(remote.show);
+      var domainAt = -1;
+      if (domainKind) {
+        var scan = state.history.length - 1;
+        while (scan >= 0) {
+          var priorLine = String(state.history[scan] || "");
+          if (/^§/.test(priorLine) || priorLine === "⌘sketch" || priorLine === "⌘axes" || isGeoTaskHeader(priorLine)) break;
+          if (domainFamily(priorLine) === domainKind) {
+            domainAt = scan;
+            break;
+          }
+          scan -= 1;
+        }
+      }
+      if (domainAt >= 0) state.history[domainAt] = remote.show;
+      else {
+        state.history.push(remote.show);
+        domainAt = state.history.length - 1;
+      }
       var fnReason = String(remote.message || "").replace(/^נכון\.\s*/, "").trim();
       if (fnReason && fnReason !== "נכון") {
         state.fn = state.fn || {};
         state.fn.reasons = state.fn.reasons || {};
-        state.fn.reasons[state.history.length - 1] = fnReason;
+        state.fn.reasons[domainAt] = fnReason;
       }
       var nextPart = remote.view && remote.view.part && remote.view.part.label;
+      if (state.fn && state.fn.pendingSketchCard) {
+        state.fn.sketchCards = state.fn.sketchCards || [];
+        state.fn.sketchCards.push(state.fn.pendingSketchCard);
+        state.history.push("⌘sketch");
+        state.fn.pendingSketchCard = null;
+      }
       if (nextPart && nextPart !== partBefore) {
         var nextMark = "§" + nextPart;
         if ((state.history || []).indexOf(nextMark) < 0) state.history.push(nextMark);
@@ -2903,6 +3807,7 @@
     if (mathField && state.fnView && state.fnView.input !== "sketch" && state.fnView.input !== "domains") mathField.clear();
     if (remote.solved) {
       markSolved();
+      syncFnAsk();
       if (mathField) mathField.setDisabled(true);
       checkBtn.disabled = true;
       nextAfterSolveBtn.classList.remove("hidden");
@@ -2912,12 +3817,27 @@
     showFeedback(true, "<strong>נכון.</strong> " + fnProse(remote.message || ""));
     updateFormulaBtn();
     if (state.fnView && state.fnView.input === "domains" && fnDomainsEl) {
-      var nextDomain = fnDomainsEl.querySelector("input");
+      var lockedDomain = {};
+      (state.fnView.domains || []).forEach(function (field) {
+        if (field.locked) lockedDomain[field.id] = true;
+      });
+      (remote.clearDomains || []).forEach(function (id) {
+        if (lockedDomain[id]) return;
+        var box = fnDomainsEl.querySelector("input[data-domain='" + id + "']");
+        if (box && !box.disabled) box.value = "";
+      });
+      var nextDomain = fnDomainsEl.querySelector("input:not(:disabled)");
       if (nextDomain) nextDomain.focus();
     } else if (mathField && state.fnView && state.fnView.input !== "sketch") mathField.focus();
   }
 
   function submitFnSketch() {
+    var view = state.fnView;
+    if (view && view.family === "free") {
+      var model = fnSketch ? fnSketch.getModel() : { points: [], strokes: [] };
+      if (!requestFunctions({ intent: "sketch", sketch: model }, applyFnRemote)) showBasicEqServerUnavailable();
+      return;
+    }
     applyFnTyped("");
   }
 
@@ -2925,8 +3845,13 @@
     if (state.locked) return;
     var view = state.fnView;
     if (view && view.input === "sketch") {
+      if (fnReviewingSketch()) {
+        showFeedback(false, "<strong>עוד לא.</strong> הבדיקה שייכת לסעיף " + fnServerPart() + ". חזרו אליו כדי להמשיך.");
+        return;
+      }
       var model = fnSketch ? fnSketch.getModel() : { points: [], line: null };
-      if (!model.line && !(model.curve && model.curve.length)) {
+      var freeSketch = view.family === "free";
+      if (!freeSketch && !model.line && !(model.curve && model.curve.length)) {
         showFeedback(false, "<strong>עוד לא.</strong> שרטטו את הגרף על מערכת הצירים.");
         return;
       }
@@ -2935,6 +3860,10 @@
     }
     if (view && view.input === "domains") {
       if (!requestFunctions({ intent: "check", domains: readFnDomains() }, applyFnRemote)) showBasicEqServerUnavailable();
+      return;
+    }
+    if (view && view.input === "extrema") {
+      if (!requestFunctions({ intent: "check", extrema: readFnExtrema() }, applyFnRemote)) showBasicEqServerUnavailable();
       return;
     }
     if (!String(typed || "").trim()) {
@@ -2947,12 +3876,21 @@
   }
 
   function fnHint() {
-    if (!requestFunctions({ intent: "hint" }, function (remote) {
+    var hintBody = { intent: "hint", progress: fnProgressForView() };
+    if (fnSketch && fnSketch.getModel) hintBody.sketch = fnSketch.getModel();
+    if (!requestFunctions(hintBody, function (remote) {
       if (!remote || remote.ok === false) {
         showFeedback(false, "<strong>עוד לא.</strong> " + fnProse((remote && remote.message) || ""));
         return;
       }
-      showFeedback(true, "<strong>רמז.</strong> " + fnProse(remote.hint || ""), "tip");
+      var hintList = remote.hints && remote.hints.length ? remote.hints : [remote.hint || ""];
+      var hintKey = (state.fnView && state.fnView.focusKind) + "|" + fnSketchPartKey();
+      state.fn = state.fn || {};
+      state.fn.hintBank = state.fn.hintBank || {};
+      var hintAt = state.fn.hintBank[hintKey] || 0;
+      var hintText = hintList[Math.min(hintAt, hintList.length - 1)];
+      if (hintAt < hintList.length - 1) state.fn.hintBank[hintKey] = hintAt + 1;
+      showFeedback(true, "<strong>רמז.</strong> " + fnProse(hintText), "tip");
     })) showBasicEqServerUnavailable();
   }
 
@@ -2972,6 +3910,10 @@
 
   function fnOneStep() {
     abandonFnFormula();
+    if (fnReviewingSketch()) {
+      showFeedback(false, "<strong>עוד לא.</strong> הצעד הבא שייך לסעיף " + fnServerPart() + ". חזרו אליו כדי להמשיך.");
+      return;
+    }
     if (!requestFunctions({ intent: "one-step" }, applyFnRemote)) showBasicEqServerUnavailable();
   }
 
@@ -2995,7 +3937,64 @@
         withNotes: true,
         footer: "",
       });
+      renderFnSolutionExamples(remote.examples);
     })) showBasicEqServerUnavailable();
+  }
+
+  function renderFnSolutionExamples(examples) {
+    if (!modelEl || !examples || !examples.length) return;
+    var wrap = document.createElement("div");
+    wrap.className = "fn-solution-examples";
+    examples.forEach(function (example) {
+      var card = document.createElement("figure");
+      card.className = "fn-solution-example";
+      var title = document.createElement("figcaption");
+      title.innerHTML = fnProse("סעיף " + (example.label || "") + ": סקיצה אפשרית");
+      card.appendChild(title);
+      card.appendChild(fnExampleSvg(example));
+      wrap.appendChild(card);
+    });
+    modelEl.appendChild(wrap);
+  }
+
+  function fnExampleSvg(example) {
+    var w = 168;
+    var h = 132;
+    var ox = 84;
+    var oy = 66;
+    var half = 52;
+    function sx(q) { return ox + Number(q) * half; }
+    function sy(q) { return oy - Number(q) * half; }
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+    svg.setAttribute("class", "fn-example-svg");
+    function line(x1, y1, x2, y2, cls) {
+      var node = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      node.setAttribute("x1", x1);
+      node.setAttribute("y1", y1);
+      node.setAttribute("x2", x2);
+      node.setAttribute("y2", y2);
+      node.setAttribute("class", cls);
+      svg.appendChild(node);
+    }
+    line(12, oy, w - 12, oy, "axis");
+    line(ox, 10, ox, h - 10, "axis");
+    var poly = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    poly.setAttribute("class", "curve");
+    poly.setAttribute("points", (example.stroke || []).map(function (pt) {
+      return sx(pt[0]) + "," + sy(pt[1]);
+    }).join(" "));
+    svg.appendChild(poly);
+    var dots = example.points && example.points.length ? example.points : (example.point ? [example.point] : []);
+    dots.forEach(function (pt) {
+      var dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      dot.setAttribute("cx", sx(pt.qx));
+      dot.setAttribute("cy", sy(pt.qy));
+      dot.setAttribute("r", "3.2");
+      dot.setAttribute("class", "point");
+      svg.appendChild(dot);
+    });
+    return svg;
   }
 
   function isGeoLengthMode() {
@@ -3050,7 +4049,7 @@
     var level = currentLevel();
     return (
       ((isQuadraticTopic() && level && level.mode === "quad-factor") ||
-        (isHighPowerTopic() && level && level.mode === "high-factor")) &&
+        (isHighPowerTopic() && level && (level.mode === "high-factor" || level.mode === "high-chain"))) &&
       !!level &&
       level.exercises &&
       level.exercises.length > 0
@@ -3095,7 +4094,123 @@
   }
 
   function factorWorkActive() {
-    return isFactorEqMode() || mixedPath() === "factor";
+    return isFactorEqMode() || mixedPath() === "factor" || (isBiquadMode() && state.factor && state.factor.split);
+  }
+
+  function factorForkLive() {
+    var st = state.factor;
+    if (!st) return false;
+    if (isBiquadMode() && st.split && st.heads && st.heads.length) return true;
+    var tr = st.trails;
+    if (!tr || !tr.length) return false;
+    return tr.some(function (t) {
+      return t && t.length;
+    });
+  }
+
+  function biquadColumnsOpen() {
+    return !!(isBiquadMode() && state.factor && state.factor.split && state.factor.heads && state.factor.heads.length);
+  }
+
+  function biquadChosenBranch() {
+    var fields = state.biquadFields || [];
+    var i;
+    if (state.biquadActiveBranch != null) {
+      for (i = 0; i < fields.length; i++) {
+        if (fields[i].index === state.biquadActiveBranch) return state.biquadActiveBranch;
+      }
+    }
+    if (fields.length === 1) return fields[0].index;
+    return null;
+  }
+
+  function biquadPending() {
+    var fields = state.biquadFields || [];
+    var active = state.biquadActiveBranch;
+    var i;
+    var fallback = null;
+    for (i = 0; i < fields.length; i++) {
+      var text = fields[i].field ? fields[i].field.serialize().trim() : "";
+      if (!text) continue;
+      if (fields[i].index === active) return { text: text, branch: fields[i].index };
+      if (!fallback) fallback = { text: text, branch: fields[i].index };
+    }
+    if (fallback) return fallback;
+    if (!biquadColumnsOpen()) {
+      var typed = typedAnswer().trim();
+      if (typed) return { text: typed, branch: null };
+    }
+    return { text: "", branch: biquadChosenBranch() };
+  }
+
+  function focusBiquadField(index) {
+    var fields = state.biquadFields || [];
+    var i;
+    for (i = 0; i < fields.length; i++) {
+      if (fields[i].index === index && fields[i].field) {
+        state.biquadActiveBranch = index;
+        fields[i].field.focus();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function clearBiquadField(index) {
+    if (index == null) return;
+    state.biquadDrafts = state.biquadDrafts || {};
+    delete state.biquadDrafts[index];
+    (state.biquadFields || []).forEach(function (item) {
+      if (item.index === index && item.field) item.field.clear();
+    });
+  }
+
+  function snapshotBiquadDrafts() {
+    if (!state.biquadFields || !state.biquadFields.length) return;
+    state.biquadDrafts = state.biquadDrafts || {};
+    state.biquadFields.forEach(function (item) {
+      if (!item || !item.field || !item.field.host || !item.field.host.isConnected) return;
+      item.field.readInputs();
+      var text = item.field.serialize();
+      if (!text) {
+        delete state.biquadDrafts[item.index];
+        return;
+      }
+      state.biquadDrafts[item.index] = JSON.parse(JSON.stringify(item.field.parts));
+    });
+  }
+
+  function rememberBiquadTarget() {
+    var fields = state.biquadFields || [];
+    var i;
+    var match = null;
+    for (i = 0; i < fields.length; i++) {
+      if (fields[i].index === state.biquadActiveBranch) match = fields[i].field;
+    }
+    if (match) {
+      DoctematicaMathField.current = match;
+      return;
+    }
+    if (fields.length === 1) {
+      DoctematicaMathField.current = fields[0].field;
+      state.biquadActiveBranch = fields[0].index;
+      return;
+    }
+    if (
+      DoctematicaMathField.current &&
+      DoctematicaMathField.current.host &&
+      !DoctematicaMathField.current.host.isConnected
+    ) {
+      DoctematicaMathField.current = null;
+    }
+  }
+
+  function syncBiquadColumnsEntry() {
+    if (!mathWrap) return;
+    if (biquadColumnsOpen()) {
+      mathWrap.classList.add("hidden");
+      if (mathKeysEl) mathKeysEl.classList.remove("hidden");
+    }
   }
 
   function sqrtWorkActive() {
@@ -3103,7 +4218,7 @@
   }
 
   function isEqWorkMode() {
-    return isStepMode() || isSqrtEqMode() || isHighRootEqMode() || isFactorEqMode() || isMixedEqMode();
+    return isStepMode() || isIneqMode() || isParamEqMode() || isSqrtEqMode() || isHighRootEqMode() || isFactorEqMode() || isMixedEqMode() || isBiquadMode();
   }
 
   function emptyMixedState() {
@@ -3129,6 +4244,8 @@
       trails: (st.trails || [[], []]).map(function (t) {
         return (t || []).map(String);
       }),
+      pending: (st.pending || []).map(String),
+      formulaBranch: st.formulaBranch,
     };
   }
 
@@ -3153,7 +4270,7 @@
   }
 
   function appendFactorTrail(which, eq, reason) {
-    if (which !== 0 && which !== 1) return;
+    if (typeof which !== "number" || which < 0) return;
     var trail = state.factor.trails[which];
     if (!trail) {
       state.factor.trails[which] = [eq];
@@ -3453,8 +4570,9 @@
       ready = true;
     }
     if (!ready) return false;
-    if (isFactorServerMode() || isHighFactorServerMode()) return true;
+    if (isFactorServerMode() || isHighFactorServerMode() || isHighChainServerMode()) return true;
     if (isMixedServerMode() && mixedPath() === "factor") return true;
+    if (isQuadIneqMode() && state.factor && state.factor.canSplit) return true;
     if (geoEqSolveActive() && (!mixedPath() || mixedPath() === "factor")) return true;
     return false;
   }
@@ -3467,9 +4585,18 @@
 
   function canUseMixedFormula() {
     if (state.locked || !state.problem) return false;
+    if (isHighChainServerMode()) {
+      if (mixedPath() === "formula") return false;
+      return !!(state.factor && state.factor.offerFormula);
+    }
+    if (isBiquadMode()) {
+      if (mixedPath() === "formula") return false;
+      return !!state.biquadOffer;
+    }
     if (sysQuadFormulaActive()) return false;
     if (fnQuadSolveActive()) return true;
     if (isSystemQuadMode() && state.offerFormula) return true;
+    if (isQuadIneqMode() && (!state.quadIneq || state.quadIneq.phase === "equation" || state.quadIneq.phase === "zeros") && !mixedPath() && state.offerFormula) return true;
     if (!isMixedEqMode() && !geoEqSolveActive()) return false;
     if (mixedPath()) return false;
     if (state.offerFormula) return true;
@@ -3733,7 +4860,10 @@
     if (!domainPending() || !domainMulti()) {
       domainGuideEl.classList.add("hidden");
       domainGuideEl.innerHTML = "";
-      if (mathWrap && !formulaWorkActive() && !sysPrepActive()) mathWrap.classList.remove("hidden");
+      if (biquadColumnsOpen()) {
+        if (mathWrap) mathWrap.classList.add("hidden");
+        if (mathKeysEl) mathKeysEl.classList.remove("hidden");
+      } else if (mathWrap && !formulaWorkActive() && !sysPrepActive()) mathWrap.classList.remove("hidden");
       return;
     }
     wireDomainMathKeys();
@@ -4578,14 +5708,20 @@
     }
     if (
       isHighFactorServerMode() ||
+      isHighChainServerMode() ||
       isFactorServerMode() ||
+      isQuadIneqMode() ||
       ((isMixedServerMode() || geoEqSolveActive()) && (mixedPath() === "factor" || geoEqSolveActive()))
     ) {
       if (geoEqSolveActive()) {
         state.mixed = state.mixed || emptyMixedState();
         state.mixed.path = "factor";
       }
-      var sendSplit = isHighFactorServerMode() ? requestHighPowerAction : requestQuadraticAction;
+      if (isQuadIneqMode()) {
+        state.mixed = state.mixed || emptyMixedState();
+        state.mixed.path = "factor";
+      }
+      var sendSplit = isHighFactorServerMode() || isHighChainServerMode() ? requestHighPowerAction : requestQuadraticAction;
       sendSplit(
         {
           intent: "split",
@@ -4614,7 +5750,7 @@
   }
 
   function applyFactorServerResult(shownTyped, res) {
-    res = res || {};
+    res = softenQuadIneqSolve(res || {});
     if (res.raw && typeof res.raw === "object") {
       res = Object.assign({}, res.raw, res);
     }
@@ -4629,8 +5765,21 @@
     var pack = state.problem.factor || {};
     state.factor = state.factor || emptyFactorState();
     if (res.canSplit != null) state.factor.canSplit = !!res.canSplit;
+    if (res.offerFormula != null) state.factor.offerFormula = !!res.offerFormula;
+    if (res.formulaEq) state.factor.formulaEq = res.formulaEq;
+    if (res.formulaBranch != null) state.factor.formulaBranch = res.formulaBranch;
+    if (Array.isArray(res.pending)) state.factor.pending = res.pending.slice();
     if (res.sqrtProg) state.factor.sqrtProg = res.sqrtProg;
     var wasSplit = !!state.factor.split;
+    var chainTrails = isHighChainServerMode() && Array.isArray(res.trails) && res.trails.length;
+    if (chainTrails) {
+      state.factor.trails = res.trails.map(function (t) {
+        return (t || []).slice();
+      });
+      state.factor.split = true;
+      if (res.eqs) state.factor.eqs = res.eqs.slice();
+      if (Array.isArray(res.solvedFlags)) state.factor.solved = res.solvedFlags.slice();
+    }
     var msg = String(res.message || res.hint || "");
     if (res.factored) {
       if (shownTyped && state.history[state.history.length - 1] !== shownTyped) {
@@ -4642,7 +5791,7 @@
         state.history.push(shownTyped);
         rememberHistoryReason(res.reason);
       }
-    } else if (res.resplit) {
+    } else if (res.resplit && !chainTrails) {
       if (res.eqs) state.factor.eqs = res.eqs;
       if (Array.isArray(res.solvedFlags)) state.factor.solved = res.solvedFlags;
       state.factor.split = true;
@@ -4651,7 +5800,7 @@
         if (res.trailAlso) appendFactorTrail(res.which, res.trailAlso);
         if (res.eqs && res.eqs[res.which]) appendFactorTrail(res.which, res.eqs[res.which], res.reason);
       }
-    } else if (res.split && !wasSplit) {
+    } else if (res.split && !wasSplit && !chainTrails) {
       var startEqs = res.eqs;
       if (!isHighFactorServerMode() && Q && typeof Q.parseProductEq === "function") {
         var p0 = Q.parseProductEq(lastHistoryEq());
@@ -4660,11 +5809,11 @@
       if (startEqs && startEqs.length >= 2) startFactorTrails(startEqs[0], startEqs[1]);
       if (res.reason && eqNotesActive()) state.factor.splitReason = res.reason;
     }
-    if (!res.resplit && res.eqs) state.factor.eqs = res.eqs;
-    if (!res.resplit && Array.isArray(res.solvedFlags)) state.factor.solved = res.solvedFlags;
+    if (!chainTrails && !res.resplit && res.eqs) state.factor.eqs = res.eqs;
+    if (!chainTrails && !res.resplit && Array.isArray(res.solvedFlags)) state.factor.solved = res.solvedFlags;
     if (res.split || res.resplit) state.factor.split = true;
     if (res.progress) state.factor.progress = res.progress;
-    if (!res.resplit && typeof res.which === "number" && shownTyped) {
+    if (!chainTrails && !res.resplit && typeof res.which === "number" && shownTyped) {
       if (res.trailAlso) appendFactorTrail(res.which, res.trailAlso);
       appendFactorTrail(res.which, shownTyped, res.reason);
     } else if (res.solved === true && res.progress) {
@@ -4682,6 +5831,10 @@
       return true;
     }
     if (done) {
+      if (isQuadIneqMode()) {
+        finishEqSolveForQuadIneq(shownTyped || "");
+        return true;
+      }
       if (geoDistUnkTask()) {
         var rootBits = [];
         if (state.factor && state.factor.trails) {
@@ -4727,7 +5880,7 @@
     }
     var shownTyped = String(typed || "").trim();
     typed = geoEngineTyped(shownTyped);
-    if (isHighFactorServerMode()) {
+    if (isHighFactorServerMode() || isHighChainServerMode()) {
       if (equationsCheckBusy) return true;
       var prevH = lastHistoryEq();
       if (
@@ -4749,7 +5902,7 @@
       }
       return true;
     }
-    if (isFactorServerMode() || ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "factor")) {
+    if (isFactorServerMode() || ((isMixedServerMode() || geoEqSolveActive() || isQuadIneqMode()) && mixedPath() === "factor")) {
       if (equationsCheckBusy) return true;
       var prevF = lastHistoryEq();
       requestQuadraticAction(
@@ -4777,10 +5930,12 @@
       isSystemMode() ||
       isQuadraticTopic() ||
       isHighPowerTopic() ||
+      state.topic === "biquad" ||
       isAnalyticTopic() ||
       isStatisticsTopic() ||
       isPercentTopic() ||
       isCalculusTopic() ||
+      state.topic === "inequalities" ||
       state.topic === "equations"
     );
   }
@@ -4793,7 +5948,8 @@
       state.topic === "statistics" ||
       state.topic === "percents" ||
       state.topic === "systems-sub" ||
-      state.topic === "calculus"
+      state.topic === "calculus" ||
+      state.topic === "inequalities"
         ? state.subtopic
         : null;
     if (!state.topic) return all;
@@ -4805,6 +5961,7 @@
       if (state.topic === "percents" && sub) return (item.subtopic || "find-part") === sub;
       if (state.topic === "systems-sub" && sub) return (item.subtopic || "sub") === sub;
       if (state.topic === "calculus" && sub) return (item.subtopic || "intro") === sub;
+      if (state.topic === "inequalities" && sub) return (item.subtopic || "linear") === sub;
       return true;
     });
   }
@@ -4836,6 +5993,7 @@
     if (id === "analytic") return "geo";
     if (id === "statistics") return "stat";
     if (id === "calculus") return "calc";
+    if (id === "inequalities") return "ineq";
     return "eq";
   }
 
@@ -4859,6 +6017,9 @@
     }
     if (name === "geo") {
       return "<svg " + common + '><path d="M4 20V5"/><path d="M4 20h16"/><path d="M4 20 16 8"/></svg>';
+    }
+    if (name === "ineq") {
+      return "<svg " + common + '><path d="M16 6 8 12l8 6"/><path d="M6 12h.01"/></svg>';
     }
     if (name === "calc") {
       return "<svg " + common + '><path d="M4 19V5"/><path d="M4 19h16"/><path d="M6 15c3-1 4-6 7-7s4 2 7 1"/></svg>';
@@ -4912,7 +6073,6 @@
       var overlay =
         shellMode === "solve" &&
         navOpen &&
-        window.matchMedia("(max-width: 1180px)").matches &&
         window.matchMedia("(min-width: 861px)").matches;
       navScrim.classList.toggle("hidden", !overlay);
     }
@@ -5004,7 +6164,7 @@
     state.topic = topic.id;
     state.source = "worksheet";
     state.exerciseIndex = 0;
-    if (topic.id === "equations" || topic.id === "analytic" || topic.id === "statistics" || topic.id === "percents" || topic.id === "systems-sub" || topic.id === "calculus") {
+    if (topic.id === "equations" || topic.id === "analytic" || topic.id === "statistics" || topic.id === "percents" || topic.id === "systems-sub" || topic.id === "calculus" || topic.id === "inequalities") {
       var subs = ((state.catalog && state.catalog.subtopics) || {})[topic.id] || [];
       state.subtopic = state.subtopic || (subs[0] && subs[0].id);
       if (!subs.some(function (s) { return s.id === state.subtopic; })) {
@@ -5088,15 +6248,16 @@
     worksheetNav.classList.remove("hidden");
     randomWrap.classList.add("hidden");
     var level = currentLevel();
-    if (level.mode === "geo-length" || level.mode === "freq-table" || !level.instruction) {
+    var pageInstruction = (state.problem && state.problem.instruction) || level.instruction;
+    if (level.mode === "geo-length" || level.mode === "freq-table" || !pageInstruction) {
       instructionEl.innerHTML = "";
       instructionEl.classList.add("hidden");
     } else {
       instructionEl.classList.remove("hidden");
       instructionEl.innerHTML =
         DoctematicaMath && DoctematicaMath.proseHTML
-          ? DoctematicaMath.proseHTML(level.instruction)
-          : level.instruction;
+          ? DoctematicaMath.proseHTML(pageInstruction)
+          : pageInstruction;
     }
     exerciseNumsEl.innerHTML = "";
     var total = level.exercises ? level.exercises.length : 0;
@@ -5250,6 +6411,7 @@
       state.topic === "statistics" ||
       state.topic === "percents" ||
       state.topic === "calculus" ||
+      state.topic === "inequalities" ||
       (state.topic === "systems-sub" && (state.subtopic === "elim" || state.subtopic === "arrange"))
     ) {
       var subList =
@@ -5291,7 +6453,20 @@
     return Math.abs(user.value - problem.value) < 1e-9;
   }
 
+  function streakKey() {
+    var p = state.problem || {};
+    var id = p.exerciseId || p.id || p.startEquation || "";
+    if (!id) return "";
+    return String(state.topic || "") + "/" + String(state.subtopic || "") + "/" + String(state.levelId || "") + "/" + id;
+  }
+
   function showFeedback(ok, message, tone) {
+    if (!ok && /עוד לא|לא נכון/.test(String(message || ""))) {
+      state.streak = 0;
+      var key = streakKey();
+      if (key && state.streakSeen) delete state.streakSeen[key];
+      renderStats();
+    }
     feedbackEl.classList.remove("hidden", "ok", "bad", "tip");
     feedbackEl.classList.add(tone || (ok ? "ok" : "bad"));
     feedbackEl.innerHTML = message;
@@ -5311,6 +6486,14 @@
   }
 
   function renderSysKnown() {
+    if (isBiquadMode() && state.factor && state.factor.split) {
+      if (sysKnownEl) {
+        sysKnownEl.classList.add("hidden");
+        sysKnownEl.innerHTML = "";
+      }
+      if (solveWrap) solveWrap.classList.remove("is-system");
+      return;
+    }
     if (formulaWorkActive() && state.quad && state.quad.gotAbc) {
       renderQuadKnown();
       return;
@@ -5372,6 +6555,7 @@
         state.sys.givenAt.push(state.history.length - 1);
       }
     }
+    if (state.sys) state.sys.hintI = 0;
     mathField.clear();
     mathField.setDisabled(false);
     setWorkInput(!!(view && view.input));
@@ -5661,7 +6845,9 @@
       return sysHatsHTML(s.slice(4).split("|"), hats);
     }
     if (s.indexOf("method:") === 0) {
-      var methodName = s.slice(7) === "elim" ? "שיטת השוואת מקדמים" : "שיטת ההצבה";
+      var methodKey = s.slice(7);
+      var methodName =
+        methodKey === "elim" ? "שיטת השוואת מקדמים" : methodKey === "equate" ? "השוואה" : "שיטת ההצבה";
       return '<span class="sys-mul-mark" dir="rtl">' + methodName + "</span>";
     }
     if (s.indexOf("mul:") === 0) {
@@ -6137,6 +7323,10 @@
       return;
     }
     state.history.push(typed);
+    if (state.sys && remote.reason) {
+      if (!state.sys.reasons) state.sys.reasons = {};
+      state.sys.reasons[state.history.length - 1] = remote.reason;
+    }
     if (remote.keep) markKeep();
     mergeSysFromView(remote);
     renderSteps();
@@ -6231,6 +7421,11 @@
       sys.phase === "final_pair" ||
       sys.phase === "isolate" ||
       sys.phase === "equate" ||
+      sys.phase === "solve" ||
+      sys.phase === "plug" ||
+      sys.phase === "yval" ||
+      sys.phase === "pair" ||
+      sys.phase === "conclude" ||
       sys.phase === "quad" ||
       sys.phase === "back";
     if (!writing) return;
@@ -6462,6 +7657,13 @@
   }
 
   function appendHistorySiteNote(li, body, index, isGiven) {
+    if (isIneqMode() || isIntervalMode() || isQuadIneqMode()) {
+      if (state.eqReasons && state.eqReasons[index]) {
+        appendSiteWhy(body, state.eqReasons[index]);
+        li.classList.add("has-why");
+      }
+      return;
+    }
     if (!eqNotesActive()) return;
     if (state.eqReasons && state.eqReasons[index]) appendSiteWhy(body, state.eqReasons[index]);
     if (!isGiven && !(state.eqReasons && state.eqReasons[index])) appendEqUserNote(li, String(index));
@@ -6528,8 +7730,66 @@
     if (parent.tagName === "LI") parent.classList.add("has-step-note");
   }
 
+  function quadSketchVisible() {
+    var el = document.getElementById("quad-ineq");
+    return !!(isQuadIneqMode() && el && !el.classList.contains("hidden"));
+  }
+
+  function isQuadSolutionLine(eq) {
+    var t = String(eq || "").trim();
+    if (!t) return false;
+    var start = state.problem && state.problem.startEquation ? String(state.problem.startEquation) : "";
+    var norm = function (s) {
+      return String(s || "").replace(/\s+/g, "").replace(/−/g, "-").replace(/≤/g, "<=").replace(/≥/g, ">=");
+    };
+    if (start && norm(t) === norm(start)) return false;
+    if (/אין\s*פתרון|כל\s*x|ℝ|∅/.test(t)) return true;
+    if (!/[<>≤≥]/.test(t) && t.indexOf("או") < 0) return false;
+    if (/x\s*\^|x²|²/.test(t)) return false;
+    return true;
+  }
+
+  function clearQuadAnswerSteps() {
+    var slot = document.getElementById("quad-answer-steps");
+    if (!slot) return;
+    slot.innerHTML = "";
+    slot.classList.add("hidden");
+  }
+
+  function renderQuadAnswerSteps(items) {
+    var slot = document.getElementById("quad-answer-steps");
+    if (!slot) return;
+    slot.innerHTML = "";
+    if (!items || !items.length) {
+      slot.classList.add("hidden");
+      return;
+    }
+    items.forEach(function (item) {
+      var li = document.createElement("li");
+      var n = document.createElement("span");
+      n.className = "n";
+      n.textContent = item.num;
+      var body = document.createElement("span");
+      body.innerHTML = DoctematicaMath.toHTML(item.eq);
+      appendHistorySiteNote(li, body, item.index, false);
+      li.appendChild(n);
+      li.appendChild(body);
+      if (state.locked && item.index === state.history.length - 1) li.classList.add("solved-row");
+      slot.appendChild(li);
+    });
+    slot.classList.remove("hidden");
+  }
+
   function renderSteps() {
+    snapshotBiquadDrafts();
+    if (isBiquadMode() && state.factor && state.factor.split && state.history.length) {
+      var stray = String(state.history[state.history.length - 1] || "")
+        .replace(/[−–—]/g, "-")
+        .replace(/\s+/g, "");
+      if (/^\([^()]*t[^()]*\)\([^()]*t[^()]*\)=0$/i.test(stray)) state.history.pop();
+    }
     stepsEl.innerHTML = "";
+    clearQuadAnswerSteps();
     if (state.problem && (state.problem.mode === "freq-table" || state.problem.mode === "percent")) {
       renderFreqSteps();
       return;
@@ -6671,7 +7931,7 @@
         state.factor &&
         state.factor.split &&
         state.factor.trails &&
-        (state.factor.trails[0].length || state.factor.trails[1].length);
+        factorForkLive();
       if (geoFactorSplit) {
         stepsEl.appendChild(renderFactorFork(stepNum + 1));
       }
@@ -6705,7 +7965,9 @@
       state.quad &&
       state.quad.trail &&
       state.quad.trail.length &&
-      !isSystemMode()
+      !isSystemMode() &&
+      !isHighChainServerMode() &&
+      !isBiquadMode()
     ) {
       stepsEl.classList.remove("hidden");
       if (isMixedEqMode() && state.history.length) {
@@ -6758,12 +8020,18 @@
       state.factor &&
       state.factor.split &&
       state.factor.trails &&
-      (state.factor.trails[0].length || state.factor.trails[1].length);
+      factorForkLive();
+    var deferredAnswers = [];
+    var deferQuadAnswer = quadSketchVisible();
     state.history.forEach(function (eq, index) {
+      if (deferQuadAnswer && isQuadSolutionLine(eq)) {
+        deferredAnswers.push({ eq: eq, index: index, num: String(++stepNum.n) });
+        return;
+      }
       var li = document.createElement("li");
       var n = document.createElement("span");
       n.className = "n";
-      var isGiven = givenAt ? givenAt.indexOf(index) !== -1 : index === 0;
+      var isGiven = isIntervalMode() ? false : givenAt ? givenAt.indexOf(index) !== -1 : index === 0;
       n.textContent = isGiven ? "נתון" : String(++stepNum.n);
       var body = document.createElement("span");
       var hats = state.sys && state.sys.lcdHats && state.sys.lcdHats[index];
@@ -6793,7 +8061,11 @@
         tag.textContent = "לשימוש בהמשך";
         li.appendChild(tag);
       }
-      if (state.locked && index === state.history.length - 1 && !factorSplit) {
+      if (
+        state.locked &&
+        !factorSplit &&
+        (index === state.history.length - 1 || isAnsweredRootLine(eq))
+      ) {
         li.classList.add("solved-row");
       }
       stepsEl.appendChild(li);
@@ -6822,13 +8094,79 @@
     if (factorSplit) {
       stepsEl.appendChild(renderFactorFork(stepNum.n + 1));
     }
+    if (
+      (isHighChainServerMode() || isBiquadMode()) &&
+      formulaWorkActive() &&
+      state.quad &&
+      state.quad.trail &&
+      state.quad.trail.length
+    ) {
+      state.quad.trail.forEach(function (item, index) {
+        var liC = document.createElement("li");
+        var nC = document.createElement("span");
+        nC.className = "n";
+        nC.textContent = index === 0 ? "מקדמים" : String(index);
+        var bodyC = document.createElement("span");
+        bodyC.innerHTML = item.html;
+        appendQuadTrailNote(liC, bodyC, item, index);
+        liC.appendChild(nC);
+        liC.appendChild(bodyC);
+        if (state.locked && index === state.quad.trail.length - 1) liC.classList.add("solved-row");
+        stepsEl.appendChild(liC);
+      });
+    }
+    if (!stepsEl.children.length) stepsEl.classList.add("hidden");
+    renderQuadAnswerSteps(deferredAnswers);
     renderFactorGuide();
     renderDomainGuide();
+    syncBiquadColumnsEntry();
+  }
+
+  function rootRhsStillOpen(rhs) {
+    var t = String(rhs || "").replace(/\s+/g, "");
+    if (!t) return false;
+    if (/[·*×]/.test(t)) return true;
+    if (/√|sqrt/i.test(t)) return false;
+    if (/[+]/.test(t.replace(/^[+±]/, ""))) return true;
+    var bare = t.replace(/[()]/g, "");
+    var body = bare.replace(/^[+±-]/, "");
+    if (/[+-]/.test(body)) return true;
+    if (!/\//.test(t)) return false;
+    var Alg = window.DoctematicaAlgebra;
+    if (!Alg || typeof Alg.isolatedRhsKind !== "function") return true;
+    return Alg.isolatedRhsKind("x=" + t, "x") !== "value";
+  }
+
+  function isAnsweredRootLine(eq) {
+    var t = String(eq || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "")
+      .replace(/²/g, "^2")
+      .replace(/³/g, "^3")
+      .replace(/⁴/g, "^4")
+      .replace(/⁵/g, "^5")
+      .replace(/⁶/g, "^6");
+    if (!t) return false;
+    if (/^אין/.test(t)) return true;
+    var parts = t.split(/,|;|או/);
+    var seen = 0;
+    var i;
+    for (i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (!p) continue;
+      var m = p.match(/^[a-zA-Z]=(.+)$/);
+      if (!m) return false;
+      var rhs = m[1].replace(/sqrt/gi, "").replace(/±/g, "").replace(/\+\-/g, "");
+      if (/[a-zA-Z]/.test(rhs)) return false;
+      if (rootRhsStillOpen(rhs)) return false;
+      seen += 1;
+    }
+    return seen > 0;
   }
 
   function renderFactorFork(baseNum) {
     var st = state.factor;
-    var letters = ["א", "ב"];
+    var letters = ["א", "ב", "ג", "ד", "ה", "ו"];
     var wrap = document.createElement("li");
     wrap.className = "factor-fork";
     if (st.splitReason && eqNotesActive()) {
@@ -6838,20 +8176,37 @@
       wrap.appendChild(splitWhy);
     }
     var i;
-    for (i = 0; i < 2; i++) {
+    var branchCount = st.eqs && st.eqs.length ? st.eqs.length : st.heads && st.heads.length ? st.heads.length : 2;
+    if (branchCount === 1) wrap.style.gridTemplateColumns = "1fr";
+    if (isBiquadMode()) state.biquadFields = [];
+    for (i = 0; i < branchCount; i++) {
       var col = document.createElement("div");
-      col.className = "factor-branch" + (st.solved[i] ? " is-done" : "");
-      var trail = st.trails[i] && st.trails[i].length ? st.trails[i] : st.eqs[i] ? [st.eqs[i]] : [];
+      col.className = "factor-branch" + (st.solved && st.solved[i] ? " is-done" : "");
+      if (st.heads && st.heads[i]) {
+        var head = document.createElement("div");
+        head.className = "factor-branch-step";
+        var headN = document.createElement("span");
+        headN.className = "n";
+        headN.textContent = letters[i] || String(i + 1);
+        var headBody = document.createElement("span");
+        headBody.innerHTML = DoctematicaMath.toHTML(st.heads[i]);
+        head.appendChild(headN);
+        head.appendChild(headBody);
+        col.appendChild(head);
+      }
+      var trail = st.trails[i] && st.trails[i].length ? st.trails[i] : [];
+      if (!trail.length && st.eqs[i] && !isBiquadMode()) trail = [st.eqs[i]];
       trail.forEach(function (eq, k) {
         var row = document.createElement("div");
         var isLast = k === trail.length - 1;
+        var answered = isAnsweredRootLine(eq);
         row.className =
           "factor-branch-step" +
-          (st.solved[i] && isLast ? " is-final" : "") +
-          (!st.solved[i] && isLast ? " is-current" : "");
+          (answered ? " is-final" : "") +
+          (!st.solved[i] && isLast && !answered ? " is-current" : "");
         var n = document.createElement("span");
         n.className = "n";
-        n.textContent = baseNum + k + "." + letters[i];
+        n.textContent = baseNum + k + "." + (letters[i] || String(i + 1));
         var body = document.createElement("span");
         body.innerHTML = DoctematicaMath.toHTML(eq);
         var branchWhy = st.why && st.why[i + ":" + k];
@@ -6859,7 +8214,7 @@
         else if (!(k === 0 && st.splitReason)) appendEqUserNote(row, "f:" + i + ":" + k);
         row.appendChild(n);
         row.appendChild(body);
-        if (st.solved[i] && isLast) {
+        if (answered) {
           var ok = document.createElement("span");
           ok.className = "factor-eq-n";
           ok.textContent = "✓";
@@ -6867,8 +8222,38 @@
         }
         col.appendChild(row);
       });
+      if (isBiquadMode() && !(st.solved && st.solved[i])) {
+        (function (branchIdx) {
+          var host = document.createElement("div");
+          host.className = "math-line factor-branch-math";
+          host.setAttribute("data-branch", String(branchIdx));
+          host.setAttribute("aria-label", "ענף " + (letters[branchIdx] || String(branchIdx + 1)));
+          var field = new DoctematicaMathField(host, null, { keyboard: false });
+          var draft = state.biquadDrafts && state.biquadDrafts[branchIdx];
+          if (draft && draft.length) field.loadParts(JSON.parse(JSON.stringify(draft)));
+          host.addEventListener("focusin", function () {
+            state.biquadActiveBranch = branchIdx;
+          });
+          host.addEventListener("keydown", function (event) {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            event.stopPropagation();
+            var text = field.serialize().trim();
+            if (!text) return;
+            applyBiquadTyped(text, branchIdx);
+          });
+          col.addEventListener("mousedown", function (event) {
+            if (event.target && event.target.closest && event.target.closest(".factor-branch-math")) return;
+            event.preventDefault();
+            field.focus();
+          });
+          state.biquadFields.push({ index: branchIdx, field: field });
+          col.appendChild(host);
+        })(i);
+      }
       wrap.appendChild(col);
     }
+    if (isBiquadMode()) rememberBiquadTarget();
     return wrap;
   }
 
@@ -7058,8 +8443,9 @@
 
   function rootLabel(sign) {
     var want = quadView();
-    if (want.kind === "one") return "x = ";
-    return sign > 0 ? "x₁ = " : "x₂ = ";
+    var v = isBiquadMode() ? "t" : "x";
+    if (want.kind === "one") return v + " = ";
+    return sign > 0 ? v + "₁ = " : v + "₂ = ";
   }
 
   function qFrac(numNode, denNode) {
@@ -7213,6 +8599,15 @@
   }
 
   function renderQuadGuide() {
+    if (isBiquadMode() && state.factor && state.factor.split) {
+      hideQuadGuide();
+      if (sysKnownEl) {
+        sysKnownEl.classList.add("hidden");
+        sysKnownEl.innerHTML = "";
+      }
+      if (solveWrap) solveWrap.classList.remove("is-system");
+      return;
+    }
     if (!formulaWorkActive() || !state.quad) {
       quadGuideEl.classList.add("hidden");
       quadGuideEl.innerHTML = "";
@@ -7445,7 +8840,9 @@
     return (
       isFormulaServerMode() ||
       sysQuadFormulaActive() ||
-      ((isMixedServerMode() || geoEqSolveActive() || fnFormulaActive()) && mixedPath() === "formula")
+      (isHighChainServerMode() && mixedPath() === "formula") ||
+      (isBiquadMode() && mixedPath() === "formula") ||
+      ((isMixedServerMode() || geoEqSolveActive() || fnFormulaActive() || isQuadIneqMode()) && mixedPath() === "formula")
     );
   }
 
@@ -7473,6 +8870,48 @@
   function requestQuadCheck(extra, onResult) {
     extra = extra || {};
     var q = state.quad;
+    if (isBiquadMode() && mixedPath() === "formula") {
+      var tEq = state.biquadFormulaEq || lastHistoryEq();
+      return requestBiquadAction(
+        Object.assign(
+          {
+            intent: extra.intent || "check",
+            start: (state.problem && state.problem.startEquation) || tEq,
+            history: state.history && state.history.length ? state.history : [tEq],
+            phase: q.phase,
+            letter: q.abcAt,
+            slots: collectQuadSlots(),
+            root: q.root,
+            compute: q.compute,
+            md53: !!(state.mixed && state.mixed.md53),
+          },
+          extra
+        ),
+        onResult
+      );
+    }
+    if (isHighChainServerMode() && mixedPath() === "formula") {
+      var branchEq = (state.factor && state.factor.formulaEq) || "";
+      return requestHighPowerAction(
+        Object.assign(
+          {
+            intent: extra.intent || "check",
+            start: (state.problem && state.problem.startEquation) || branchEq,
+            history: state.history && state.history.length ? state.history : [branchEq],
+            phase: q.phase,
+            letter: q.abcAt,
+            slots: collectQuadSlots(),
+            root: q.root,
+            compute: q.compute,
+            md53: !!(state.mixed && state.mixed.md53),
+            formulaBranch: state.factor && state.factor.formulaBranch,
+            factor: factorPayload(),
+          },
+          extra
+        ),
+        onResult
+      );
+    }
     var sysStart = sysQuadFormulaActive() && state.sys && state.sys.formulaEq ? state.sys.formulaEq : "";
     return requestQuadraticAction(
       Object.assign(
@@ -7499,7 +8938,7 @@
   }
 
   function applyQuadServerResult(res) {
-    res = res || {};
+    res = softenQuadIneqSolve(res || {});
     mergeQuadView(res.view);
     if (res.answer) mergeQuadView({ answer: res.answer, kind: res.kind });
     var q = state.quad;
@@ -7737,6 +9176,59 @@
     }
   }
 
+  function finishEqSolveForQuadIneq(answer) {
+    if (!isQuadIneqMode()) return false;
+    var bits = [];
+    if (state.factor && state.factor.trails) {
+      state.factor.trails.forEach(function (tr) {
+        (tr || []).forEach(function (line) {
+          var bit = String(line || "").trim();
+          if (/^[A-Za-z]\s*=/.test(bit.replace(/[−–—]/g, "-"))) bits.push(bit);
+        });
+      });
+    }
+    var text = String(answer || "").trim();
+    if (text && text !== "x = , x = " && bits.indexOf(text) < 0) bits.push(text);
+    bits.forEach(function (bit) {
+      if (!bit || bit === "x = , x = ") return;
+      if (state.history[state.history.length - 1] === bit) return;
+      state.history.push(bit);
+      rememberHistoryReason("אלה נקודות האפס של הביטוי.");
+    });
+    state.mixed = emptyMixedState();
+    state.quad = null;
+    state.factor = emptyFactorState();
+    state.offerFormula = false;
+    state.quadIneq = state.quadIneq || {};
+    state.quadIneq.phase = "signs";
+    state.quadIneq.rootsDone = true;
+    state.locked = false;
+    if (mathField) mathField.setDisabled(false);
+    if (checkBtn) checkBtn.disabled = false;
+    if (nextAfterSolveBtn) nextAfterSolveBtn.classList.add("hidden");
+    hideQuadGuide();
+    setQuadInput(true);
+    updateFormulaBtn();
+    updateSplitBtn();
+    setModeUi();
+    renderSteps();
+    requestQuadIneq({ intent: "regions" }, function (remote) {
+      if (window.DoctematicaQuadIneq && remote && remote.roots) {
+        DoctematicaQuadIneq.open("signs");
+        DoctematicaQuadIneq.setModel({ roots: remote.roots, regions: remote.regions || [] });
+      }
+      showFeedback(
+        true,
+        siteStepMessage(
+          "מצאתם את נקודות האפס. עכשיו שרטטו את התחומים, בדקו סימנים, או רשמו את הפתרון.",
+          "<strong>נקודות האפס נמצאו.</strong> התרגיל עוד לא נגמר: מוצאים את התחומים שפותרים את אי־השוויון."
+        ),
+        "tip"
+      );
+    });
+    return true;
+  }
+
   function finishQuad(message) {
     state.quad.phase = "done";
     var ans = String((quadView() && quadView().answer) || (state.problem && state.problem.quad && state.problem.quad.answer) || "");
@@ -7748,9 +9240,18 @@
     }
     renderQuadGuide();
     renderSteps();
+    if (isHighChainServerMode()) {
+      finishChainFormula(ans);
+      return;
+    }
+    if (isBiquadMode()) {
+      finishBiquadFormula(ans);
+      return;
+    }
     if (finishEqSolveForSys(ans)) return;
     if (finishEqSolveForFn(ans)) return;
     if (finishEqSolveForGeo(ans || (state.problem.quad && state.problem.quad.answer))) return;
+    if (finishEqSolveForQuadIneq(ans)) return;
     markSolved();
     mathField.setDisabled(true);
     checkBtn.disabled = true;
@@ -7772,6 +9273,10 @@
   }
 
   function fillQuadStep() {
+    if (isBiquadMode() && state.factor && state.factor.split) {
+      biquadOneStep();
+      return;
+    }
     if (isFormulaWorkServerMode()) {
       requestQuadCheck({ intent: "one-step" }, applyQuadServerResult);
       return;
@@ -8775,7 +10280,7 @@
   }
 
   function applySqrtServerResult(shownTyped, res) {
-    res = res || {};
+    res = softenQuadIneqSolve(res || {});
     state.stats.try += 1;
     saveStats();
     renderStats();
@@ -8787,6 +10292,10 @@
     state.history.push(shownTyped);
     rememberHistoryReason(res.reason);
     renderSteps();
+    if (isQuadIneqMode() && (res.rootsFound || res.phase === "signs")) {
+      finishEqSolveForQuadIneq(shownTyped);
+      return;
+    }
     if (res.solved) {
       if (geoDistUnkTask() && finishEqSolveForGeo(shownTyped)) return;
       markSolved();
@@ -8814,7 +10323,7 @@
     }
     var shownTyped = String(typed || "").trim();
     typed = geoEngineTyped(shownTyped);
-    if (isSqrtServerMode() || ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "sqrt")) {
+    if (isSqrtServerMode() || ((isMixedServerMode() || geoEqSolveActive() || isQuadIneqMode()) && mixedPath() === "sqrt")) {
       if (equationsCheckBusy) return true;
       var prev = lastHistoryEq();
       requestQuadraticAction(
@@ -9140,15 +10649,72 @@
     );
   }
 
+  function finishChainFormula(ans) {
+    requestHighPowerAction(
+      {
+        intent: "absorb",
+        start: (state.problem && state.problem.startEquation) || "",
+        history: state.history,
+        typed: ans || ((state.quad && state.quad.view && state.quad.view.answer) || ""),
+        formulaBranch: state.factor && state.factor.formulaBranch,
+        factor: factorPayload(),
+      },
+      function (res) {
+        state.mixed = emptyMixedState();
+        state.quad = null;
+        hideQuadGuide();
+        if (!res || !res.ok) {
+          showFeedback(false, "<strong>עוד לא.</strong> " + ((res && res.message) || ""));
+          setModeUi();
+          return;
+        }
+        applyFactorServerResult(ans || "", res);
+        updateFormulaBtn();
+        setModeUi();
+      }
+    );
+  }
+
+  function enterChainFormula(md53) {
+    var eq = (state.factor && state.factor.formulaEq) || "";
+    requestHighPowerAction(
+      {
+        intent: "formula-enter",
+        start: (state.problem && state.problem.startEquation) || eq,
+        history: state.history,
+        md53: !!md53,
+        formulaBranch: state.factor && state.factor.formulaBranch,
+        factor: factorPayload(),
+      },
+      function (res) {
+        if (res && res.formulaEq) {
+          state.factor = state.factor || emptyFactorState();
+          state.factor.formulaEq = res.formulaEq;
+          state.factor.formulaBranch = res.formulaBranch;
+        }
+        beginMixedFormulaFromServer(res, !!md53);
+      }
+    );
+  }
+
   function enterMixedFormula() {
+    if (isBiquadMode()) {
+      enterBiquadFormula(false);
+      return;
+    }
+    if (isHighChainServerMode()) {
+      enterChainFormula(false);
+      return;
+    }
     if (isSystemQuadMode()) {
       enterSysFormula(false);
       return;
     }
-    if (isMixedServerMode() || geoEqSolveActive() || fnQuadSolveActive()) {
+    if (isMixedServerMode() || geoEqSolveActive() || fnQuadSolveActive() || isQuadIneqMode()) {
       requestQuadraticAction(
         {
           intent: "formula-enter",
+          subtopic: "mixed",
           start: (state.problem && state.problem.startEquation) || lastHistoryEq(),
           history: state.history,
           md53: false,
@@ -9164,14 +10730,23 @@
   }
 
   function enterMixedMd53() {
+    if (isBiquadMode()) {
+      enterBiquadFormula(true);
+      return;
+    }
+    if (isHighChainServerMode()) {
+      enterChainFormula(true);
+      return;
+    }
     if (isSystemQuadMode()) {
       enterSysFormula(true);
       return;
     }
-    if (isMixedServerMode() || geoEqSolveActive() || fnQuadSolveActive()) {
+    if (isMixedServerMode() || geoEqSolveActive() || fnQuadSolveActive() || isQuadIneqMode()) {
       requestQuadraticAction(
         {
           intent: "formula-enter",
+          subtopic: "mixed",
           start: (state.problem && state.problem.startEquation) || lastHistoryEq(),
           history: state.history,
           md53: true,
@@ -9226,7 +10801,7 @@
   }
 
   function applyMixedServerResult(shownTyped, res) {
-    res = res || {};
+    res = softenQuadIneqSolve(res || {});
     if (res.errorId === "domain-required") {
       state.stats.try += 1;
       saveStats();
@@ -9564,7 +11139,7 @@
   }
 
   function sqrtHint() {
-    if (isSqrtServerMode() || ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "sqrt")) {
+    if (isSqrtServerMode() || ((isMixedServerMode() || geoEqSolveActive() || isQuadIneqMode()) && mixedPath() === "sqrt")) {
       var hintEq = lastHistoryEq();
       requestQuadraticAction(
         {
@@ -9582,7 +11157,7 @@
   }
 
   function sqrtOneStep() {
-    if (isSqrtServerMode() || ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "sqrt")) {
+    if (isSqrtServerMode() || ((isMixedServerMode() || geoEqSolveActive() || isQuadIneqMode()) && mixedPath() === "sqrt")) {
       var cur = lastHistoryEq();
       requestQuadraticAction(
         {
@@ -9591,6 +11166,16 @@
           history: state.history,
         },
         function (remote) {
+          if (isQuadIneqMode() && (remote.boardAction || remote.rootsFound || remote.phase === "signs")) {
+            state.mixed = emptyMixedState();
+            noteQuadIneqPhase(remote);
+            if (remote.boardAction && window.DoctematicaQuadIneq) {
+              DoctematicaQuadIneq.open("signs");
+              DoctematicaQuadIneq.applyAction(remote.boardAction);
+            }
+            showFeedback(true, "<strong>צעד של האתר.</strong> " + siteReasonHTML(remote.reason || remote.hint || "עכשיו בודקים את הסימן בכל תחום."), "tip");
+            return;
+          }
           if (remote.step) {
             applySqrtServerResult(remote.step, remote);
             return;
@@ -9604,7 +11189,11 @@
   }
 
   function factorHint() {
-    if (isHighFactorServerMode()) {
+    if (isHighChainServerMode() && mixedPath() === "formula") {
+      quadHint();
+      return;
+    }
+    if (isHighFactorServerMode() || isHighChainServerMode()) {
       if (
         !requestHighPowerAction(
           {
@@ -9614,6 +11203,10 @@
             factor: factorPayload(),
           },
           function (remote) {
+            if (remote.solved || remote.solvedAll) {
+              applyFactorServerResult("", remote);
+              return;
+            }
             if (remote.canSplit != null) {
               state.factor = state.factor || emptyFactorState();
               state.factor.canSplit = !!remote.canSplit;
@@ -9627,7 +11220,7 @@
       }
       return;
     }
-    if (isFactorServerMode() || ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "factor")) {
+    if (isFactorServerMode() || ((isMixedServerMode() || geoEqSolveActive() || isQuadIneqMode()) && mixedPath() === "factor")) {
       requestQuadraticAction(
         {
           intent: "hint",
@@ -9649,7 +11242,11 @@
   }
 
   function factorOneStep() {
-    if (isHighFactorServerMode()) {
+    if (isHighChainServerMode() && mixedPath() === "formula") {
+      fillQuadStep();
+      return;
+    }
+    if (isHighFactorServerMode() || isHighChainServerMode()) {
       if (
         !requestHighPowerAction(
           {
@@ -9659,6 +11256,20 @@
             factor: factorPayload(),
           },
           function (remote) {
+            if (remote.enter === "formula" || remote.path === "formula") {
+              if (remote.formulaEq) {
+                state.factor = state.factor || emptyFactorState();
+                state.factor.formulaEq = remote.formulaEq;
+                state.factor.formulaBranch = remote.formulaBranch;
+                state.factor.offerFormula = true;
+              }
+              beginMixedFormulaFromServer(remote, !!remote.md53);
+              return;
+            }
+            if (remote.solved || remote.solvedAll) {
+              applyFactorServerResult(remote.step || "", remote);
+              return;
+            }
             if (remote.resplit || (remote.split && !(state.factor && state.factor.split))) {
               applyFactorServerResult("", remote);
               return;
@@ -9675,7 +11286,7 @@
       }
       return;
     }
-    if (isFactorServerMode() || ((isMixedServerMode() || geoEqSolveActive()) && mixedPath() === "factor")) {
+    if (isFactorServerMode() || ((isMixedServerMode() || geoEqSolveActive() || isQuadIneqMode()) && mixedPath() === "factor")) {
       requestQuadraticAction(
         {
           intent: "one-step",
@@ -9793,7 +11404,14 @@
           history: state.history,
         },
         function (remote) {
-          showFeedback(true, "<strong>רמז.</strong> " + remote.hint, remote.done ? undefined : "tip");
+          var hintText = remote.hint;
+          if ((isParamEqMode() || isIneqMode()) && remote.hints && remote.hints.length) {
+            var curEq = lastHistoryEq();
+            if (!state.paramHint || state.paramHint.eq !== curEq) state.paramHint = { eq: curEq, i: 0 };
+            hintText = remote.hints[Math.min(state.paramHint.i, remote.hints.length - 1)];
+            state.paramHint.i += 1;
+          }
+          showFeedback(true, "<strong>רמז.</strong> " + siteReasonHTML(hintText), remote.done ? undefined : "tip");
         }
       )
     ) {
@@ -9875,6 +11493,194 @@
     showBasicEqServerUnavailable();
   }
 
+  function requestQuadIneq(payload, onResult) {
+    if (!isQuadIneqMode()) return false;
+    if (equationsCheckBusy) return true;
+    equationsCheckBusy = true;
+    var snap = quadIneqSnap();
+    var body = {
+      intent: payload.intent,
+      ineq: (state.problem && state.problem.startEquation) || "",
+      typed: payload.typed || "",
+      history: payload.history || state.history || [],
+      rootsDone: !!(state.quadIneq && state.quadIneq.rootsDone),
+      sign: payload.sign || snap.sign,
+      parabola: payload.parabola || snap.parabola,
+      signRow: payload.signRow || null,
+    };
+    fetch(QUAD_INEQ_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          var httpErr = new Error("quad ineq http " + res.status);
+          httpErr.status = res.status;
+          throw httpErr;
+        }
+        return res.json();
+      })
+      .then(function (remote) {
+        equationsCheckBusy = false;
+        noteQuadIneqPhase(remote || {});
+        onResult(remote || {});
+      })
+      .catch(function (err) {
+        equationsCheckBusy = false;
+        if (payload.signRow && payload.signRow.field) {
+          onResult({
+            ok: false,
+            field: payload.signRow.field,
+            message: err && err.status >= 500 ? "הבדיקה נכשלה. שגיאה בעיבוד בשרת." : "הבדיקה לא זמינה כרגע. שרת הבדיקה לא מגיב.",
+          });
+          return;
+        }
+        if (err && err.status >= 500) showServerProcessingError();
+        else showBasicEqServerUnavailable();
+      });
+    return true;
+  }
+
+  function quadIneqHint() {
+    requestQuadIneq({ intent: "hint" }, function (remote) {
+      var hints = remote.hints && remote.hints.length ? remote.hints : [remote.hint || ""];
+      var key = (state.problem && state.problem.exerciseId) || "";
+      if (state.quadHintKey !== key) {
+        state.quadHintKey = key;
+        state.quadHint = 0;
+      }
+      var text = hints[state.quadHint % hints.length];
+      state.quadHint += 1;
+      showFeedback(true, "<strong>רמז.</strong> " + siteReasonHTML(text), "tip");
+    });
+  }
+
+  function quadIneqOneStep() {
+    var signing = state.quadIneq && state.quadIneq.phase === "signs";
+    if (!signing && mixedPath() === "formula") return fillQuadStep();
+    if (!signing && mixedPath() === "factor") return factorOneStep();
+    if (!signing && mixedPath() === "sqrt") return sqrtOneStep();
+    requestQuadIneq({ intent: "one-step" }, function (remote) {
+      noteQuadIneqPhase(remote);
+      if (remote.boardAction && window.DoctematicaQuadIneq) {
+        DoctematicaQuadIneq.open("signs");
+        DoctematicaQuadIneq.applyAction(remote.boardAction);
+        showFeedback(true, "<strong>צעד של האתר.</strong> " + siteReasonHTML(remote.reason), "tip");
+        return;
+      }
+      if (remote.enter === "formula" || (remote.path === "formula" && !remote.step)) {
+        beginMixedFormulaFromServer(remote);
+        if (remote.fill || remote.nextLetter || remote.nextPhase) applyQuadServerResult(remote);
+        return;
+      }
+      if (remote.enter === "factor" || remote.path === "factor") {
+        state.mixed = state.mixed || emptyMixedState();
+        state.mixed.path = "factor";
+        if (remote.step) {
+          applyMixedServerResult(remote.step, remote);
+          return;
+        }
+        setModeUi();
+        factorOneStep();
+        return;
+      }
+      if (remote.done || !remote.step) {
+        showFeedback(true, "<strong>רמז.</strong> " + siteReasonHTML(remote.hint || remote.reason || "רשמו את פתרון אי־השוויון."), "tip");
+        return;
+      }
+      state.history.push(remote.step);
+      if (remote.reason) {
+        state.eqReasons = state.eqReasons || {};
+        state.eqReasons[state.history.length - 1] = remote.reason;
+      }
+      renderSteps();
+      mathField.clear();
+      if (remote.solved) {
+        markSolved();
+        mathField.setDisabled(true);
+        checkBtn.disabled = true;
+        nextAfterSolveBtn.classList.remove("hidden");
+      }
+      showFeedback(true, "<strong>צעד של האתר.</strong> " + siteReasonHTML(remote.reason), "tip");
+    });
+  }
+
+  function quadIneqSolution() {
+    requestQuadIneq({ intent: "solution" }, function (remote) {
+      showEqSolution("פתרון מלא — אי־שוויון ריבועי", {
+        always: true,
+        withNotes: true,
+        steps: (remote.steps || []).map(function (s) { return s.eq; }),
+        notes: (remote.steps || []).map(function (s) { return s.explain || ""; }),
+        footer: remote.answer ? "הפתרון: " + remote.answer : "",
+      });
+    });
+  }
+
+  function andHint() {
+    requestIntervals(
+      { intent: "hint", drawing: DoctematicaNumberLine ? DoctematicaNumberLine.snapshot() : null },
+      function (remote) {
+        var hints = remote.hints && remote.hints.length ? remote.hints : [remote.hint || ""];
+        var key = (state.problem && state.problem.exerciseId) || "";
+        if (state.andHintKey !== key) {
+          state.andHintKey = key;
+          state.andHint = 0;
+        }
+        var text = hints[state.andHint % hints.length];
+        state.andHint += 1;
+        showFeedback(true, "<strong>רמז.</strong> " + siteReasonHTML(text), "tip");
+      }
+    );
+  }
+
+  function andOneStep() {
+    var drawing = DoctematicaNumberLine && DoctematicaNumberLine.isOpen() ? DoctematicaNumberLine.snapshot() : { open: false };
+    requestIntervals({ intent: "one-step", history: state.history, drawing: drawing }, function (remote) {
+      if (remote.drawingAction && DoctematicaNumberLine) {
+        DoctematicaNumberLine.applyAction(remote.drawingAction);
+        showFeedback(true, "<strong>צעד של האתר.</strong> " + siteReasonHTML(remote.reason), "tip");
+        return;
+      }
+      if (remote.done || !remote.step) {
+        showFeedback(true, "<strong>רמז.</strong> " + siteReasonHTML(remote.hint || "רשמו את התחום המשותף."), "tip");
+        return;
+      }
+      state.history.push(remote.step);
+      if (remote.reason) {
+        state.eqReasons = state.eqReasons || {};
+        state.eqReasons[state.history.length - 1] = remote.reason;
+      }
+      renderSteps();
+      mathField.clear();
+      if (remote.solved) {
+        markSolved();
+        mathField.setDisabled(true);
+        checkBtn.disabled = true;
+        nextAfterSolveBtn.classList.remove("hidden");
+        showFeedback(true, "<strong>צעד של האתר.</strong> " + siteReasonHTML(remote.reason));
+        renderSteps();
+      } else {
+        showFeedback(true, "<strong>צעד של האתר.</strong> " + siteReasonHTML(remote.reason), "tip");
+        mathField.focus();
+      }
+    });
+  }
+
+  function andSolution() {
+    requestIntervals({ intent: "solution" }, function (remote) {
+      var steps = remote.steps || [];
+      showEqSolution(isOrMode() ? "פתרון מלא — מערכת או" : "פתרון מלא — מערכת וגם", {
+        always: true,
+        steps: steps.map(function (s) { return s.eq; }),
+        withNotes: true,
+        notes: steps.map(function (s) { return siteReasonHTML(s.explain); }),
+        footer: remote.answer ? "הפתרון: " + remote.answer : "",
+      });
+    });
+  }
+
   function currentGuide() {
     if (isFreqTableMode()) {
       return {
@@ -9906,6 +11712,38 @@
         showSolution: fnSolution,
       };
     }
+    if (isQuadIneqMode()) {
+      if (mixedPath() === "formula") {
+        return {
+          work: true,
+          buttons: true,
+          hintText: state.mixed && state.mixed.md53
+            ? "md53: רשמו a, אחר כך b, אחר כך c. אחרי שלושתם מופיע הפתרון."
+            : "רשמו את המקדמים a, b, c בנוסחת השורשים. אחרי כל מקדם לחצו Enter.",
+          hint: quadHint,
+          oneStep: fillQuadStep,
+          showSolution: quadIneqSolution,
+        };
+      }
+      if (mixedPath() === "factor") {
+        return {
+          work: true,
+          buttons: true,
+          hintText: "מפרקים לגורמים, או רושמים את פתרון אי־השוויון.",
+          hint: quadIneqHint,
+          oneStep: factorOneStep,
+          showSolution: quadIneqSolution,
+        };
+      }
+      return {
+        work: true,
+        buttons: true,
+        hintText: "אפשר לכתוב את הפתרון, או למצוא קודם את נקודות האפס.",
+        hint: quadIneqHint,
+        oneStep: quadIneqOneStep,
+        showSolution: quadIneqSolution,
+      };
+    }
     if (isSystemMode()) {
       return {
         work: true,
@@ -9933,7 +11771,11 @@
                   showFeedback(false, "<strong>עוד לא.</strong> " + ((remote && remote.message) || ""));
                   return;
                 }
-                showFeedback(true, "<strong>רמז.</strong> " + (remote.hint || ""), "tip");
+                var hintList = remote.hints && remote.hints.length ? remote.hints : [remote.hint || ""];
+                if (state.sys.hintI == null) state.sys.hintI = 0;
+                var hintText = hintList[Math.min(state.sys.hintI, hintList.length - 1)];
+                if (state.sys.hintI < hintList.length - 1) state.sys.hintI += 1;
+                showFeedback(true, "<strong>רמז.</strong> " + hintText, "tip");
               }
             )
           ) {
@@ -9988,7 +11830,9 @@
                 var rest = remote.steps || [];
                 var lines = prior.concat(rest);
                 showEqSolution(
-                  state.problem && state.problem.mode === "system-elim"
+                  state.problem && state.problem.mode === "meet"
+                    ? "פתרון מלא — נקודות מפגש"
+                    : state.problem && state.problem.mode === "system-elim"
                     ? "פתרון מלא — השוואת מקדמים"
                     : state.problem && state.problem.mode === "system-arrange"
                       ? "פתרון מלא — משוואות לא מסודרות"
@@ -10285,19 +12129,78 @@
         showSolution: geoShowSolution,
       };
     }
-    if (isFactorEqMode()) {
-      var high = isHighFactorServerMode();
+    if (isBiquadMode()) {
+      if (mixedPath() === "formula" && !(state.factor && state.factor.split)) {
+        return {
+          work: true,
+          buttons: true,
+          hintText: state.mixed && state.mixed.md53
+            ? "md53: רשמו a, אחר כך b, אחר כך c של המשוואה ב־t."
+            : "רשמו את המקדמים a, b, c בנוסחת השורשים של t. אחרי כל מקדם לחצו Enter.",
+          hint: quadHint,
+          oneStep: fillQuadStep,
+          showSolution: biquadShowSolution,
+        };
+      }
       return {
         work: true,
         buttons: true,
-        hintText: high
+        hintText: "סדרו את המשוואה, הציבו t = xⁿ לפי הקשר בין החזקות, פתרו את t, ואז חזרו ל־x בכל ערך.",
+        hint: biquadHint,
+        oneStep: biquadOneStep,
+        showSolution: biquadShowSolution,
+      };
+    }
+    if (isFactorEqMode()) {
+      var high = isHighFactorServerMode();
+      var chain = isHighChainServerMode();
+      if (chain && mixedPath() === "formula") {
+        return {
+          work: true,
+          buttons: true,
+          hintText: state.mixed && state.mixed.md53
+            ? "md53: רשמו a, אחר כך b, אחר כך c. אחרי שלושתם מופיע הפתרון."
+            : "רשמו את המקדמים a, b, c בנוסחת השורשים של הענף הריבועי. אחרי כל מקדם לחצו Enter.",
+          hint: quadHint,
+          oneStep: fillQuadStep,
+          showSolution: function () {
+            requestHighPowerAction(
+              {
+                intent: "solution",
+                start: state.problem.startEquation,
+                history: state.history,
+                factor: factorPayload(),
+              },
+              function (remote) {
+                showEqSolution("פתרון מלא — משוואה בחזקה גבוהה", {
+                  always: true,
+                  steps: (remote.steps || []).map(function (s) {
+                    return s.eq;
+                  }),
+                  notes: (remote.steps || []).map(function (s) {
+                    return s.explain || "";
+                  }),
+                  withNotes: true,
+                  footer: remote.answer ? "קבוצת הפתרונות: " + remote.answer : "",
+                });
+              }
+            );
+          },
+        };
+      }
+      return {
+        work: true,
+        buttons: true,
+        hintText: chain
+          ? "העבירו לאגף אחד אם צריך, הוציאו חזקה משותפת של x, ואז «חילוק למשוואות». כל ענף נפתר לפי הסוג שלו."
+          : high
           ? "העבירו לאגף אחד אם צריך, הוציאו חזקה משותפת של x (ואפשר גם מספר), למשל x³−9x → x(x²−9)=0 או x³−4x² → x²(x−4)=0. אחר כך «חילוק למשוואות»: מ־xⁿ=0 מקבלים x=0; הענף השני לינארי או ריבועי (בידוד ואז שורש / ±)."
           : "הוציאו גורם משותף x, למשל x²−5x=0 → x(x−5)=0. אפשר גם 2x(x−4). אחרי הפירוק לחצו «חילוק למשוואות» ופתרו כל גורם = 0.",
         hint: factorHint,
         oneStep: factorOneStep,
         showSolution: function () {
-          var title = high ? "פתרון מלא — משוואה בחזקה גבוהה" : "פתרון מלא — הוצאת גורם משותף";
-          var sendSol = high ? requestHighPowerAction : requestQuadraticAction;
+          var title = chain || high ? "פתרון מלא — משוואה בחזקה גבוהה" : "פתרון מלא — הוצאת גורם משותף";
+          var sendSol = chain || high ? requestHighPowerAction : requestQuadraticAction;
           if (
             sendSol(
               {
@@ -10312,7 +12215,13 @@
                   steps: (remote.steps || []).map(function (s) {
                     return s.eq;
                   }),
-                  footer: remote.answer ? "הפתרון: " + remote.answer : "",
+                  notes: chain
+                    ? (remote.steps || []).map(function (s) {
+                        return s.explain || "";
+                      })
+                    : [],
+                  withNotes: !!chain,
+                  footer: remote.answer ? (chain ? "קבוצת הפתרונות: " + remote.answer : "הפתרון: " + remote.answer) : "",
                 });
               }
             )
@@ -10487,7 +12396,19 @@
         },
       };
     }
-    if (isStepMode()) {
+    if (isIntervalMode()) {
+      return {
+        work: true,
+        buttons: true,
+        hintText: isOrMode()
+          ? "אפשר לכתוב את האיחוד, למשל x > 3 או x < 1 או x > 6, או לשרטט את התחומים על הציר."
+          : "אפשר לכתוב את התחום המשותף, למשל 3 < x < 7, או לשרטט את התחומים על הציר.",
+        hint: andHint,
+        oneStep: andOneStep,
+        showSolution: andSolution,
+      };
+    }
+    if (isStepMode() || isParamEqMode() || isIneqMode()) {
       return {
         work: true,
         buttons: true,
@@ -10504,16 +12425,26 @@
                   history: state.history,
                 },
                 function (remote) {
+                  var steps = (remote.steps || []).map(function (s) {
+                    return s.eq;
+                  });
+                  var notes = (remote.steps || []).map(function (s) {
+                    if (isIneqMode() && s.explain) return siteReasonHTML(s.explain);
+                    return s.explain;
+                  });
+                  if (state.problem && state.problem.given) {
+                    var g = state.problem.given;
+                    steps.unshift(state.problem.startEquation);
+                    notes.unshift("המשוואה הנתונה. " + (g.letter || "x") + " = " + String(g.value).replace(/-/g, "−") + ".");
+                  }
                   showEqSolution("פתרון מלא לפי הדרך הנלמדת", {
                     withNotes: true,
                     note: "(אפשר גם לדלג על שלבי ביניים, כל עוד המשוואה שקולה)",
-                    footer: "הפתרון: x = " + remote.answer,
-                    steps: (remote.steps || []).map(function (s) {
-                      return s.eq;
-                    }),
-                    notes: (remote.steps || []).map(function (s) {
-                      return s.explain;
-                    }),
+                    footer: isIneqMode()
+                      ? "הפתרון: " + remote.answer
+                      : "הפתרון: " + ((state.problem && state.problem.solveFor) || "x") + " = " + remote.answer,
+                    steps: steps,
+                    notes: notes,
                     domain: remote.domain,
                   });
                 }
@@ -10655,6 +12586,7 @@
     if (mathKeysEl && !isFreqTableMode()) {
       mathKeysEl.classList.remove("is-frac-only");
       mathKeysEl.classList.remove("is-mean-keys");
+      mathKeysEl.classList.toggle("is-ineq-keys", isIneqMode() || isIntervalMode());
     }
   }
 
@@ -10662,8 +12594,13 @@
     state.locked = true;
     answerEl.disabled = true;
     state.stats.ok += 1;
-    state.streak += 1;
-    if (state.streak > state.stats.best) state.stats.best = state.streak;
+    state.streakSeen = state.streakSeen || {};
+    var key = streakKey();
+    if (!key || !state.streakSeen[key]) {
+      if (key) state.streakSeen[key] = true;
+      state.streak += 1;
+      if (state.streak > state.stats.best) state.stats.best = state.streak;
+    }
     saveStats();
     renderStats();
   }
@@ -10827,7 +12764,7 @@
       state.domain = null;
       state.history = [];
       state.freq = { step: "", done: false, found: {} };
-      state.fn = { progress: emptyFnProgress(), sketch: { points: [], line: null }, reasons: {}, axisLive: emptyAxisLive(), axisCards: [], axisDone: { y: false, x: false } };
+      state.fn = { progress: emptyFnProgress(), sketch: { points: [], line: null, strokes: [] }, partSketches: {}, viewPart: "", hintBank: {}, reasons: {}, axisLive: emptyAxisLive(), axisCards: [], axisDone: { y: false, x: false } };
       state.fnFormula = false;
       clearLcdAssist();
       clearGeoUi();
@@ -10858,6 +12795,15 @@
       state.mixed = emptyMixedState();
       state.sqrtProg = { pos: false, neg: false };
       state.history = isEqWorkMode() ? [state.problem.startEquation] : [];
+      state.biquadHints = 0;
+      state.biquadOffer = false;
+      state.biquadFormulaEq = "";
+      state.biquadDrafts = {};
+      state.biquadFields = [];
+      state.biquadActiveBranch = null;
+      state.quadIneq = { phase: "zeros" };
+      state.offerFormula = false;
+      if (window.DoctematicaQuadIneq) DoctematicaQuadIneq.reset();
       state.lcdMarks = {};
       clearLcdAssist();
       resetDomainState(state.problem && state.problem.startEquation);
@@ -11016,10 +12962,34 @@
     mathWrap.classList.remove("hidden");
     checkBtn.classList.remove("hidden");
     answerLabelEl.classList.remove("hidden");
-    if (isStepMode() || isSqrtEqMode() || isHighRootEqMode() || isFactorEqMode() || isMixedEqMode()) {
-      promptEl.innerHTML = DoctematicaMath.toHTML(state.problem.startEquation);
+    if (isQuadIneqMode()) {
+      promptEl.innerHTML = DoctematicaMath.toHTML(state.problem.startEquation || state.problem.prompt || "");
+      mathKeysEl.classList.remove("hidden");
+      mathKeysEl.classList.add("is-ineq-keys");
+      if (nlineBtn) nlineBtn.classList.add("hidden");
+      renderQuadIneqPanel();
+    } else if (isIntervalMode()) {
+      var andConds = (state.problem && state.problem.conds) || [];
+      promptEl.innerHTML = andConds
+        .map(function (c) {
+          return DoctematicaMath.toHTML(c);
+        })
+        .join(isOrMode() ? " או " : " וגם ");
+      mathKeysEl.classList.remove("hidden");
+      mathKeysEl.classList.add("is-ineq-keys");
+      if (nlineBtn) nlineBtn.classList.remove("hidden");
+      if (DoctematicaNumberLine) DoctematicaNumberLine.reset();
+    } else if (isStepMode() || isIneqMode() || isParamEqMode() || isSqrtEqMode() || isHighRootEqMode() || isFactorEqMode() || isMixedEqMode() || isBiquadMode()) {
+      if (nlineBtn) nlineBtn.classList.add("hidden");
+      if (DoctematicaNumberLine) DoctematicaNumberLine.close();
+      var givenLine = state.problem.given
+        ? "<div class=\"eq-given\">" + DoctematicaMath.toHTML((state.problem.given.letter || "x") + " = " + state.problem.given.value) + "</div>"
+        : "";
+      promptEl.innerHTML = DoctematicaMath.toHTML(state.problem.startEquation) + givenLine;
       mathKeysEl.classList.remove("hidden");
     } else {
+      if (nlineBtn) nlineBtn.classList.add("hidden");
+      if (DoctematicaNumberLine) DoctematicaNumberLine.close();
       promptEl.textContent = state.problem.prompt;
       mathKeysEl.classList.add("hidden");
     }
@@ -11068,6 +13038,27 @@
     domainBtn.addEventListener("click", function () {
       if (!domainPending()) return;
       fillDomainFromButton();
+    });
+  }
+
+  if (nlineEl && DoctematicaNumberLine) {
+    DoctematicaNumberLine.mount(nlineEl, {
+      onEmpty: function () {
+        if (mathField) mathField.insertChars("∅");
+      },
+      onCheck: function () {
+        requestIntervals({ intent: "draw-check", drawing: DoctematicaNumberLine.snapshot() }, function (remote) {
+          showFeedback(!!remote.ok, "<strong>" + (remote.ok ? "שרטוט." : "עוד לא.") + "</strong> " + siteReasonHTML(remote.message || ""), remote.ok ? "tip" : "");
+        });
+      },
+    });
+  }
+
+  if (nlineBtn) {
+    nlineBtn.addEventListener("click", function () {
+      if (!isIntervalMode() || !DoctematicaNumberLine) return;
+      if (DoctematicaNumberLine.isOpen()) DoctematicaNumberLine.close();
+      else DoctematicaNumberLine.open();
     });
   }
 
@@ -11286,6 +13277,16 @@
       return;
     }
 
+    if (isBiquadMode()) {
+      if (mixedPath() === "formula" && !(state.factor && state.factor.split)) {
+        handleQuadSubmit();
+        return;
+      }
+      var biquadPendingNow = biquadPending();
+      applyBiquadTyped(biquadPendingNow.text, biquadPendingNow.branch);
+      return;
+    }
+
     if (state.problem && state.problem.mode === "geo-length") {
       if (mixedPath() === "formula") {
         handleQuadSubmit();
@@ -11308,11 +13309,117 @@
     }
 
     if (isFactorEqMode()) {
+      if (isHighChainServerMode() && mixedPath() === "formula") {
+        handleQuadSubmit();
+        return;
+      }
       applyFactorTyped(typedAnswer());
       return;
     }
 
-    if (isStepMode()) {
+    if (isQuadIneqMode()) {
+      var quadTyped = typedAnswer();
+      var quadAnswer = /[<>≤≥]|או/.test(quadTyped);
+      if (!quadAnswer && mixedPath() === "formula") {
+        handleQuadSubmit();
+        return;
+      }
+      if (!quadAnswer && mixedPath() === "factor") {
+        applyFactorTyped(quadTyped);
+        return;
+      }
+      if (!quadAnswer && mixedPath() === "sqrt") {
+        applySqrtEqTyped(quadTyped.trim());
+        return;
+      }
+      if (!quadTyped && window.DoctematicaQuadIneq && DoctematicaQuadIneq.isOpen()) {
+        var boardSnap = DoctematicaQuadIneq.snapshot();
+        if (boardSnap.mode === "parabola") {
+          requestQuadIneq({ intent: "parabola-check", parabola: boardSnap.parabola }, function (remote) {
+            showFeedback(!!remote.ok, (remote.ok ? "<strong>נכון.</strong> " : "<strong>עוד לא.</strong> ") + siteReasonHTML(remote.message || ""));
+          });
+          return;
+        }
+        var signIndex = 0;
+        (boardSnap.regions || []).some(function (row, index) {
+          if (row && row.x) {
+            signIndex = index;
+            return true;
+          }
+          return false;
+        });
+        var signRow = (boardSnap.regions || [])[signIndex] || {};
+        requestQuadIneq({
+          intent: "sign-check",
+          signRow: { index: signIndex, x: signRow.x, expr: signRow.expr, value: signRow.value, sign: signRow.sign, from: signRow.from, to: signRow.to, fromText: signRow.fromText, toText: signRow.toText },
+        }, function (remote) {
+          showFeedback(!!remote.ok, (remote.ok ? "<strong>נכון.</strong> " : "<strong>עוד לא.</strong> ") + siteReasonHTML(remote.message || ""));
+        });
+        return;
+      }
+      requestQuadIneq({ intent: "check", typed: quadTyped }, function (remote) {
+        if (remote.path || remote.enter) {
+          applyMixedServerResult(quadTyped, remote);
+          noteQuadIneqPhase(remote);
+          return;
+        }
+        state.stats.try += 1;
+        saveStats();
+        renderStats();
+        if (!remote.ok) {
+          showFeedback(false, "<strong>עוד לא.</strong> " + siteReasonHTML(remote.message || ""));
+          return;
+        }
+        var quadLine = String(quadTyped || "").trim();
+        if (quadLine) {
+          state.history.push(quadLine);
+          state.eqReasons = state.eqReasons || {};
+          state.eqReasons[state.history.length - 1] = remote.reason || remote.message || "";
+          renderSteps();
+          mathField.clear();
+        }
+        if (remote.solved) {
+          markSolved();
+          mathField.setDisabled(true);
+          checkBtn.disabled = true;
+          nextAfterSolveBtn.classList.remove("hidden");
+        }
+        showFeedback(true, "<strong>נכון.</strong> " + siteReasonHTML(remote.message || ""));
+        noteQuadIneqPhase(remote);
+      });
+      return;
+    }
+
+    if (isIntervalMode()) {
+      var andTyped = typedAnswer();
+      requestIntervals({ intent: "check", typed: andTyped }, function (remote) {
+        state.stats.try += 1;
+        saveStats();
+        renderStats();
+        if (!remote.ok) {
+          showFeedback(false, "<strong>עוד לא.</strong> " + siteReasonHTML(remote.message || ""));
+          return;
+        }
+        var andLine = String(andTyped || "").trim();
+        if (andLine) {
+          state.history.push(andLine);
+          state.eqReasons = state.eqReasons || {};
+          state.eqReasons[state.history.length - 1] = remote.reason || remote.message || "";
+          renderSteps();
+          mathField.clear();
+        }
+        if (remote.solved) {
+          markSolved();
+          mathField.setDisabled(true);
+          checkBtn.disabled = true;
+          nextAfterSolveBtn.classList.remove("hidden");
+        }
+        showFeedback(true, "<strong>נכון.</strong> " + siteReasonHTML(remote.message || ""));
+      });
+      return;
+    }
+
+    if (isStepMode() || isParamEqMode() || isIneqMode()) {
       if (isDomainLcdServerMode() && (state.denomSetupPending || state.denomReady === false)) {
         showBasicEqServerUnavailable();
         return;
@@ -11335,7 +13442,7 @@
         saveStats();
         renderStats();
         if (!result.ok) {
-          showFeedback(false, "<strong>עוד לא.</strong> " + result.message);
+          showFeedback(false, "<strong>עוד לא.</strong> " + siteReasonHTML(result.message));
           return;
         }
         clearLcdAssist();
@@ -11347,10 +13454,10 @@
           checkBtn.disabled = true;
           renderSteps();
           nextAfterSolveBtn.classList.remove("hidden");
-          showFeedback(true, "<strong>כל הכבוד.</strong> " + result.message);
+          showFeedback(true, "<strong>כל הכבוד.</strong> " + siteReasonHTML(result.message));
         } else {
           mathField.clear();
-          showFeedback(true, "<strong>צעד חוקי.</strong> " + result.message);
+          showFeedback(true, "<strong>צעד חוקי.</strong> " + siteReasonHTML(result.message));
           mathField.focus();
         }
       }

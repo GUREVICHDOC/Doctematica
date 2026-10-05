@@ -114,17 +114,49 @@
     return { left: s, base: "x" };
   }
 
-  function MathField(host, actionsHost) {
+  function powText(base, exp) {
+    var b = String(base || "");
+    var e = String(exp || "") || "2";
+    if (/^[a-z]$/i.test(b)) return b + "^" + e;
+    if (/^-?\d+(?:\.\d+)?$/.test(b)) return b + "^" + e;
+    if (/^\(.*\)$/.test(b)) return b + "^" + e;
+    return "(" + b + ")^" + e;
+  }
+
+  function fieldVisible(field) {
+    return !!(
+      field &&
+      !field.disabled &&
+      field.host &&
+      field.host.isConnected &&
+      field.host.offsetParent !== null
+    );
+  }
+
+  function liveMathField(fallback) {
+    var cur = MathField.current;
+    if (fieldVisible(cur)) return cur;
+    if (fieldVisible(fallback)) return fallback;
+    return null;
+  }
+
+  function MathField(host, actionsHost, opts) {
+    opts = opts || {};
     this.host = host;
-    this.actionsHost = actionsHost;
+    this.actionsHost = actionsHost || null;
     this.parts = [{ type: "text", value: "" }];
     this.focusPart = 0;
     this.focusPath = ["value"];
     this.disabled = false;
-    this.buildActions();
+    this.ownKeyboard = opts.keyboard !== false && !!this.actionsHost;
+    if (this.ownKeyboard) this.buildActions();
     this.render();
     var self = this;
+    this.host.addEventListener("focusin", function () {
+      MathField.current = self;
+    });
     this.host.addEventListener("click", function (event) {
+      MathField.current = self;
       if (event.target === self.host) self.focus();
     });
   }
@@ -260,10 +292,7 @@
       var b = this.serializeSlot(val.base);
       var e = this.serializeSlot(val.exp);
       if (!e) e = "2";
-      if (/^[xy]$/i.test(b)) return b + "^" + e;
-      if (/^-?\d+(?:\.\d+)?$/.test(b)) return b + "^" + e;
-      if (/^\(.*\)$/.test(b)) return b + "^" + e;
-      return "(" + b + ")^" + e;
+      return powText(b, e);
     }
     return String(val || "").trim();
   };
@@ -282,10 +311,7 @@
       var b = this.serializeSlot(part.base);
       var e = this.serializeSlot(part.exp);
       if (!e) e = "2";
-      if (/^[xy]$/i.test(b)) return b + "^" + e;
-      if (/^-?\d+(?:\.\d+)?$/.test(b)) return b + "^" + e;
-      if (/^\(.*\)$/.test(b)) return b + "^" + e;
-      return "(" + b + ")^" + e;
+      return powText(b, e);
     }
     if (part.type === "area") {
       var verts = this.serializeSlot(part.verts).replace(/\s+/g, "").toUpperCase();
@@ -334,10 +360,20 @@
     this.disabled = !!disabled;
     var inputs = this.host.querySelectorAll("input");
     for (var i = 0; i < inputs.length; i++) inputs[i].disabled = this.disabled;
-    var buttons = this.actionsHost.querySelectorAll("button");
-    for (var b = 0; b < buttons.length; b++) buttons[b].disabled = this.disabled;
+    if (this.actionsHost) {
+      var buttons = this.actionsHost.querySelectorAll("button");
+      for (var b = 0; b < buttons.length; b++) buttons[b].disabled = this.disabled;
+    }
     if (this.disabled) this.host.classList.add("is-locked");
     else this.host.classList.remove("is-locked");
+  };
+
+  MathField.prototype.loadParts = function (parts) {
+    this.parts = parts && parts.length ? parts : [{ type: "text", value: "" }];
+    this.focusPart = 0;
+    this.focusPath = ["value"];
+    this.caretPos = null;
+    this.render();
   };
 
   MathField.prototype.clear = function () {
@@ -644,6 +680,13 @@
     return true;
   };
 
+  function polishIneqChars(value, caret) {
+    var next = String(value || "").replace(/<=/g, "≤").replace(/>=/g, "≥");
+    if (next === value) return { value: value, caret: caret };
+    var drop = String(value).length - next.length;
+    return { value: next, caret: Math.max(0, (caret == null ? next.length : caret) - drop) };
+  }
+
   MathField.prototype.insertChars = function (ch) {
     if (this.insertPlain(ch)) return;
     if (this.disabled) return;
@@ -655,13 +698,15 @@
     var a = el.selectionStart != null ? el.selectionStart : v.length;
     var b = el.selectionEnd != null ? el.selectionEnd : v.length;
     var next = v.slice(0, a) + ch + v.slice(b);
+    var polished = polishIneqChars(next, a + String(ch).length);
+    next = polished.value;
     el.value = next;
     var partIndex = parseInt(el.getAttribute("data-part"), 10);
     var path = (el.getAttribute("data-path") || "value").split(".");
     if (this.parts[partIndex]) this.setAt(this.parts[partIndex], path, next);
     this.focusPart = partIndex;
     this.focusPath = path;
-    this.caretPos = a + String(ch).length;
+    this.caretPos = polished.caret;
     if (path[0] === "verts") {
       var cleaned = this.sanitizeAreaVerts(next, this.areaVertsNeed(this.parts[partIndex]));
       el.value = cleaned;
@@ -1094,6 +1139,13 @@
       input.setAttribute("data-active", "1");
     }
     input.addEventListener("input", function () {
+      var polished = polishIneqChars(input.value, input.selectionStart);
+      if (polished.value !== input.value) {
+        input.value = polished.value;
+        try {
+          input.setSelectionRange(polished.caret, polished.caret);
+        } catch (e) {}
+      }
       if (self.parts[partIndex]) self.setAt(self.parts[partIndex], path, input.value);
       if (path[0] === "verts" && self.maybeAdvanceAreaVerts(partIndex, path, input)) {
         return;
@@ -1284,13 +1336,17 @@
 
   MathField.prototype.buildActions = function () {
     var self = this;
+    function go(method, arg) {
+      var target = liveMathField(self);
+      if (target && typeof target[method] === "function") target[method](arg);
+    }
     this.actionsHost.innerHTML = "";
     [
       {
         label: "שבר",
         icon: '<span class="frac-icon" aria-hidden="true"><i></i><i></i></span>',
         run: function () {
-          self.insertFrac();
+          go("insertFrac");
         },
       },
       {
@@ -1298,60 +1354,67 @@
         className: "mean-key",
         icon: '<span class="m-bar" aria-hidden="true">x</span>',
         run: function () {
-          self.insertChars("x\u0304");
+          go("insertChars", "x\u0304");
         },
       },
       {
         label: "שורש",
         icon: '<span class="sqrt-icon" aria-hidden="true">√</span>',
         run: function () {
-          self.insertSqrt();
+          go("insertSqrt");
         },
       },
       {
         label: "שורש n",
         icon: '<span class="nroot-icon" aria-hidden="true"><sup>n</sup>√</span>',
         run: function () {
-          self.insertNroot();
+          go("insertNroot");
         },
       },
       {
         label: "±",
         icon: '<span class="pm-icon" aria-hidden="true">±</span>',
         run: function () {
-          self.insertChars("±");
+          go("insertChars", "±");
         },
       },
       {
         label: "שונה",
         icon: '<span class="neq-icon" aria-hidden="true">≠</span>',
         run: function () {
-          self.insertChars("≠");
+          go("insertChars", "≠");
         },
       },
+      { label: "", className: "ineq-key", icon: '<span class="pm-icon" aria-hidden="true">&lt;</span>', ch: "<" },
+      { label: "", className: "ineq-key", icon: '<span class="pm-icon" aria-hidden="true">≤</span>', ch: "≤" },
+      { label: "", className: "ineq-key", icon: '<span class="pm-icon" aria-hidden="true">&gt;</span>', ch: ">" },
+      { label: "", className: "ineq-key", icon: '<span class="pm-icon" aria-hidden="true">≥</span>', ch: "≥" },
       {
         label: "חזקה",
         icon: '<span class="pow-icon" aria-hidden="true">x<sup>n</sup></span>',
         run: function () {
-          self.insertPow();
+          go("insertPow");
         },
       },
       {
         label: "שבר מעורב",
         icon: '<span class="mixed-icon" aria-hidden="true"><b></b><span class="frac-icon"><i></i><i></i></span></span>',
         run: function () {
-          self.insertMixed();
+          go("insertMixed");
         },
       },
     ].forEach(function (spec) {
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "ghost math-action" + (spec.className ? " " + spec.className : "");
+      if (spec.ch) btn.setAttribute("aria-label", spec.ch);
       btn.innerHTML = spec.icon + "<span>" + spec.label + "</span>";
       btn.addEventListener("mousedown", function (event) {
         event.preventDefault();
       });
-      btn.addEventListener("click", spec.run);
+      btn.addEventListener("click", spec.run || function () {
+        go("insertChars", spec.ch);
+      });
       self.actionsHost.appendChild(btn);
     });
     this.buildMSlopeButton();
@@ -1372,7 +1435,8 @@
       event.preventDefault();
     });
     btn.addEventListener("click", function () {
-      self.insertMSlope(self.mSlopePts);
+      var target = liveMathField(self);
+      if (target) target.insertMSlope(self.mSlopePts);
     });
     wrap.appendChild(btn);
     this.actionsHost.appendChild(wrap);
@@ -1392,7 +1456,8 @@
       event.preventDefault();
     });
     btn.addEventListener("click", function () {
-      self.insertMDist(self.mDistPts);
+      var target = liveMathField(self);
+      if (target) target.insertMDist(self.mDistPts);
     });
     wrap.appendChild(btn);
     this.actionsHost.appendChild(wrap);
@@ -1448,7 +1513,8 @@
       });
       opt.addEventListener("click", function () {
         self.closeAreaMenu();
-        self.insertArea(item.shape);
+        var target = liveMathField(self);
+        if (target) target.insertArea(item.shape);
       });
       menu.appendChild(opt);
     });

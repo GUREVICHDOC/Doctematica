@@ -128,7 +128,7 @@ function main() {
   var otherY = call("check", eq1, eq2, { history: atBack, typed: "y=(4)^2-8" });
   add(otherY.ok && /פשוט יותר/.test(otherY.note || "") ? { ok: true, id: "other-eq" } : fail("other-eq", JSON.stringify(otherY && { ok: otherY.ok, note: otherY.note, msg: otherY.message, phase: otherY.phase })));
   var wrongX = call("check", eq1, eq2, { history: atBack, typed: "y=2*(-2)" });
-  add(wrongX.ok === false && /הערך השני/.test(wrongX.message || "") ? { ok: true, id: "wrong-x" } : fail("wrong-x", wrongX && wrongX.message));
+  add(wrongX.ok && wrongX.phase === "back" ? { ok: true, id: "other-x-first" } : fail("other-x-first", wrongX && wrongX.message));
   var badY = call("check", eq1, eq2, { history: atBack, typed: "y=2*4" });
   add(badY.ok && badY.phase === "back" ? { ok: true, id: "plug-mid" } : fail("plug-mid", JSON.stringify(badY && { ok: badY.ok, phase: badY.phase, msg: badY.message })));
   var yNow = call("check", eq1, eq2, { history: atBack.concat(["y=2*4"]), typed: "y=9" });

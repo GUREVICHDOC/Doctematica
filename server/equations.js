@@ -22,12 +22,14 @@ function lastEq(body) {
 
 function snapshotHint(act) {
   act = act || {};
-  return {
+  var out = {
     ok: true,
     done: !!act.done,
     hint: String(act.hint || ""),
     step: act.eq ? String(act.eq) : null,
   };
+  if (act.hints && act.hints.length) out.hints = act.hints.map(String);
+  return out;
 }
 
 function snapshotSolution(path, domainSnap) {
@@ -236,12 +238,23 @@ function createEquationsHandler(engine) {
     return extra;
   }
 
+  function paramOpts(body) {
+    body = body || {};
+    var opts = {};
+    if (body.solveFor) opts.target = String(body.solveFor);
+    if (body.given && body.given.value != null) {
+      opts.given = { letter: String(body.given.letter || "x"), value: Number(body.given.value) };
+      if (!opts.target) opts.target = "a";
+    }
+    return opts;
+  }
+
   function handleCheck(body) {
     var blocked = requireDomain(body);
     if (blocked) return blocked;
     var previous = lastEq(body);
     var typed = String((body && body.typed) || "");
-    return attachLcdOffer(typed || previous, snapshotCheckStep(Algebra.checkStep(previous, typed)));
+    return attachLcdOffer(typed || previous, snapshotCheckStep(Algebra.checkStep(previous, typed, paramOpts(body))));
   }
 
   function handleHint(body) {
@@ -249,7 +262,7 @@ function createEquationsHandler(engine) {
     if (blocked) {
       return { ok: true, done: false, hint: blocked.message, step: null, errorId: blocked.errorId };
     }
-    var act = Teach.nextAction(lastEq(body));
+    var act = Teach.nextAction(lastEq(body), paramOpts(body));
     return snapshotHint(act);
   }
 
@@ -268,7 +281,7 @@ function createEquationsHandler(engine) {
         return attachLcdOffer(cleared, clearCheck);
       }
     }
-    var act = Teach.nextAction(cur);
+    var act = Teach.nextAction(cur, paramOpts(body));
     if (!act || act.done || !act.eq) {
       return {
         ok: true,
@@ -281,7 +294,7 @@ function createEquationsHandler(engine) {
         step: null,
       };
     }
-    var check = snapshotCheckStep(Algebra.checkStep(cur, act.eq));
+    var check = snapshotCheckStep(Algebra.checkStep(cur, act.eq, paramOpts(body)));
     check.done = false;
     check.hint = String(act.hint || "");
     check.step = String(act.eq);
@@ -291,7 +304,7 @@ function createEquationsHandler(engine) {
 
   function handleSolution(body) {
     var start = String((body && body.start) || lastEq(body) || "");
-    return snapshotSolution(Teach.fullPath(start), snapshotDomainInfo(Teach.analyzeDomain(start)));
+    return snapshotSolution(Teach.fullPath(start, paramOpts(body)), snapshotDomainInfo(Teach.analyzeDomain(start)));
   }
 
   function handleSetup(body) {

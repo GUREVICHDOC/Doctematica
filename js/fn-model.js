@@ -101,7 +101,7 @@
     for (i = 0; i < s.length; i++) {
       var c = s.charAt(i);
       var prev = i > 0 ? s.charAt(i - 1) : "";
-      if ((c === "+" || c === "−") && prev && prev !== "(" && prev !== "+" && prev !== "−") {
+      if ((c === "+" || c === "−") && prev && prev !== "(" && prev !== "=" && prev !== "+" && prev !== "−") {
         out += " " + c + " ";
       } else out += c;
     }
@@ -592,10 +592,12 @@
   function isAllReals(text) {
     var t = String(text || "")
       .replace(/\s+/g, "")
-      .replace(/[∈∊]/g, "");
+      .replace(/[∈∊]/g, "")
+      .replace(/[−–—]/g, "-");
     if (!t) return false;
-    if (/^(ℝ|R|כלx|לכלx|כלמספר|כלמספרממשי|כלממשי|כלממשיים|x∈ℝ|x∈R|ℝ|כלx∈ℝ)$/i.test(t)) return true;
-    if (/כל/.test(t) && /x/i.test(t)) return true;
+    if (/^\((-∞|-inf|-infinity),(∞|inf|infinity)\)$/i.test(t)) return true;
+    if (/^(ℝ|R|xℝ|xR|כלx|לכלx|כלמספר|כלמספרממשי|כלממשי|כלממשיים|כלהמספריםהממשיים|כלערכיx|xℝ|xR|ℝ|כלxℝ)$/i.test(t)) return true;
+    if (/כל/.test(t) && (/x/i.test(t) || /ממשי/.test(t))) return true;
     if (t === "ℝ" || /^x∈/.test(t)) return true;
     return false;
   }
@@ -604,7 +606,7 @@
     var t = String(text || "").replace(/\s+/g, "");
     if (!t) return false;
     if (t === "∅" || t === "{}" || t === "Ø") return true;
-    if (/^(אין|איןתחום|לאקיים|לאקיימת|קבוצהריקה|איןחיתוך|איןנקודה|איןנקודתחיתוך)$/.test(t)) return true;
+    if (/^(אין|איןתחום|איןפתרון|איןפתרונות|איןx|אףx|איןערכיx|לאקיים|לאקיימת|קבוצהריקה|איןחיתוך|איןנקודה|איןנקודתחיתוך)$/.test(t)) return true;
     if (/^אין/.test(t) && /חיתוך|תחום|נקוד/.test(t)) return true;
     return false;
   }
@@ -629,36 +631,117 @@
       .replace(/≤/g, "<=")
       .replace(/⩾/g, ">=")
       .replace(/⩽/g, "<=");
-    var inclusive = /<=|>=/.test(s);
+    var bracket = s.match(/^(\[|\()([^,]+),([^)\]]+)(\]|\))$/);
+    if (bracket) {
+      var leftEnd = parseBound(bracket[2]);
+      var rightEnd = parseBound(bracket[3]);
+      if (leftEnd == null || rightEnd == null) return null;
+      if (typeof leftEnd === "number" && typeof rightEnd === "number" && leftEnd > rightEnd) return { empty: true };
+      return intervalEnds(leftEnd, rightEnd, bracket[1] === "[", bracket[4] === "]");
+    }
+    var brace = s.match(/^\{(-?\d+(?:\.\d+)?)\}$/);
+    if (brace) return intervalEnds(Number(brace[1]), Number(brace[1]), true, true);
+    var eqPoint = s.match(/^x=(.+)$/i);
+    if (eqPoint) {
+      var point = parseBound(eqPoint[1]);
+      if (typeof point !== "number") return null;
+      return {
+        from: point,
+        to: point,
+        fromIncluded: true,
+        toIncluded: true,
+        point: true,
+        empty: false,
+        all: false,
+        inclusive: true,
+      };
+    }
     var between = s.match(/^(.+?)(<=|<)x(<=|<)(.+)$/i);
     if (between) {
       var a = parseBound(between[1]);
       var b = parseBound(between[4]);
       if (a == null || b == null || a === "inf" || b === "-inf") return null;
-      return { from: a, to: b, empty: false, all: false, inclusive: inclusive };
+      if (typeof a === "number" && typeof b === "number" && a > b) return { empty: true };
+      return intervalEnds(a, b, between[2] === "<=", between[3] === "<=");
     }
     var betweenRev = s.match(/^(.+?)(>=|>)x(>=|>)(.+)$/i);
     if (betweenRev) {
       var hi = parseBound(betweenRev[1]);
       var lo = parseBound(betweenRev[4]);
       if (hi == null || lo == null || hi === "-inf" || lo === "inf") return null;
-      return { from: lo, to: hi, empty: false, all: false, inclusive: inclusive };
+      if (typeof lo === "number" && typeof hi === "number" && lo > hi) return { empty: true };
+      return intervalEnds(lo, hi, betweenRev[4] && betweenRev[3] === ">=", betweenRev[2] === ">=");
     }
     var right = s.match(/^x(>=|<=|>|<)(.+)$/i);
     if (right) {
       var bound = parseBound(right[2]);
       if (bound == null || bound === "inf" || bound === "-inf") return null;
-      if (right[1] === ">" || right[1] === ">=") return { from: bound, to: "inf", empty: false, all: false, inclusive: inclusive };
-      return { from: "-inf", to: bound, empty: false, all: false, inclusive: inclusive };
+      if (right[1] === ">" || right[1] === ">=") return intervalEnds(bound, "inf", right[1] === ">=", false);
+      return intervalEnds("-inf", bound, false, right[1] === "<=");
     }
     var left = s.match(/^(.+?)(>=|<=|>|<)x$/i);
     if (left) {
       var boundL = parseBound(left[1]);
       if (boundL == null || boundL === "inf" || boundL === "-inf") return null;
-      if (left[2] === "<" || left[2] === "<=") return { from: boundL, to: "inf", empty: false, all: false, inclusive: inclusive };
-      return { from: "-inf", to: boundL, empty: false, all: false, inclusive: inclusive };
+      if (left[2] === "<" || left[2] === "<=") return intervalEnds(boundL, "inf", left[2] === "<=", false);
+      return intervalEnds("-inf", boundL, false, left[2] === ">=");
     }
     return null;
+  }
+
+  function intervalEnds(from, to, fromIncluded, toIncluded) {
+    var point = from === to || (typeof from === "number" && typeof to === "number" && Math.abs(from - to) < 1e-9);
+    if (point && (!fromIncluded || !toIncluded)) return { empty: true };
+    return {
+      from: from,
+      to: to,
+      fromIncluded: !!fromIncluded,
+      toIncluded: !!toIncluded,
+      point: !!point,
+      empty: false,
+      all: false,
+      inclusive: !!(fromIncluded || toIncluded),
+    };
+  }
+
+  function fmtBound(v) {
+    if (v === "inf") return "∞";
+    if (v === "-inf") return "−∞";
+    var n = Number(v);
+    if (!isFinite(n)) return String(v);
+    if (Math.abs(n - Math.round(n)) < 1e-8) return String(Math.round(n)).replace("-", "−");
+    return String(Math.round(n * 1000) / 1000).replace("-", "−");
+  }
+
+  function formatInterval(iv) {
+    if (!iv || iv.empty) return "אין פתרון";
+    if (iv.all || (iv.from === "-inf" && iv.to === "inf")) return "כל x";
+    if (iv.point) return "x = " + fmtBound(iv.from);
+    var lo = iv.from !== "-inf";
+    var hi = iv.to !== "inf";
+    if (lo && hi) {
+      return fmtBound(iv.from) + (iv.fromIncluded ? " ≤ " : " < ") + "x" + (iv.toIncluded ? " ≤ " : " < ") + fmtBound(iv.to);
+    }
+    if (lo) return "x " + (iv.fromIncluded ? "≥ " : "> ") + fmtBound(iv.from);
+    return "x " + (iv.toIncluded ? "≤ " : "< ") + fmtBound(iv.to);
+  }
+
+  function endIncluded(interval, which) {
+    if (!interval) return false;
+    var key = which + "Included";
+    if (interval[key] != null) return !!interval[key];
+    return false;
+  }
+
+  function sameInterval(student, expected) {
+    if (!student || !expected) return false;
+    if (student.empty || expected.empty) return !!(student.empty && expected.empty);
+    var studentAll = !!(student.all || (student.from === "-inf" && student.to === "inf"));
+    var expectedAll = !!(expected.all || (expected.from === "-inf" && expected.to === "inf"));
+    if (studentAll || expectedAll) return studentAll && expectedAll;
+    if (!sameEnd(student.from, expected.from) || !sameEnd(student.to, expected.to)) return false;
+    if (student.point || expected.point) return !!(student.point && expected.point) || (endIncluded(student, "from") && endIncluded(student, "to") && endIncluded(expected, "from") && endIncluded(expected, "to"));
+    return endIncluded(student, "from") === endIncluded(expected, "from") && endIncluded(student, "to") === endIncluded(expected, "to");
   }
 
   function sameEnd(a, b) {
@@ -692,12 +775,60 @@
       .filter(Boolean);
   }
 
+  function ineqAtomPattern() {
+    var num = "[−–—+-]?(?:\\d+(?:\\.\\d+)?(?:\\s*/\\s*\\d+(?:\\.\\d+)?)?)";
+    var op = "(?:<=|>=|≤|≥|<|>)";
+    var between = num + "\\s*" + op + "\\s*x\\s*" + op + "\\s*" + num;
+    var right = "x\\s*" + op + "\\s*" + num;
+    var left = num + "\\s*" + op + "\\s*x";
+    return new RegExp("^(?:" + between + "|" + right + "|" + left + ")", "i");
+  }
+
+  function splitSpacedInequalities(chunk) {
+    var rest = String(chunk || "").trim();
+    var re = ineqAtomPattern();
+    var parts = [];
+    while (rest) {
+      var found = rest.match(re);
+      if (!found) return null;
+      parts.push(found[0].trim());
+      rest = rest.slice(found[0].length).replace(/^\s+/, "");
+      if (!rest) break;
+    }
+    if (parts.length < 2) return null;
+    var i;
+    for (i = 0; i < parts.length; i++) {
+      if (!parseInterval(parts[i])) return null;
+    }
+    return parts;
+  }
+
+  function splitRegionParts(raw) {
+    if (parseInterval(raw)) return [raw];
+    var chunks = String(raw || "").split(/\s+או\s+|\s*∪\s*|\s*,\s*/);
+    var out = [];
+    var i;
+    for (i = 0; i < chunks.length; i++) {
+      var chunk = chunks[i].trim();
+      if (!chunk) return null;
+      if (parseInterval(chunk)) {
+        out.push(chunk);
+        continue;
+      }
+      var spaced = splitSpacedInequalities(chunk);
+      if (!spaced) return null;
+      spaced.forEach(function (part) { out.push(part); });
+    }
+    return out.length ? out : null;
+  }
+
   function parseRegionList(text) {
     var raw = String(text || "").trim();
     if (!raw) return null;
     if (isEmptySet(raw)) return [];
     if (isAllReals(raw)) return [{ from: "-inf", to: "inf", empty: false, all: true }];
-    var parts = raw.split(/\s+או\s+/);
+    var parts = splitRegionParts(raw);
+    if (!parts) return null;
     var out = [];
     var i;
     for (i = 0; i < parts.length; i++) {
@@ -706,6 +837,35 @@
       out.push(interval);
     }
     return out;
+  }
+
+  function takeRegions(student, expected) {
+    student = student || [];
+    expected = expected || [];
+    var used = [];
+    var foreign = false;
+    var i;
+    var j;
+    for (i = 0; i < student.length; i++) {
+      var hit = false;
+      for (j = 0; j < expected.length; j++) {
+        if (used[j]) continue;
+        if (sameInterval(student[i], expected[j])) {
+          used[j] = true;
+          hit = true;
+          break;
+        }
+      }
+      if (!hit) foreign = true;
+    }
+    var matched = [];
+    for (j = 0; j < expected.length; j++) if (used[j]) matched.push(expected[j]);
+    return {
+      foreign: foreign,
+      complete: !foreign && matched.length === expected.length && (expected.length > 0 || !student.length),
+      partial: !foreign && matched.length > 0 && matched.length < expected.length,
+      matched: matched,
+    };
   }
 
   function sameRegionSet(student, expected) {
@@ -756,12 +916,19 @@
 
   function intersectOne(a, b) {
     if (!a || !b || a.empty || b.empty) return null;
-    if (a.all) return { from: b.from, to: b.to };
-    if (b.all) return { from: a.from, to: a.to };
+    if (a.all) return intervalEnds(b.from, b.to, endIncluded(b, "from"), endIncluded(b, "to"));
+    if (b.all) return intervalEnds(a.from, a.to, endIncluded(a, "from"), endIncluded(a, "to"));
     var from = endNum(a.from) >= endNum(b.from) ? a.from : b.from;
     var to = endNum(a.to) <= endNum(b.to) ? a.to : b.to;
-    if (!(endNum(from) < endNum(to))) return null;
-    return { from: from, to: to };
+    var fromIncluded;
+    var toIncluded;
+    if (sameEnd(a.from, b.from)) fromIncluded = endIncluded(a, "from") && endIncluded(b, "from");
+    else fromIncluded = endNum(a.from) > endNum(b.from) ? endIncluded(a, "from") : endIncluded(b, "from");
+    if (sameEnd(a.to, b.to)) toIncluded = endIncluded(a, "to") && endIncluded(b, "to");
+    else toIncluded = endNum(a.to) < endNum(b.to) ? endIncluded(a, "to") : endIncluded(b, "to");
+    if (endNum(from) > endNum(to) + 1e-9) return null;
+    var hit = intervalEnds(from, to, fromIncluded, toIncluded);
+    return hit.empty ? null : hit;
   }
 
   function intersectRegions(left, right) {
@@ -773,6 +940,148 @@
       });
     });
     return out;
+  }
+
+  function intersectAll(list) {
+    if (!list || !list.length) return { empty: true };
+    var cur = null;
+    var i;
+    for (i = 0; i < list.length; i++) {
+      var iv = list[i];
+      if (!iv || iv.empty) return { empty: true };
+      var all = !!(iv.all || (iv.from === "-inf" && iv.to === "inf"));
+      if (all) {
+        if (!cur) cur = { from: "-inf", to: "inf", empty: false, all: true, fromIncluded: false, toIncluded: false };
+        continue;
+      }
+      if (!cur || cur.all) {
+        cur = iv;
+        continue;
+      }
+      var hit = intersectOne(cur, iv);
+      if (!hit) return { empty: true };
+      cur = hit;
+    }
+    return cur || { empty: true };
+  }
+
+  function canonInterval(iv) {
+    if (!iv || iv.empty) return null;
+    if (iv.all || (iv.from === "-inf" && iv.to === "inf")) {
+      return { from: "-inf", to: "inf", fromIncluded: false, toIncluded: false, all: true, empty: false, point: false, inclusive: false };
+    }
+    return intervalEnds(iv.from, iv.to, endIncluded(iv, "from"), endIncluded(iv, "to"));
+  }
+
+  function overlapsOrAbuts(left, right) {
+    if (endNum(left.to) > endNum(right.from) + 1e-9) return true;
+    if (!sameEnd(left.to, right.from)) return false;
+    return endIncluded(left, "to") || endIncluded(right, "from");
+  }
+
+  function mergeTouching(left, right) {
+    var from = left.from;
+    var fromIncluded = endIncluded(left, "from");
+    if (sameEnd(left.from, right.from)) fromIncluded = fromIncluded || endIncluded(right, "from");
+    var to = endNum(left.to) >= endNum(right.to) - 1e-9 ? left.to : right.to;
+    var toIncluded;
+    if (sameEnd(left.to, right.to)) toIncluded = endIncluded(left, "to") || endIncluded(right, "to");
+    else toIncluded = endNum(left.to) > endNum(right.to) ? endIncluded(left, "to") : endIncluded(right, "to");
+    if (from === "-inf" && to === "inf") {
+      return { from: "-inf", to: "inf", fromIncluded: false, toIncluded: false, all: true, empty: false, point: false, inclusive: false };
+    }
+    return intervalEnds(from, to, fromIncluded, toIncluded);
+  }
+
+  function unionAll(list) {
+    var items = [];
+    var i;
+    for (i = 0; i < (list || []).length; i++) {
+      var c = canonInterval(list[i]);
+      if (!c) continue;
+      if (c.all) return [c];
+      items.push(c);
+    }
+    if (!items.length) return [];
+    items.sort(function (a, b) {
+      var d = endNum(a.from) - endNum(b.from);
+      if (Math.abs(d) > 1e-9) return d;
+      return endNum(a.to) - endNum(b.to);
+    });
+    var out = [items[0]];
+    for (i = 1; i < items.length; i++) {
+      var last = out[out.length - 1];
+      var cur = items[i];
+      if (overlapsOrAbuts(last, cur)) out[out.length - 1] = mergeTouching(last, cur);
+      else out.push(cur);
+      if (out[out.length - 1].all) return [out[out.length - 1]];
+    }
+    return out;
+  }
+
+  function combineIntervals(list, operation) {
+    var op = String(operation || "intersection").toLowerCase();
+    if (op === "union") return unionAll(list);
+    var hit = intersectAll(list);
+    if (!hit || hit.empty) return [];
+    var one = canonInterval(hit);
+    return one ? [one] : [];
+  }
+
+  function formatIntervalSet(list) {
+    if (!list || !list.length) return "אין פתרון";
+    if (list.length === 1 && (list[0].all || (list[0].from === "-inf" && list[0].to === "inf"))) return "כל x";
+    return list.map(formatInterval).join(" או ");
+  }
+
+  function sameIntervalSet(student, expected) {
+    student = student || [];
+    expected = expected || [];
+    if (!student.length || !expected.length) return !student.length && !expected.length;
+    var studentAll = student.length === 1 && !!(student[0].all || (student[0].from === "-inf" && student[0].to === "inf"));
+    var expectedAll = expected.length === 1 && !!(expected[0].all || (expected[0].from === "-inf" && expected[0].to === "inf"));
+    if (studentAll || expectedAll) return studentAll && expectedAll;
+    if (student.length !== expected.length) return false;
+    var used = [];
+    var i;
+    var j;
+    for (i = 0; i < student.length; i++) {
+      var found = false;
+      for (j = 0; j < expected.length; j++) {
+        if (used[j]) continue;
+        if (sameInterval(student[i], expected[j])) {
+          used[j] = true;
+          found = true;
+          break;
+        }
+      }
+      if (!found) return false;
+    }
+    return true;
+  }
+
+  function compoundOp(op) {
+    if (op === "<=") return "≤";
+    if (op === ">=") return "≥";
+    return op;
+  }
+
+  function splitCompound(text) {
+    var src = String(text || "").trim();
+    if (!src || /וגם/.test(src)) return null;
+    var re = /<=|>=|≤|≥|<|>/g;
+    var hits = [];
+    var m;
+    while ((m = re.exec(src))) hits.push({ i: m.index, op: m[0], len: m[0].length });
+    if (hits.length !== 2) return null;
+    var left = src.slice(0, hits[0].i).trim();
+    var mid = src.slice(hits[0].i + hits[0].len, hits[1].i).trim();
+    var right = src.slice(hits[1].i + hits[1].len).trim();
+    if (!left || !mid || !right) return null;
+    return [
+      left + " " + compoundOp(hits[0].op) + " " + mid,
+      mid + " " + compoundOp(hits[1].op) + " " + right,
+    ];
   }
 
   function rangeOf(fn) {
@@ -831,6 +1140,36 @@
     return items;
   }
 
+  function qyForLevel(anchors, y) {
+    var list = (anchors || []).filter(function (item) {
+      return item && isFinite(Number(item.y)) && isFinite(Number(item.qy));
+    }).slice().sort(function (a, b) { return Number(a.y) - Number(b.y); });
+    var height = Number(y);
+    if (!list.length || !isFinite(height)) return 0.35;
+    if (list.length === 1 || height <= Number(list[0].y)) {
+      var low = list[0];
+      if (Math.abs(height - Number(low.y)) < 1e-6) return Number(low.qy);
+      if (height > Number(low.y)) return Math.min(0.95, Number(low.qy) + 0.55);
+      return Math.max(-0.95, Number(low.qy) - 0.38);
+    }
+    var high = list[list.length - 1];
+    if (height >= Number(high.y)) {
+      if (Math.abs(height - Number(high.y)) < 1e-6) return Number(high.qy);
+      return Math.min(0.95, Number(high.qy) + 0.42);
+    }
+    var i;
+    for (i = 0; i < list.length - 1; i++) {
+      var a = list[i];
+      var b = list[i + 1];
+      if (height >= Number(a.y) && height <= Number(b.y)) {
+        var span = Number(b.y) - Number(a.y);
+        var t = span ? (height - Number(a.y)) / span : 0;
+        return Number(a.qy) + (Number(b.qy) - Number(a.qy)) * t;
+      }
+    }
+    return Number(high.qy);
+  }
+
   global.DoctematicaFnModel = {
     near: near,
     near0: near0,
@@ -860,16 +1199,27 @@
     bareNumber: bareNumber,
     containsAt: containsAt,
     parseInterval: parseInterval,
+    formatInterval: formatInterval,
+    sameInterval: sameInterval,
+    fmtBound: fmtBound,
     parseRegionList: parseRegionList,
+    takeRegions: takeRegions,
     parseDomainAnswer: parseDomainAnswer,
     sameRegion: sameRegion,
     sameRegionSet: sameRegionSet,
     intersectRegions: intersectRegions,
+    intersectAll: intersectAll,
+    unionAll: unionAll,
+    combineIntervals: combineIntervals,
+    formatIntervalSet: formatIntervalSet,
+    sameIntervalSet: sameIntervalSet,
+    splitCompound: splitCompound,
     rangeOf: rangeOf,
     levelCond: levelCond,
     parseScalarCond: parseScalarCond,
     isFlatPhrase: isFlatPhrase,
     isEmptySet: isEmptySet,
     isAllReals: isAllReals,
+    qyForLevel: qyForLevel,
   };
 })(window);

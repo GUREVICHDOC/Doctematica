@@ -16,7 +16,7 @@ function main() {
   }
 
   var topics = (engine.DoctematicaProblems.topics || []).map(function (topic) { return topic.id; });
-  add(topics.join(",") === "equations,quadratic,high-power,systems-sub,percents,analytic,statistics"
+  add(topics.join(",") === "equations,inequalities,quadratic,high-power,systems-sub,percents,analytic,calculus,statistics"
     ? { ok: true, id: "topic-order" }
     : fail("topic-order", topics.join(",")));
   var subs = engine.DoctematicaProblems.subtopics.percents || [];

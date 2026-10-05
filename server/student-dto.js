@@ -73,10 +73,24 @@ function slimProblem(problem) {
     startEquation: problem.startEquation || null,
     eq1: problem.eq1 || null,
     eq2: problem.eq2 || null,
+    stage: problem.stage || null,
     explain: problem.explain || "",
   };
   if (problem.geo) out.geo = dropSecrets(problem.geo, 0);
   if (problem.mode === "quad-mixed") out.offerFormula = !!problem.offerFormula;
+  if (problem.mode === "ineq-quad") {
+    out.startEquation = problem.startEquation || "";
+    out.prompt = problem.prompt || problem.startEquation || "";
+  }
+  if (problem.mode === "ineq-and" || problem.mode === "ineq-or") {
+    out.conds = problem.conds || [];
+    out.prompt = problem.prompt || "";
+    out.op = problem.op || (problem.mode === "ineq-or" ? "union" : "intersection");
+  }
+  if (problem.mode === "param") {
+    if (problem.solveFor) out.solveFor = problem.solveFor;
+    if (problem.given) out.given = { letter: problem.given.letter || "x", value: problem.given.value };
+  }
   if (problem.mode === "fn") {
     out.stem = problem.stem || "";
     out.prompt = problem.stem || problem.prompt || "";
@@ -247,7 +261,32 @@ function openProblem(engine, levelId, index) {
   if (problem.mode === "percent") {
     view = percent.openingView(engine, problem.levelId, index, problem.exerciseId);
   }
-  if (problem.mode === "fn" && problem.fn && engine.DoctematicaFn) {
+  if (problem.mode === "fn" && problem.monoGraph) {
+    var monoLevels = (engine.DoctematicaCurriculum && engine.DoctematicaCurriculum.levels) || [];
+    var monoLevel = monoLevels.filter(function (item) { return item.id === problem.levelId; })[0];
+    var monoEx = monoLevel && (monoLevel.exercises || []).filter(function (item) { return item.id === problem.exerciseId; })[0];
+    if (monoEx) view = require("./extrema").openingView(engine, monoEx);
+  } else if (problem.mode === "fn" && problem.signGraph) {
+    var signLevels = (engine.DoctematicaCurriculum && engine.DoctematicaCurriculum.levels) || [];
+    var signLevel = signLevels.filter(function (item) { return item.id === problem.levelId; })[0];
+    var signEx = signLevel && (signLevel.exercises || []).filter(function (item) { return item.id === problem.exerciseId; })[0];
+    if (signEx) view = require("./sign-graph").openingView(engine, signEx);
+  } else if (problem.mode === "fn" && problem.levelProbe) {
+    var probeLevels = (engine.DoctematicaCurriculum && engine.DoctematicaCurriculum.levels) || [];
+    var probeLevel = probeLevels.filter(function (item) { return item.id === problem.levelId; })[0];
+    var probeEx = probeLevel && (probeLevel.exercises || []).filter(function (item) { return item.id === problem.exerciseId; })[0];
+    if (probeEx) view = require("./level-probe").openingView(engine, probeEx);
+  } else if (problem.mode === "fn" && problem.freeSketch) {
+    var sketchLevels = (engine.DoctematicaCurriculum && engine.DoctematicaCurriculum.levels) || [];
+    var sketchLevel = sketchLevels.filter(function (item) { return item.id === problem.levelId; })[0];
+    var sketchEx = sketchLevel && (sketchLevel.exercises || []).filter(function (item) { return item.id === problem.exerciseId; })[0];
+    if (sketchEx) view = require("./free-sketch").openingView(engine, sketchEx);
+  } else if (problem.mode === "fn" && problem.compare) {
+    var levels = (engine.DoctematicaCurriculum && engine.DoctematicaCurriculum.levels) || [];
+    var level = levels.filter(function (item) { return item.id === problem.levelId; })[0];
+    var ex = level && (level.exercises || []).filter(function (item) { return item.id === problem.exerciseId; })[0];
+    if (ex) view = require("./compare").openingView(engine, ex);
+  } else if (problem.mode === "fn" && problem.fn && engine.DoctematicaFn) {
     view = engine.DoctematicaFn.viewFor(problem.fn, engine.DoctematicaFn.freshProgress());
   }
   var slim = slimProblem(problem);

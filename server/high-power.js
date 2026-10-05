@@ -2,6 +2,7 @@
 
 var handleHighRoot = require("./high-root").handleHighRoot;
 var handleHighFactor = require("./high-factor").handleHighFactor;
+var handleHighChain = require("./high-chain").handleHighChain;
 
 function createHighPowerHandler(engine) {
   function handle(body) {
@@ -13,6 +14,7 @@ function createHighPowerHandler(engine) {
     }
     if (subtopic === "root") return handleHighRoot(engine, body);
     if (subtopic === "factor") return handleHighFactor(engine, body);
+    if (subtopic === "chain") return handleHighChain(engine, body);
     return { error: "unknown subtopic", message: "unknown subtopic" };
   }
 

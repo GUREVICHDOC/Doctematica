@@ -23,8 +23,10 @@
 
   var topics = [
     { id: "equations", label: "משוואות בנעלם אחד" },
+    { id: "inequalities", label: "אי שוויונות" },
     { id: "quadratic", label: "משוואות ריבועיות" },
     { id: "high-power", label: "משוואות בחזקה גבוהה" },
+    { id: "biquad", label: "משוואות דו־ריבועיות" },
     { id: "systems-sub", label: "מערכת משוואות" },
     { id: "percents", label: "אחוזים" },
     { id: "analytic", label: "גאומטריה אנליטית" },
@@ -37,6 +39,11 @@
       { id: "basic", label: "משוואות בסיס" },
       { id: "denom", label: "משוואות עם מכנה" },
     ],
+    inequalities: [
+      { id: "linear", label: "אי שוויונות ממעלה ראשונה" },
+      { id: "quadratic", label: "אי שוויונות ריבועיים" },
+      { id: "sketch", label: "שרטוט תחומים" },
+    ],
     analytic: [
       { id: "segments", label: "אורכי קטעים" },
       { id: "areas", label: "שטחים והיקפים" },
@@ -44,6 +51,7 @@
     ],
     calculus: [
       { id: "intro", label: "מבוא" },
+      { id: "pre", label: "קדם אנליזה" },
     ],
     percents: [
       { id: "find-part", label: "מציאת כמות עבור אחוז" },

@@ -660,11 +660,75 @@ function readySubState(Q, Sys, eq1, eq2, ready) {
   return st;
 }
 
+function hideSquare(text) {
+  return String(text || "").replace(/x\^2/gi, "x").replace(/x²/g, "x");
+}
+
+function showSquare(text) {
+  return String(text || "")
+    .replace(/x\^2/gi, "§")
+    .replace(/x²/g, "§")
+    .replace(/x/gi, "x^2")
+    .replace(/§/g, "x^2");
+}
+
+function isSquareLinear(Sys, text) {
+  if (!/x\^2|x²/i.test(String(text || ""))) return false;
+  var rest = String(text || "").replace(/x\^2/gi, "").replace(/x²/g, "");
+  if (/x/i.test(rest)) return false;
+  try {
+    Sys.parseEquation(hideSquare(text));
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
 function blankState(Q, Sys, eq1, eq2) {
   if (yRhs(eq1) && yRhs(eq2)) return level1State(Q, Sys, eq1, eq2);
+  if (isSquareLinear(Sys, eq1) && isSquareLinear(Sys, eq2)) return squarePairState(Q, Sys, eq1, eq2);
   var ready = readyChoice(Sys, eq1, eq2);
   if (ready) return readySubState(Q, Sys, eq1, eq2, ready);
   return level2State(Q, Sys, eq1, eq2);
+}
+
+function squarePairState(Q, Sys, eq1, eq2) {
+  var eqs = [String(eq1 || ""), String(eq2 || "")];
+  function yCoef(text) {
+    try {
+      var eq = Sys.parseEquation(hideSquare(text));
+      return Math.abs(eq.left.y - eq.right.y);
+    } catch (err) {
+      return 99;
+    }
+  }
+  var index = yCoef(eqs[0]) <= yCoef(eqs[1]) ? 0 : 1;
+  return {
+    eq: eqs,
+    equated: "",
+    engineEq: "",
+    pack: { steps: [], answer: "" },
+    quadAt: -1,
+    phase: "isolate",
+    roots: [],
+    branches: [],
+    active: 0,
+    easy: index,
+    polys: [null, null],
+    doneKind: null,
+    note: "",
+    pending: null,
+    linearIndex: index,
+    quadIndex: 1 - index,
+    wantVar: "y",
+    wantWhy: "בודדים את y כדי להציב במשוואה השנייה.",
+    isolEq: eqs[index],
+    isol: null,
+    isolText: "",
+    subExpr: "",
+    solvedVar: "x",
+    square: true,
+  };
 }
 
 function level1State(Q, Sys, eq1, eq2) {
@@ -845,6 +909,8 @@ function takeQuad(Q, st, typed) {
 }
 
 function takeIsolate(Q, Sys, st, typed) {
+  if (st.square) return takeSquareIsolate(Q, Sys, st, typed);
+  if (illegalEquate(st.eq, typed)) return { ok: false, message: ILLEGAL_EQUATE_MSG };
   var chk = Sys.checkWorkStep(st.isolEq, typed);
   if (!chk.ok) return { ok: false, message: chk.message };
   st.isolEq = String(typed).trim();
@@ -1045,6 +1111,16 @@ function takeBackIsol(Q, Sys, st, typed) {
     }
   }
   if (hitOther) {
+    var altI = -1;
+    for (i = 0; i < st.branches.length; i++) {
+      if (i === st.active || backFilled(st, st.branches[i])) continue;
+      var otherSolved = solvedOf(st, st.branches[i]);
+      if (mentions(rhs, otherSolved) && !mentions(rhs, solved)) altI = i;
+    }
+    if (altI >= 0) {
+      st.active = altI;
+      return takeBackIsol(Q, Sys, st, typed);
+    }
     return { ok: false, message: "עכשיו מציבים את " + st.solvedVar + " = " + fmtX(Sys, solved) + ", לא את הערך השני." };
   }
   var val = evalArith(tail);
@@ -1145,6 +1221,15 @@ function takeBack(Q, Sys, st, typed) {
     }
   }
   if (hitOther) {
+    var altX = -1;
+    for (i = 0; i < st.branches.length; i++) {
+      if (i === st.active || st.branches[i].y != null) continue;
+      if (mentions(rhs, st.branches[i].x) && !mentions(rhs, b.x)) altX = i;
+    }
+    if (altX >= 0) {
+      st.active = altX;
+      return takeBack(Q, Sys, st, typed);
+    }
     return {
       ok: false,
       message: "עכשיו מציבים את x = " + fmtX(Sys, b.x) + ", לא את הערך השני.",
@@ -1415,8 +1500,8 @@ function hintFor(Q, Sys, A, st) {
     if (keyEq(st.isolEq) === keyEq(st.eq[st.linearIndex])) {
       return "כדי להשתמש בשיטת ההצבה, בודדו משתנה במשוואה " + eqWord(st.linearIndex) + ". " + st.wantWhy;
     }
-    var goal = isolatingToward(Sys, st.isolEq) || st.wantVar;
-    var alg = teachApi.nextAlgebra(Sys, A, st.isolEq, { mode: "isolate", v: goal });
+    var goal = st.square ? st.wantVar : isolatingToward(Sys, st.isolEq) || st.wantVar;
+    var alg = teachApi.nextAlgebra(Sys, A, st.square ? hideSquare(st.isolEq) : st.isolEq, { mode: "isolate", v: goal });
     if (alg && alg.hint) return alg.hint;
     return "המשיכו לבודד את " + goal + ".";
   }
@@ -1526,7 +1611,88 @@ function plugIsolExpr(expr, solvedVar, value, Sys) {
   return substituteTokens(expr, solvedVar, shown, false);
 }
 
+function normBare(text) {
+  return String(text || "")
+    .replace(/\s+/g, "")
+    .replace(/[−–—]/g, "-")
+    .replace(/²/g, "^2");
+}
+
+function illegalEquate(eqs, typed) {
+  function isol(eq) {
+    var n = normBare(eq);
+    var m = n.match(/^([a-z])=(.+)$/i);
+    if (!m) return "";
+    if (m[2].toLowerCase().indexOf(m[1].toLowerCase()) >= 0) return "";
+    return m[1].toLowerCase();
+  }
+  if (!eqs || eqs.length < 2) return false;
+  var a = isol(eqs[0]);
+  var b = isol(eqs[1]);
+  if (a && a === b) return false;
+  function sides(eq) {
+    var t = normBare(eq);
+    var i = t.indexOf("=");
+    if (i < 0) return ["", ""];
+    return [t.slice(0, i), t.slice(i + 1)];
+  }
+  var s0 = sides(eqs[0]);
+  var s1 = sides(eqs[1]);
+  if (!s0[0] || !s1[0]) return false;
+  var n = normBare(typed);
+  var crosses = [
+    s0[0] + "=" + s1[0],
+    s0[0] + "=" + s1[1],
+    s0[1] + "=" + s1[0],
+    s0[1] + "=" + s1[1],
+    s1[0] + "=" + s0[0],
+    s1[0] + "=" + s0[1],
+    s1[1] + "=" + s0[0],
+    s1[1] + "=" + s0[1],
+  ];
+  return crosses.indexOf(n) >= 0;
+}
+
+var ILLEGAL_EQUATE_MSG = "כדי להשוות בין הביטויים, תחילה צריך לוודא ששניהם שווים לאותו משתנה.";
+
+function takeSquareIsolate(Q, Sys, st, typed) {
+  if (illegalEquate(st.eq, typed)) return { ok: false, message: ILLEGAL_EQUATE_MSG };
+  var chk;
+  try {
+    chk = Sys.checkWorkStep(hideSquare(st.isolEq), hideSquare(typed));
+  } catch (err) {
+    return { ok: false, message: (err && err.message) || "הצעד אינו שקול." };
+  }
+  if (!chk || !chk.ok) {
+    if (illegalEquate(st.eq, typed)) return { ok: false, message: ILLEGAL_EQUATE_MSG };
+    return { ok: false, message: (chk && chk.message) || "הצעד אינו שקול." };
+  }
+  st.isolEq = String(typed).trim();
+  if (chk.kind === "isolated" && chk.isolation) {
+    st.isol = { v: "y" };
+    st.isolText = showSquare(st.isolEq);
+    st.subExpr = showSquare(sideExpr(hideSquare(st.isolEq), "y"));
+    st.solvedVar = "x";
+    try {
+      armSubstitution(Q, st);
+    } catch (err2) {
+      return { ok: false, message: "הבידוד חוקי, אבל אחרי ההצבה מתקבלת משוואה שהמנוע עדיין לא יודע לפתוח." };
+    }
+    return { ok: true, message: chk.message || "בודדתם את y. עכשיו מציבים במשוואה השנייה." };
+  }
+  return { ok: true, message: chk.message || "צעד חוקי. המשיכו לבודד את y." };
+}
+
 function nextLine(Q, Sys, A, st) {
+  if (st.phase === "isolate" && st.square) {
+    var mapped = teachApi.nextAlgebra(Sys, A, hideSquare(st.isolEq), { mode: "isolate", v: "y" });
+    if (!mapped || mapped.error || !mapped.eq) return null;
+    return {
+      eq: showSquare(mapped.eq),
+      reason: showSquare(mapped.reason || "בודדים את y כדי שנוכל להציב."),
+      hint: showSquare(mapped.hint || "בודדים את y באחת המשוואות."),
+    };
+  }
   if (st.phase === "isolate") {
     var goal = isolatingToward(Sys, st.isolEq) || st.wantVar;
     var alg = teachApi.nextAlgebra(Sys, A, st.isolEq, { mode: "isolate", v: goal });

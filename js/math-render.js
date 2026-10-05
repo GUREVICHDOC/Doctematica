@@ -23,6 +23,26 @@
     );
   }
 
+  function readExponent(s, at) {
+    var ch = s.charAt(at);
+    if (ch === "²") return { exp: "2", len: 1 };
+    if (ch === "³") return { exp: "3", len: 1 };
+    if (ch === "⁴") return { exp: "4", len: 1 };
+    if (ch === "⁵") return { exp: "5", len: 1 };
+    if (ch === "⁶") return { exp: "6", len: 1 };
+    if (ch !== "^") return null;
+    var rest = s.slice(at + 1);
+    var braced = rest.match(/^\{(\d+)\}/);
+    var plain = rest.match(/^(\d+)/);
+    var raw = braced ? braced[1] : plain ? plain[1] : "";
+    if (!raw || Number(raw) < 2) return null;
+    return { exp: String(Number(raw)), len: 1 + (braced ? braced[0].length : plain[0].length) };
+  }
+
+  function powHTML(baseHtml, exp) {
+    return '<span class="m-pow">' + baseHtml + '<sup class="m-sup">' + exp + "</sup></span>";
+  }
+
   function unwrapParens(s) {
     var t = String(s).trim();
     if (t.charAt(0) === "(" && t.charAt(t.length - 1) === ")") {
@@ -293,72 +313,38 @@
         i += algFrac[0].length;
         continue;
       }
-      var pow = s.slice(i).match(/^((?:\(-?\d+\))|(?:-?\d+)|[xy])(\^[2-6]|²|³|⁴|⁵|⁶)/i);
-      if (pow) {
-        var base = pow[1];
-        var expTok = pow[2];
-        var exp =
-          expTok === "^6" || expTok === "⁶"
-            ? "6"
-            : expTok === "^5" || expTok === "⁵"
-              ? "5"
-              : expTok === "^4" || expTok === "⁴"
-                ? "4"
-                : expTok === "^3" || expTok === "³"
-                  ? "3"
-                  : "2";
+      var powBase = s.slice(i).match(/^((?:\(-?\d+\))|(?:-?\d+)|[xy])/i);
+      var powExp = powBase ? readExponent(s, i + powBase[0].length) : null;
+      if (powBase && powExp) {
+        var base = powBase[1];
         var baseHtml;
         if (/^[xy]$/i.test(base)) {
           baseHtml = '<span class="m-x">' + escapeHtml(base) + "</span>";
         } else {
           baseHtml = sideToHTML(base);
         }
-        out += '<span class="m-pow">' + baseHtml + '<sup class="m-sup">' + exp + "</sup></span>";
-        i += pow[0].length;
+        out += powHTML(baseHtml, powExp.exp);
+        i += powBase[0].length + powExp.len;
         continue;
       }
-      var parenPow = s.slice(i).match(/^(\([^()]+\))(\^[2-6]|²|³|⁴|⁵|⁶)/);
-      if (parenPow) {
-        var fracBase = String(parenPow[1]).slice(1, -1).match(/^([−–—-]?)(\d+)\s*\/\s*(\d+)$/);
-        if (fracBase) {
-          var fracBody = fracBase[1] ? '<span class="m-neg">−</span>' + fracHTML(fracBase[2], fracBase[3]) : fracHTML(fracBase[2], fracBase[3]);
-          var fracExp =
-            parenPow[2] === "^6" || parenPow[2] === "⁶"
-              ? "6"
-              : parenPow[2] === "^5" || parenPow[2] === "⁵"
-                ? "5"
-                : parenPow[2] === "^4" || parenPow[2] === "⁴"
-                  ? "4"
-                  : parenPow[2] === "^3" || parenPow[2] === "³"
-                    ? "3"
-                    : "2";
-          out +=
-            '<span class="m-pow"><span class="m-paren">(' +
-            fracBody +
-            ')</span><sup class="m-sup">' +
-            fracExp +
-            "</sup></span>";
-          i += parenPow[0].length;
+      var parenPow = s.slice(i).match(/^(\([^()]+\))/);
+      var parenExp = parenPow ? readExponent(s, i + parenPow[0].length) : null;
+      if (parenPow && parenExp) {
+        var letterBase = String(parenPow[1]).slice(1, -1).trim();
+        if (/^[a-z]$/i.test(letterBase)) {
+          out += powHTML('<span class="m-x">' + escapeHtml(letterBase) + "</span>", parenExp.exp);
+          i += parenPow[0].length + parenExp.len;
           continue;
         }
-        var pTok = parenPow[2];
-        var pExp =
-          pTok === "^6" || pTok === "⁶"
-            ? "6"
-            : pTok === "^5" || pTok === "⁵"
-              ? "5"
-              : pTok === "^4" || pTok === "⁴"
-                ? "4"
-                : pTok === "^3" || pTok === "³"
-                  ? "3"
-                  : "2";
-        out +=
-          '<span class="m-pow">' +
-          sideToHTML(parenPow[1]) +
-          '<sup class="m-sup">' +
-          pExp +
-          "</sup></span>";
-        i += parenPow[0].length;
+        var fracBase = letterBase.match(/^([−–—-]?)(\d+)\s*\/\s*(\d+)$/);
+        if (fracBase) {
+          var fracBody = fracBase[1] ? '<span class="m-neg">−</span>' + fracHTML(fracBase[2], fracBase[3]) : fracHTML(fracBase[2], fracBase[3]);
+          out += powHTML('<span class="m-paren">(' + fracBody + ")</span>", parenExp.exp);
+          i += parenPow[0].length + parenExp.len;
+          continue;
+        }
+        out += powHTML(sideToHTML(parenPow[1]), parenExp.exp);
+        i += parenPow[0].length + parenExp.len;
         continue;
       }
       // Balanced paren power: (…)^2 / (…)^3 when inner has nested parens
@@ -366,23 +352,13 @@
         var bal = matchBalancedParen(s, i);
         if (bal) {
           var afterBal = i + bal.length;
-          var balExp = null;
-          var balPowLen = 0;
-          if (s.slice(afterBal, afterBal + 2) === "^3" || s.charAt(afterBal) === "³") {
-            balExp = "3";
-            balPowLen = s.charAt(afterBal) === "³" ? 1 : 2;
-          } else if (s.slice(afterBal, afterBal + 2) === "^2" || s.charAt(afterBal) === "²") {
-            balExp = "2";
-            balPowLen = s.charAt(afterBal) === "²" ? 1 : 2;
-          }
+          var balExp = readExponent(s, afterBal);
           if (balExp) {
-            out +=
-              '<span class="m-pow">' +
-              sideToHTML(bal) +
-              '<sup class="m-sup">' +
-              balExp +
-              "</sup></span>";
-            i = afterBal + balPowLen;
+            var balInner = unwrapParens(bal).trim();
+            out += /^[a-z]$/i.test(balInner)
+              ? powHTML('<span class="m-x">' + escapeHtml(balInner) + "</span>", balExp.exp)
+              : powHTML(sideToHTML(bal), balExp.exp);
+            i = afterBal + balExp.len;
             continue;
           }
           var slashDen = matchSlashDen(s, afterBal);
@@ -397,6 +373,13 @@
       if (wrappedFrac) {
         out += fracHTML(wrappedFrac[1], wrappedFrac[2]);
         i += wrappedFrac[0].length;
+        emitTimesAfterFracIfNeeded(out, s, i);
+        continue;
+      }
+      var negNumFrac = s.slice(i).match(/^\(([−–—-])(\d+)\)\s*\/\s*(\d+)/);
+      if (negNumFrac) {
+        out += '<span class="m-neg">−</span>' + fracHTML(negNumFrac[2], negNumFrac[3]);
+        i += negNumFrac[0].length;
         emitTimesAfterFracIfNeeded(out, s, i);
         continue;
       }
@@ -442,8 +425,16 @@
         i += 1;
         continue;
       }
-      if (ch === "=" || ch === "≠") {
-        out += '<span class="m-eq">' + (ch === "≠" ? "≠" : "=") + "</span>";
+      if (ch === "=" || ch === "≠" || ch === "<" || ch === ">" || ch === "≤" || ch === "≥") {
+        var rel = ch;
+        if (ch === "<" && s.charAt(i + 1) === "=") {
+          rel = "≤";
+          i += 1;
+        } else if (ch === ">" && s.charAt(i + 1) === "=") {
+          rel = "≥";
+          i += 1;
+        }
+        out += '<span class="m-eq">' + escapeHtml(rel) + "</span>";
         i += 1;
         continue;
       }
@@ -480,7 +471,7 @@
   }
 
   function toHTML(text) {
-    var src = String(text || "").trim();
+    var src = String(text || "").trim().replace(/<=/g, "≤").replace(/>=/g, "≥");
     if (!src) return "";
     var parts = src.split("=");
     if (parts.length === 1) return '<span class="m-expr" dir="ltr">' + sideToHTML(src) + "</span>";
@@ -573,6 +564,8 @@
       );
       return id;
     }
+    src = src.replace(/x\s*\|[^.\n]*f\(x\)\s*\|[^.\n]*/g, stash);
+    src = src.replace(/\((?:−∞|[−–—-]∞|[−–—-]?\d+(?:\.\d+)?),\s*(?:∞|[−–—-]?\d+(?:\.\d+)?)\)/g, stash);
     src = src.replace(RE_M_EQ_LIST, stash);
     src = src.replace(RE_M_EQ, stash);
     src = src.replace(/\bd_?[A-Za-z]{2,4}(?:\s*=\s*[^\s,;]+)?/g, stash);
@@ -591,12 +584,20 @@
       }
       return stash(body) + tail;
     }
-    src = src.replace(/f\s*\(\s*[^()\u05D0-\u05EA]+\s*\)\s*=\s*[0-9xXyY+−–—\-\s().\/^²³*·×]+/gi, stashEq);
-    src = src.replace(/f\s*\(\s*[^()\u05D0-\u05EA]+\s*\)\s*(?:<=|>=|≤|≥|<|>)\s*[−–—-]?\d+(?:\.\d+)?/gi, stashEq);
+    src = src.replace(
+      /[a-zA-Z]\s*\(\s*[^()\u05D0-\u05EA]+\s*\)\s*=\s*[−–—-]?(?:\d+(?:\.\d+)?|[a-zA-Z])(?:\s*[,;]\s*[a-zA-Z]\s*\(\s*[^()\u05D0-\u05EA]+\s*\)\s*=\s*[−–—-]?(?:\d+(?:\.\d+)?|[a-zA-Z]))+/g,
+      stashEq
+    );
+    src = src.replace(/[a-zA-Z]\s*\(\s*[^()\u05D0-\u05EA]+\s*\)\s*=\s*[0-9a-zA-Z+−–—\-\s().\/^²³*·×]+/g, stashEq);
+    src = src.replace(
+      /[A-Za-z]\s*\(\s*[^()\u05D0-\u05EA]+\s*\)(?:\s*(?:=|<=|>=|≤|≥|<|>)\s*(?:[A-Za-z]\s*\(\s*[^()\u05D0-\u05EA]+\s*\)|[−–—-]?\d+(?:\.\d+)?))*/g,
+      stashEq
+    );
     src = src.replace(RE_INEQ, stash);
-    src = src.replace(/[yY]\s*=\s*[0-9xXyY()²³^./+−–—\-\s*·×]+/g, stashEq);
+    src = src.replace(new RegExp(INEQ_NUM + "\\s*<\\s*" + INEQ_NUM, "g"), stash);
+    src = src.replace(/[yY]\s*=\s*[0-9a-zA-Z()²³^./+−–—\-\s*·×]+/g, stashEq);
     src = src.replace(/[0-9a-zA-Z()²³^./+−–—\-\s*·×]*[xXa-zA-Z](?:²|\^2)[0-9a-zA-Z()²³^./+−–—\-\s*·×=]*/g, stashEq);
-    src = src.replace(/f\s*\(\s*[^()\u05D0-\u05EA]+\s*\)/gi, stash);
+    src = src.replace(/[A-Za-z]\s*\(\s*[^()\u05D0-\u05EA]+\s*\)/g, stash);
     src = src.replace(RE_SLOPE_TEMPLATE, stash);
     src = src.replace(RE_PROD_EQ, stash);
     src = src.replace(RE_LINEAR_EQ, function (chunk, offset, full) {
@@ -628,6 +629,9 @@
     );
     src = src.replace(/(^|[^A-Za-z0-9])(\d+\s*\/\s*\d+)/g, function (_, pre, frac) {
       return pre + stash(frac);
+    });
+    src = src.replace(/(^|[^\w])([A-Za-z])(?=$|[^\w])/g, function (_, pre, letter) {
+      return pre + stash(letter);
     });
     var esc = escapeHtml(src);
     slots.forEach(function (html, i) {

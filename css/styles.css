@@ -435,6 +435,11 @@ button#new-problem {
   background: rgba(18, 21, 28, 0.035);
 }
 
+.steps li.solved-row:last-child {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
 .steps li.keep-row {
   background: rgba(47, 107, 69, 0.12);
   box-shadow: inset 0 0 0 1.5px rgba(47, 107, 69, 0.45);
@@ -949,6 +954,50 @@ code {
 
 .factor-branch-step.is-current {
   background: rgba(18, 21, 28, 0.04);
+}
+
+.factor-branch-field {
+  position: relative;
+  margin-top: 2px;
+}
+
+.factor-branch-math.math-line {
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 2px;
+}
+
+.factor-branch-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  pointer-events: none;
+  font-weight: 700;
+  direction: ltr;
+}
+
+.factor-branch-view.is-empty::before {
+  content: "…";
+  color: #8a9099;
+  font-weight: 600;
+}
+
+.factor-branch-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  direction: ltr;
+  text-align: left;
+  color: transparent;
+  caret-color: #12151c;
 }
 
 .factor-branch-step.is-final {

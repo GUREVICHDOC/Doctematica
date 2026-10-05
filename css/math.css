@@ -608,6 +608,14 @@
   flex-wrap: wrap;
 }
 
+.math-actions > .ineq-key {
+  display: none;
+}
+
+.math-actions.is-ineq-keys > .ineq-key {
+  display: inline-flex;
+}
+
 .math-action {
   display: inline-flex;
   align-items: center;
@@ -1434,4 +1442,286 @@
 
 .steps .q-formula {
   font-size: 1.05rem;
+}
+
+.nline {
+  margin: 0 0 14px;
+  padding: 10px 12px 8px;
+  border: 1px solid #d7d2c8;
+  border-radius: 10px;
+  background: #fbfaf7;
+}
+
+.nline-rows,
+.nline-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.nline-btn.is-on {
+  background: #1f4b3a;
+  color: #fff;
+  border-color: #1f4b3a;
+}
+
+.nline-num {
+  width: 7rem;
+  padding: 6px 8px;
+  border: 1px solid #c8c2b6;
+  border-radius: 8px;
+  font: 600 1rem "Times New Roman", "Frank Ruhl Libre", serif;
+}
+
+.nline-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  touch-action: manipulation;
+}
+
+.nline-axis {
+  stroke: #243126;
+  fill: #243126;
+  stroke-width: 2;
+}
+
+.nline-tick {
+  stroke: #243126;
+  stroke-width: 2;
+}
+
+.nline-label {
+  font: 600 14px "Times New Roman", "Frank Ruhl Libre", serif;
+  fill: #243126;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.nline-frac-num,
+.nline-frac-den {
+  font-size: 13px;
+}
+
+.nline-frac-bar {
+  stroke: #243126;
+  stroke-width: 1.4;
+}
+
+#quad-answer-steps {
+  margin-top: 12px;
+}
+
+.qineq {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #d9d3c7;
+  border-radius: 12px;
+  background: #faf8f4;
+}
+
+.qineq-tools,
+.qineq-signs,
+.qineq-region {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 8px;
+}
+
+.qineq-note {
+  margin: 0 0 8px;
+}
+
+.qineq-label {
+  min-width: 7rem;
+}
+
+.qineq-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.85rem;
+}
+
+.qineq-field input {
+  width: 9rem;
+  padding: 6px 8px;
+  border: 1px solid #c8c2b6;
+  border-radius: 8px;
+  font: 600 1rem "Times New Roman", "Frank Ruhl Libre", serif;
+}
+
+.qineq-stage {
+  direction: ltr;
+}
+
+.qineq-zones {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  min-height: 8.2rem;
+}
+
+.qineq-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  box-sizing: border-box;
+  padding: 4px 6px 8px;
+  min-width: 0;
+}
+
+.qineq-zone + .qineq-zone {
+  border-left: 2px solid #1d4e89;
+}
+
+.qineq-mini {
+  width: 100%;
+  max-width: 5.4rem;
+  padding: 4px 6px;
+  border: 1px solid #c8c2b6;
+  border-radius: 8px;
+  font: 600 0.95rem "Times New Roman", "Frank Ruhl Libre", serif;
+  text-align: center;
+}
+
+.qineq-mini.is-ok,
+.qineq-math.is-ok .qineq-math-view,
+.qineq-math.is-ok .qineq-mini,
+.qineq-signs .nline-btn.is-ok {
+  border-color: #1f6b45;
+  background: #e8f6ee;
+}
+
+.qineq-mini.is-bad,
+.qineq-math.is-bad .qineq-math-view,
+.qineq-math.is-bad .qineq-mini,
+.qineq-signs .nline-btn.is-bad {
+  border-color: #9b2c2c;
+  background: #fdecec;
+}
+
+.qineq-math {
+  width: 100%;
+  max-width: 11rem;
+}
+
+.qineq-math-view {
+  min-height: 1.8rem;
+  padding: 4px 6px;
+  border: 1px solid #c8c2b6;
+  border-radius: 8px;
+  background: #fff;
+  text-align: center;
+  cursor: text;
+  direction: ltr;
+  line-height: 1.6;
+  font-size: 1.05rem;
+}
+
+.qineq-math.is-editing .qineq-math-view {
+  display: none;
+}
+
+.qineq-math:not(.is-editing) .qineq-mini {
+  display: none;
+}
+
+.qineq-math .qineq-mini {
+  max-width: none;
+}
+
+.qineq-num {
+  width: 13rem;
+}
+
+.qineq-sep {
+  stroke: #1d4e89;
+  stroke-width: 2;
+}
+
+.qineq-axis {
+  margin-top: -1px;
+}
+
+.qineq-axis.is-pen {
+  cursor: crosshair;
+}
+
+.qineq-pad {
+  fill: transparent;
+}
+
+.qineq-curve {
+  fill: none;
+  stroke: #1f4b3a;
+  stroke-width: 2.4;
+}
+
+.nline-hit {
+  fill: transparent;
+  stroke: transparent;
+  cursor: pointer;
+}
+
+.nline-hit.is-on {
+  fill: rgba(31, 75, 58, 0.12);
+  stroke: #1f4b3a;
+}
+
+.nline-ray {
+  stroke-width: 4;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.nline-shaft {
+  stroke: transparent;
+  stroke-width: 16;
+  cursor: grab;
+}
+
+.nline-drag {
+  cursor: grab;
+}
+
+.nline-head {
+  cursor: grab;
+}
+
+.nline-a { stroke: #1d4e89; }
+.nline-b { stroke: #9a4d12; }
+.nline-c { stroke: #1f4b3a; }
+.nline-head.nline-a { fill: #1d4e89; }
+.nline-head.nline-b { fill: #9a4d12; }
+.nline-head.nline-c { fill: #1f4b3a; }
+
+.nline-point {
+  stroke-width: 2.4;
+  fill: #fbfaf7;
+}
+
+.nline-point.is-closed { fill: currentColor; }
+.nline-point.nline-a { color: #1d4e89; stroke: #1d4e89; }
+.nline-point.nline-b { color: #9a4d12; stroke: #9a4d12; }
+.nline-point.nline-c { color: #1f4b3a; stroke: #1f4b3a; }
+
+.nline-overlap {
+  stroke: #1f4b3a;
+  stroke-width: 8;
+  stroke-linecap: round;
+  fill: #1f4b3a;
+  opacity: 0.85;
+}
+
+.nline-note {
+  margin: 0;
+  min-height: 1.3em;
+  font-weight: 600;
+  line-height: 1.4;
 }

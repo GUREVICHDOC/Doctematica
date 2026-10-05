@@ -8,7 +8,7 @@
   }
 
   function freshProgress() {
-    return { done: {}, phase: {}, eq: {}, rootKnown: false, vertexKnown: false, axes: {}, regions: {}, got: {} };
+    return { done: {}, phase: {}, eq: {}, params: {}, rootKnown: false, vertexKnown: false, axes: {}, regions: {}, got: {} };
   }
 
   function cloneProgress(progress) {
@@ -452,6 +452,21 @@
 
   function checkZeroTask(pack, progress, task, typed, needPoint) {
     var M = model();
+    if (pack.param && !progress.fnReady) {
+      var readyVal = progress.params && progress.params[pack.param.letter];
+      var wantExpr = readyVal == null ? "" : resolvedExpr(pack.param, readyVal);
+      var yLine = M.parseYValue(typed);
+      var asCall = M.ascii(typed).match(/^[a-z]\(x\)=(.+)$/i);
+      var rhs = yLine ? yLine.rhs : asCall ? asCall[1] : "";
+      if (rhs && wantExpr && M.analyze(rhs) && M.analyze(wantExpr)) {
+        var gotFn = M.analyze(rhs);
+        var wantFn = M.analyze(wantExpr);
+        if (M.near(gotFn.a, wantFn.a) && M.near(gotFn.b, wantFn.b) && M.near(gotFn.c, wantFn.c)) {
+          progress.fnReady = true;
+          return good(progress, pack, "y = " + M.pretty(wantExpr), "הציבו את " + pack.param.letter + " בפונקציה. בנקודת חיתוך עם ציר x מתקיים y = 0.");
+        }
+      }
+    }
     var fn = pack.fn;
     var phase = progress.phase[task.id] || "";
     if (!fn.roots.length) {
@@ -462,7 +477,11 @@
       }
       return bad("לפונקציה הזו אין נקודת אפס. כתבו שאין.");
     }
-    if (fn.degree >= 2) return checkSolve(pack, progress, task, typed, { k: 0, points: needPoint });
+    if (fn.degree >= 2) {
+      var quadZero = checkSolve(pack, progress, task, typed, { k: 0, points: needPoint });
+      if (quadZero && quadZero.ok && pack.param) progress.fnReady = true;
+      return quadZero;
+    }
     var point = readPoint(typed);
     var root = fn.roots[0];
     if (point) {
@@ -858,16 +877,50 @@
     var slots = domainSlots(task, fn);
     var keys = slotKeys(slots);
     var shows = [];
+    var pending = false;
+    var problem = "";
     var i;
     for (i = 0; i < keys.length; i++) {
       var key = keys[i];
+      var heldKey = task.id + ":" + key;
       var text = String(fields[key] || "").trim();
-      if (!text) return bad("מלאו את " + DOMAIN_NAME[key] + ".");
+      var want = asRegionList(slots[key]);
+      if (!text) {
+        if (next.held && next.held[heldKey] && next.held[heldKey].length) {
+          pending = true;
+          continue;
+        }
+        return bad("מלאו את " + DOMAIN_NAME[key] + ".");
+      }
       var list = M.parseRegionList(text);
       if (!list) return bad("ב" + DOMAIN_NAME[key] + " רשמו תחום, למשל x > 3, x < 2 או x > 6, כל x, או אין.");
+      var merged = (next.held && next.held[heldKey] ? next.held[heldKey] : []).concat(list);
+      var cover = M.takeRegions ? M.takeRegions(merged, want) : null;
+      if (cover && cover.complete) {
+        if (next.held) delete next.held[heldKey];
+        shows.push(DOMAIN_SHOW[key] + ": " + M.formatIntervalSet(want));
+        continue;
+      }
+      if (cover && cover.partial) {
+        next.held = next.held || {};
+        next.held[heldKey] = cover.matched;
+        shows.push(DOMAIN_SHOW[key] + ": " + M.formatIntervalSet(cover.matched));
+        pending = true;
+        continue;
+      }
       var why = domainWhy(fn, task, key, list, slots);
-      if (why) return bad(why);
+      if (why) {
+        if (!problem) problem = why;
+        continue;
+      }
       shows.push(DOMAIN_SHOW[key] + ": " + text);
+    }
+    if (pending || problem) {
+      if (!shows.length && problem) return bad(problem);
+      var note = pending ? "התחום נכון. יש עוד תחום." : "";
+      if (problem) note = note ? note + " " + problem : problem;
+      if (pending) return good(next, pack, shows.join(", "), note);
+      return bad(problem);
     }
     var bag = {};
     keys.forEach(function (key) { bag[key] = true; });
@@ -2151,6 +2204,283 @@
     return good(progress, pack, yn ? "כן" : "לא", whyClaim);
   }
 
+  function algebraApi() {
+    return global.DoctematicaAlgebra;
+  }
+
+  function asciiNum(n) {
+    return String(n).replace(/−/g, "-");
+  }
+
+  function eqKey(text) {
+    return model().ascii(text).replace(/²/g, "^2").toLowerCase();
+  }
+
+  function plugX(expr, x) {
+    var A = algebraApi();
+    return A && A.plugLetter ? A.plugLetter(expr, "x", x) : expr;
+  }
+
+  function grindEq(text) {
+    var A = algebraApi();
+    var cur = String(text || "");
+    var guard = 0;
+    while (A && guard++ < 8) {
+      var act = A.nextParamAction(cur, { target: "x" });
+      if (!act || !act.eq || act.done) break;
+      if (!/מחשבים|מאחדים את המספרים/.test(act.explain || "")) break;
+      cur = act.eq;
+    }
+    return cur;
+  }
+
+  function sameParamEq(a, b, letter) {
+    if (!a || !b) return false;
+    if (eqKey(grindEq(a)) === eqKey(grindEq(b))) return true;
+    var A = algebraApi();
+    if (!A) return false;
+    try {
+      var chk = A.checkStep(grindEq(a), grindEq(b), { target: letter });
+      return !!(chk && chk.ok);
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function bindValue(expr, letter, pt) {
+    var A = algebraApi();
+    if (!A) return null;
+    var cur = asciiNum(pt.y) + "=" + plugX(expr, pt.x);
+    var guard = 0;
+    while (guard++ < 14) {
+      var act = A.nextParamAction(cur, { target: letter });
+      if (!act || !act.eq || act.done) return null;
+      var chk = A.checkStep(cur, act.eq, { target: letter });
+      if (!chk || !chk.ok) return null;
+      cur = act.eq;
+      if (chk.solved) {
+        var rhs = model().ascii(cur).split("=").pop();
+        return model().evalNumeric(rhs);
+      }
+    }
+    return null;
+  }
+
+  function paramBinds(param) {
+    return (param.points || []).map(function (pt) {
+      return { pt: pt, value: bindValue(param.expr, param.letter, pt) };
+    });
+  }
+
+  function informativeBind(param) {
+    var found = (param.binds || []).filter(function (b) { return b.value != null; })[0];
+    return found || null;
+  }
+
+  function fnName(param) {
+    return param && param.name && param.name !== "y" ? param.name : "";
+  }
+
+  function openingEq(param, pt) {
+    var rhs = plugX(param.expr, pt.x);
+    var name = fnName(param);
+    if (name) return name + "(" + asciiNum(pt.x) + ")=" + rhs;
+    return asciiNum(pt.y) + "=" + rhs;
+  }
+
+  function fullPlug(param, pt) {
+    return asciiNum(pt.y) + "=" + plugX(param.expr, pt.x);
+  }
+
+  function callPlug(param, pt) {
+    var name = fnName(param);
+    if (!name) return null;
+    return name + "(" + asciiNum(pt.x) + ")=" + plugX(param.expr, pt.x);
+  }
+
+  function resolvedExpr(param, value) {
+    var A = algebraApi();
+    var raw = A && A.plugLetter ? A.plugLetter(param.expr, param.letter, value) : param.expr;
+    raw = String(raw)
+      .replace(/\+\(-(\d+(?:\.\d+)?)\)/g, "-$1")
+      .replace(/^\(-(\d+(?:\.\d+)?)\)/, "-$1")
+      .replace(/\(-(\d+(?:\.\d+)?)\)([a-z])/gi, "-$1$2");
+    var fn = model().analyze(raw);
+    return fn ? fn.expr : raw;
+  }
+
+  function readIsolated(text, letter) {
+    var s = model().ascii(text);
+    var m = s.match(new RegExp("^" + letter + "=([\\d./()+-]+)$", "i"));
+    if (!m) return null;
+    return model().evalNumeric(m[1]);
+  }
+
+  function finishParam(progress, task, letter, value, show) {
+    progress.params = progress.params || {};
+    progress.params[letter] = value;
+    progress.done[task.id] = true;
+    progress.phase[task.id] = "done";
+    progress.eq[task.id] = show;
+    return value;
+  }
+
+  function uninformative(progress, pack, task, letter) {
+    progress.phase[task.id] = "idle";
+    progress.idlePoint = true;
+    if (progress.eq) delete progress.eq[task.id];
+    return good(
+      progress,
+      pack,
+      "0 = 0",
+      "ההצבה נכונה, אבל לאחר ההצבה התקבל 0 = 0 ולכן לא נשאר מידע על " + letter + ". נסו להשתמש בנקודת החיתוך השנייה שמופיעה בגרף."
+    );
+  }
+
+  function checkParamPoint(pack, progress, task, typed) {
+    var M = model();
+    var A = algebraApi();
+    var P = pack.param;
+    if (!P || !A) return bad("לא הצלחתי לקרוא את הפונקציה.");
+    var letter = P.letter;
+    var text = String(typed || "").trim();
+    var cur = progress.eq && progress.eq[task.id];
+    if (cur) {
+      var act = A.nextParamAction(cur, { target: letter });
+      var chk = null;
+      if (act && act.eq && eqKey(act.eq) === eqKey(text)) chk = A.checkStep(cur, act.eq, { target: letter });
+      if (!chk) chk = A.checkStep(cur, text, { target: letter });
+      if (!chk || !chk.ok) return bad((chk && chk.message) || "הצעד לא שקול למשוואה.");
+      var shown = act && act.eq && eqKey(act.eq) === eqKey(text) ? act.eq : text;
+      var why = act && act.eq && eqKey(act.eq) === eqKey(text) ? act.explain : chk.message;
+      if (chk.solved) {
+        var found = readIsolated(shown, letter);
+        if (found == null) found = readIsolated(text, letter);
+        if (found == null) return bad("בודדו את " + letter + ".");
+        finishParam(progress, task, letter, found, letter + "=" + asciiNum(found));
+        return good(progress, pack, M.pretty(letter + "=" + asciiNum(found)), why || "זהו הפתרון.");
+      }
+      var ground = grindEq(shown);
+      if (!new RegExp(letter, "i").test(M.ascii(shown)) && sameParamEq(ground, "0=0", letter)) {
+        return uninformative(progress, pack, task, letter);
+      }
+      progress.eq[task.id] = shown;
+      progress.phase[task.id] = "eq";
+      progress.idlePoint = false;
+      return good(progress, pack, M.pretty(shown), why || "צעד חוקי.");
+    }
+    var point = readPoint(text);
+    if (point) {
+      var named = (P.binds || []).filter(function (b) {
+        return M.near(b.pt.x, point.x) && M.near(b.pt.y, point.y);
+      })[0];
+      if (!named) return bad("הנקודה הזו אינה נתונה על הגרף.");
+      progress.phase[task.id] = "picked";
+      progress.picked = { x: point.x, y: point.y };
+      progress.idlePoint = false;
+      if (named.value == null) {
+        return good(progress, pack, pairText(point.x, point.y), "הנקודה נמצאת על הגרף. הציבו את שיעוריה בפונקציה. שימו לב: ייתכן שהיא לא תקבע את " + letter + ".");
+      }
+      return good(progress, pack, pairText(point.x, point.y), "הציבו x = " + M.fmt(point.x) + " ו־y = " + M.fmt(point.y) + " במשוואת הפונקציה.");
+    }
+    var callHead = fnName(P) ? M.ascii(text).match(/^([a-z])\(([^)]+)\)=(.+)$/i) : null;
+    var called = callHead && callHead[1].toLowerCase() === fnName(P).toLowerCase()
+      ? (P.points || []).filter(function (pt) {
+          return eqKey(callHead[2]) === eqKey(asciiNum(pt.x)) && sameParamEq("0=" + callHead[3], "0=" + plugX(P.expr, pt.x), letter);
+        })[0]
+      : null;
+    if (called) {
+      progress.phase[task.id] = "call";
+      return good(progress, pack, M.pretty(text), "מציבים x = " + M.fmt(called.x) + " בפונקציה.");
+    }
+    var yLeft = M.parseYValue(text);
+    var yPoint = yLeft && (P.points || []).filter(function (pt) { return sameParamEq(text, "y=" + plugX(P.expr, pt.x), letter); })[0];
+    if (yPoint) {
+      return bad("הצבתם את x = " + M.fmt(yPoint.x) + ", אבל עדיין לא הצבתם את y = " + M.fmt(yPoint.y) + ".");
+    }
+    var barePowPt = (P.points || []).filter(function (pt) { return pt.x < 0 && M.bareNegativePower(text, pt.x); })[0];
+    if (barePowPt) {
+      return bad("מספר שלילי בחזקה נכתב בסוגריים בבסיס: (" + M.fmt(barePowPt.x) + ")².");
+    }
+    var matched = (P.binds || []).filter(function (b) { return sameParamEq(text, fullPlug(P, b.pt), letter); })[0];
+    if (!matched) {
+      var swapped = (P.points || []).filter(function (pt) {
+        return sameParamEq(text, asciiNum(pt.x) + "=" + plugX(P.expr, pt.y), letter);
+      })[0];
+      if (swapped) return bad("הצבתם את x במקום y, או את y במקום x. x = " + M.fmt(swapped.x) + " ו־y = " + M.fmt(swapped.y) + ".");
+      if (P.points.length === 1 && !new RegExp(letter, "i").test(M.ascii(text)) && !/^[a-z]=/i.test(M.ascii(text))) {
+        return bad("הנתון הוא ערך של x, לא של " + letter + ".");
+      }
+      var diag = null;
+      (P.binds || []).some(function (b) {
+        var verdict = A.checkStep(fullPlug(P, b.pt), text, { target: letter });
+        if (verdict && !verdict.ok && verdict.errorId) {
+          diag = verdict;
+          return true;
+        }
+        return false;
+      });
+      if (diag) return bad(diag.message);
+      return bad("הציבו את שיעורי הנקודה בפונקציה.");
+    }
+    if (matched.value == null && !new RegExp(letter, "i").test(M.ascii(text))) {
+      return uninformative(progress, pack, task, letter);
+    }
+    var solvedNow = A.checkStep(fullPlug(P, matched.pt), text, { target: letter });
+    if (solvedNow && solvedNow.ok && solvedNow.solved) {
+      finishParam(progress, task, letter, matched.value, letter + "=" + asciiNum(matched.value));
+      return good(progress, pack, M.pretty(letter + "=" + asciiNum(matched.value)), solvedNow.message || "זהו הפתרון.");
+    }
+    var wasCall = progress.phase[task.id] === "call";
+    progress.eq[task.id] = text;
+    progress.phase[task.id] = "eq";
+    progress.idlePoint = false;
+    var openWhy = wasCall
+      ? fnName(P) + "(" + M.fmt(matched.pt.x) + ") = " + M.fmt(matched.pt.y) + ", ולכן מציבים " + M.fmt(matched.pt.y) + "."
+      : "נקודה על גרף הפונקציה מקיימת את משוואת הפונקציה, ולכן מציבים x = " + M.fmt(matched.pt.x) + " ו־y = " + M.fmt(matched.pt.y) + ".";
+    return good(progress, pack, M.pretty(text), openWhy);
+  }
+
+  function checkParamApply(pack, progress, task, typed) {
+    var M = model();
+    var P = pack.param;
+    var letter = P.letter;
+    var value = progress.params && progress.params[letter];
+    if (value == null) return bad("קודם מצאו את " + letter + ".");
+    var text = String(typed || "").trim();
+    var bare = M.bareNumber(text);
+    if ((bare != null && M.near(bare, value)) || new RegExp("^" + letter + "=", "i").test(M.ascii(text))) {
+      return bad("כתבו את משוואת הפונקציה, לא רק את ערך " + letter + ".");
+    }
+    var rhs = null;
+    var call = M.ascii(text).match(/^[a-z]\(([^)]*)\)=(.+)$/i);
+    var yLine = M.parseYValue(text);
+    if (call) rhs = call[2];
+    else if (yLine) rhs = yLine.rhs;
+    if (rhs == null) return bad("כתבו את משוואת הפונקציה, לא רק את ערך " + letter + ".");
+    if (new RegExp(letter, "i").test(rhs)) {
+      return bad("התבקשתם לכתוב את הפונקציה בלי הפרמטר " + letter + ".");
+    }
+    var want = M.analyze(resolvedExpr(P, value));
+    var got = M.analyze(rhs);
+    if (!want || !got) return bad("לא הצלחתי לקרוא את הפונקציה.");
+    var name = fnName(P) || "y";
+    var shown = (fnName(P) ? name + "(x)" : "y") + " = " + M.pretty(want.expr);
+    if (M.near(got.a, want.a) && M.near(got.b, want.b) && M.near(got.c, want.c)) {
+      progress.done[task.id] = true;
+      progress.phase[task.id] = "done";
+      progress.fnReady = true;
+      return good(progress, pack, shown, "מציבים את הערך של " + letter + " במשוואת הפונקציה.");
+    }
+    if (M.near(got.a, want.a) && M.near(got.b, want.b) && !M.near(got.c, want.c)) {
+      return bad("האיבר הקבוע לא משתנה. מציבים רק את " + letter + ".");
+    }
+    if (want.degree >= 1 && M.near0(got.a) && M.near0(got.b)) {
+      return bad("אחרי שמציבים את " + letter + " נשאר x. כתבו את האיבר עם x.");
+    }
+    return bad(letter + " הוא המקדם של x. הציבו את הערך שמצאתם במקום " + letter + ", לא במקום אחר.");
+  }
+
   function dispatch(pack, progress, typed) {
     var task = currentTask(pack, progress);
     if (!task) return bad("סיימתם את התרגיל.");
@@ -2173,6 +2503,8 @@
     if (task.kind === "fnRangeClaim") return checkRangeClaim(pack, progress, task, text);
     if (task.kind === "fnOn") return checkOn(pack, progress, task, text);
     if (task.kind === "fnClaim") return checkClaim(pack, progress, task, text);
+    if (task.kind === "paramPoint") return checkParamPoint(pack, progress, task, text);
+    if (task.kind === "paramApply") return checkParamApply(pack, progress, task, text);
     return bad("הסעיף הזה עדיין לא נתמך.");
   }
 
@@ -2339,10 +2671,45 @@
     return null;
   }
 
+  function nextParamPointLine(pack, progress, task) {
+    var P = pack.param;
+    var phase = (progress.phase && progress.phase[task.id]) || "";
+    var eq = progress.eq && progress.eq[task.id];
+    var A = algebraApi();
+    if (!eq) {
+      var info = informativeBind(P);
+      var pt = progress.picked || (info ? info.pt : (P.points || [])[0]);
+      if (!pt) return null;
+      if (phase === "call" || (fnName(P) && phase !== "picked")) {
+        if (phase === "call") return fullPlug(P, pt);
+        if (fnName(P) && phase !== "picked") return openingEq(P, pt);
+      }
+      return fullPlug(P, pt);
+    }
+    if (!A) return null;
+    var act = A.nextParamAction(eq, { target: P.letter });
+    if (!act || !act.eq || act.done) return null;
+    return act.eq;
+  }
+
+  function nextParamApplyLine(pack, progress) {
+    var P = pack.param;
+    var value = progress.params && progress.params[P.letter];
+    if (value == null) return null;
+    var expr = model().pretty(resolvedExpr(P, value)).replace(/\s+/g, "");
+    return (fnName(P) ? fnName(P) + "(x)" : "y") + "=" + expr;
+  }
+
   function nextLine(pack, progress) {
     var M = model();
     var task = currentTask(pack, cloneProgress(progress));
     if (!task) return null;
+    if (task.kind === "paramPoint") return nextParamPointLine(pack, progress, task);
+    if (task.kind === "paramApply") return nextParamApplyLine(pack, progress);
+    if (task.kind === "fnZero" && pack.param && !progress.fnReady) {
+      var readyVal = progress.params && progress.params[pack.param.letter];
+      if (readyVal != null) return "y=" + model().pretty(resolvedExpr(pack.param, readyVal)).replace(/\s+/g, "");
+    }
     var fn = pack.fn;
     var phase = (progress.phase && progress.phase[task.id]) || "";
     if (task.kind === "fnValue" || task.kind === "fnPoint") {
@@ -2499,12 +2866,72 @@
     return null;
   }
 
+  function paramPointHints(pack, progress, task) {
+    var M = model();
+    var P = pack.param;
+    var phase = ((progress && progress.phase) || {})[task.id] || "";
+    var eq = progress && progress.eq && progress.eq[task.id];
+    var letter = P.letter;
+    if (progress && progress.idlePoint) {
+      return ["הנקודה שבחרתם אכן נמצאת על הגרף, אבל היא אינה מאפשרת לקבוע את " + letter + ". השתמשו בנקודת החיתוך השנייה."];
+    }
+    if (eq) {
+      var A = algebraApi();
+      var act = A && A.nextParamAction(eq, { target: letter });
+      if (act && act.hints && act.hints.length) return act.hints;
+      if (/\^|²/.test(model().ascii(eq))) return ["חשבו את החזקה. מספר שלילי נכתב בסוגריים בבסיס."];
+      return ["כעת נותרה משוואה שבה " + letter + " הוא הנעלם. פתרו אותה."];
+    }
+    if (phase === "picked" && progress.picked) {
+      return ["הציבו x = " + M.fmt(progress.picked.x) + " ו־y = " + M.fmt(progress.picked.y) + " במשוואת הפונקציה."];
+    }
+    if (phase === "call") {
+      var pt = (P.points || [])[0];
+      return [fnName(P) + "(" + M.fmt(pt.x) + ") = " + M.fmt(pt.y) + ". הציבו את הערך באגף השמאלי."];
+    }
+    if (P.fromGraph) {
+      return [
+        "חפשו בגרף נקודה שאת שיעוריה אפשר לדעת בוודאות.",
+        "נקודות החיתוך עם ציר x הן נקודות שבהן y = 0.",
+      ];
+    }
+    var only = (P.points || [])[0];
+    if (!only) return ["הציבו את הנקודה הנתונה בפונקציה."];
+    if (fnName(P)) {
+      return [
+        "נתון " + fnName(P) + "(" + M.fmt(only.x) + ") = " + M.fmt(only.y) + ". התחילו בהצבת x בפונקציה.",
+        "אפשר גם להציב מיד את הנקודה (" + M.fmt(only.x) + "," + M.fmt(only.y) + ").",
+      ];
+    }
+    return [
+      "אם הנקודה (" + M.fmt(only.x) + "," + M.fmt(only.y) + ") נמצאת על הגרף, אפשר להציב את שיעורי הנקודה בפונקציה.",
+      "הציבו x = " + M.fmt(only.x) + " ו־y = " + M.fmt(only.y) + ".",
+    ];
+  }
+
+  function hintsFor(pack, progress) {
+    var task = currentTask(pack, progress || freshProgress());
+    if (!task) return ["סיימתם את התרגיל."];
+    if (task.kind === "paramPoint") return paramPointHints(pack, progress || freshProgress(), task);
+    return [hintFor(pack, progress)];
+  }
+
   function hintFor(pack, progress) {
     var M = model();
     var task = currentTask(pack, progress || freshProgress());
     if (!task) return "סיימתם את התרגיל.";
     var fn = pack.fn;
     var phase = ((progress && progress.phase) || {})[task.id] || "";
+    if (task.kind === "paramPoint") return paramPointHints(pack, progress, task)[0];
+    if (task.kind === "paramApply") {
+      return "כבר מצאתם את " + pack.param.letter + ". הציבו את הערך שמצאתם במקום " + pack.param.letter + " במשוואת הפונקציה.";
+    }
+    if (task.kind === "fnZero" && pack.param && !progress.fnReady) {
+      return "הציבו את " + pack.param.letter + " בפונקציה. עכשיו יש לכם פונקציה ללא פרמטרים.";
+    }
+    if (task.kind === "fnZero" && pack.param && progress.fnReady && !(progress.eq && progress.eq[task.id])) {
+      return "בנקודת חיתוך עם ציר x מתקיים y = 0.";
+    }
     if (task.kind === "fnValue") {
       if (phase === "plug") return "חשבו את האגף הימני.";
       return "הציבו את " + M.fmt(task.at) + " במקום x, ורשמו f(" + M.fmt(task.at) + ").";
@@ -2717,7 +3144,7 @@
     }
     return {
       stem: pack.stem || "",
-      fnText: "f(x) = " + M.pretty(pack.fn.expr),
+      fnText: pack.display || ("f(x) = " + M.pretty(pack.fn.expr)),
       part: part ? { label: part.label || "", text: (part.text || "") + (task && task.prompt ? " " + task.prompt : "") } : null,
       focusKind: task ? task.kind : "",
       sketch: input === "sketch",
@@ -2733,7 +3160,31 @@
     };
   }
 
+  function paramDisplay(param) {
+    var expr = model().pretty(param.expr);
+    if (param.name && param.name !== "y") return param.name + "(x) = " + expr;
+    return "y = " + expr;
+  }
+
   function prepare(ex) {
+    if (ex && ex.param && ex.param.expr) {
+      var param = ex.param;
+      param.binds = paramBinds(param);
+      var info = informativeBind(param);
+      var fn = info ? model().analyze(resolvedExpr(param, info.value)) : null;
+      if (!fn) return null;
+      return {
+        fn: fn,
+        display: paramDisplay(param),
+        param: param,
+        stem: (ex && ex.stem) || "",
+        marks: (ex && ex.marks) || null,
+        graph: !!(ex && ex.graph),
+        labels: (ex && ex.labels) || null,
+        parts: (ex && ex.parts) || [],
+        tasks: (ex && ex.tasks) || [],
+      };
+    }
     var fn = model().analyze(ex && ex.fn);
     if (!fn) return null;
     return {
@@ -2829,6 +3280,7 @@
     freshProgress: freshProgress,
     viewFor: viewFor,
     hintFor: hintFor,
+    hintsFor: hintsFor,
     nextLine: nextLine,
     checkTyped: checkTyped,
     checkDomainFields: checkDomainFields,

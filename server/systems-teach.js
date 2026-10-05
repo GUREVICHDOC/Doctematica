@@ -113,6 +113,40 @@ function collectDistributes(Sys, text) {
   return hits;
 }
 
+function improperMixed(wholeStr, numStr, denStr) {
+  var whole = parseInt(wholeStr, 10);
+  var num = parseInt(numStr, 10);
+  var den = parseInt(denStr, 10);
+  if (!den) return null;
+  var sign = whole < 0 ? -1 : 1;
+  var imp = sign * (Math.abs(whole) * den + num);
+  var body = den === 1 ? String(Math.abs(imp)) : Math.abs(imp) + "/" + den;
+  var shown = (imp < 0 ? "-" : "") + body;
+  return shown.indexOf("/") >= 0 ? "(" + shown + ")" : shown;
+}
+
+function mixedNumberStep(text) {
+  var count = 0;
+  var next = String(text || "").replace(/(-?\d+)\s+(\d+)\s*\/\s*(\d+)/g, function (_m, w, n, d) {
+    var imp = improperMixed(w, n, d);
+    if (imp == null) return _m;
+    count += 1;
+    return imp;
+  });
+  next = next.replace(/\((-?\d+)\+(\d+)\/(\d+)\)/g, function (_m, w, n, d) {
+    var imp = improperMixed(w, n, d);
+    if (imp == null) return _m;
+    count += 1;
+    return imp;
+  });
+  if (!count || next.replace(/\s+/g, "") === String(text || "").replace(/\s+/g, "")) return null;
+  return {
+    eq: next.replace(/\s*=\s*/, "=").replace(/\s+/g, ""),
+    hint: "המירו את המספרים המעורבים לשברים מדומים.",
+    reason: "ממירים מספר מעורב לשבר מדומה: כופלים את השלם במכנה ומוסיפים את המונה.",
+  };
+}
+
 function expandStep(Sys, text) {
   var src = String(text || "").replace(/\s+/g, "");
   var hits = collectDistributes(Sys, src);
@@ -417,6 +451,8 @@ function nextAlgebra(Sys, Algebra, text, goal) {
   if (term) return { already: true, terminal: term };
   if (goalMet(Sys, Algebra, text, goal)) return { already: true };
 
+  var mixed = mixedNumberStep(text);
+  if (mixed) return withTerminal(Sys, text, mixed);
   var expanded = expandStep(Sys, text);
   if (expanded) return withTerminal(Sys, text, expanded);
   var product = productStep(Sys, text);
@@ -664,6 +700,8 @@ function arrangeStep(Sys, text) {
     var denom = Sys.numericDenomStep(text);
     if (denom && denom.eq) return withTerminal(Sys, text, denom);
   }
+  var mixed = mixedNumberStep(text);
+  if (mixed) return withTerminal(Sys, text, mixed);
   var expanded = expandStep(Sys, text);
   if (expanded) return withTerminal(Sys, text, expanded);
   var product = productStep(Sys, text);

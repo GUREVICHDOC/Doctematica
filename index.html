@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="css/coord-board.css" />
     <link rel="stylesheet" href="css/fn-sketch.css?v=9" />
     <link rel="stylesheet" href="css/line-match.css" />
-    <link rel="stylesheet" href="css/shell.css?v=15" />
+    <link rel="stylesheet" href="css/shell.css?v=17" />
   </head>
   <body class="is-pick">
     <div class="scene" aria-hidden="true">
@@ -191,12 +191,17 @@
                 <div id="line-match-panel" class="line-match-panel hidden" aria-label="שיוך משוואות לישרים"></div>
                 <ol class="steps hidden" id="steps" aria-label="צעדי המשוואה"></ol>
                 <div id="fn-sketch-slot" class="fn-sketch-slot"></div>
+                <ol class="steps hidden" id="steps-follow" aria-label="סעיפי המשך"></ol>
+                <div id="number-line" class="nline hidden" aria-label="ציר מספרים"></div>
+                <div id="quad-ineq" class="qineq hidden" aria-label="ניתוח סימנים"></div>
+                <ol class="steps hidden" id="quad-answer-steps" aria-label="פתרון אי־השוויון"></ol>
                 <div id="lcd-guide" class="lcd-guide hidden"></div>
                 <div id="factor-guide" class="factor-guide hidden"></div>
                 <div id="sys-guide" class="sys-guide hidden"></div>
                 <form id="answer-form">
                   <label id="answer-label">התשובה שלך</label>
                   <div id="fn-domains" class="fn-domains hidden"></div>
+                  <div id="fn-extrema" class="fn-extrema hidden"></div>
                   <div id="fn-axes" class="fn-axis-board hidden"></div>
                   <div id="fn-choice" class="fn-choice hidden"></div>
                   <div id="domain-guide" class="domain-guide hidden"></div>
@@ -235,6 +240,7 @@
                   <button type="button" class="ghost hidden" id="split-eqs-btn">חילוק למשוואות</button>
                   <button type="button" class="ghost hidden" id="use-formula-btn">נוסחת שורשים</button>
                   <button type="button" class="ghost hidden" id="md53-btn">md53</button>
+                  <button type="button" class="ghost hidden" id="nline-btn">שרטוט תחומים</button>
                   <button type="button" class="ghost" id="hint-btn">רמז</button>
                   <button type="button" class="ghost" id="one-step-btn">צעד אחד</button>
                   <button type="button" class="ghost" id="show-solution">פתרון מלא</button>
@@ -253,9 +259,11 @@
     </div>
     <script src="js/geo/draw.js"></script>
     <script src="js/coord-board.js"></script>
-    <script src="js/fn-sketch.js?v=9"></script>
+    <script src="js/fn-sketch.js?v=15"></script>
     <script src="js/math-render.js"></script>
     <script src="js/math-field.js"></script>
+    <script src="js/number-line.js"></script>
+    <script src="js/quad-ineq-board.js"></script>
     <script src="js/client-ui.js"></script>
     <script src="js/app.js"></script>
     <script src="js/session.js"></script>

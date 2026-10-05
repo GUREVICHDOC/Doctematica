@@ -126,6 +126,167 @@
     return null;
   }
 
+  function normRaw(text) {
+    return String(text || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/[×·]/g, "*")
+      .replace(/\s+/g, "");
+  }
+
+  function splitInnerTerms(inner) {
+    var s = String(inner || "").replace(/[−–—]/g, "-");
+    var terms = [];
+    var start = 0;
+    var i;
+    for (i = 1; i < s.length; i++) {
+      var c = s.charAt(i);
+      var prev = s.charAt(i - 1);
+      if ((c === "+" || c === "-") && prev !== "*" && prev !== "/" && prev !== "(") {
+        terms.push(s.slice(start, i));
+        start = i;
+      }
+    }
+    terms.push(s.slice(start));
+    return terms.filter(function (t) {
+      return t && t !== "+" && t !== "-";
+    });
+  }
+
+  function parseBinTerm(term) {
+    var t = String(term || "").replace(/\s+/g, "");
+    var sign = 1;
+    if (t.charAt(0) === "+") t = t.slice(1);
+    else if (t.charAt(0) === "-") {
+      sign = -1;
+      t = t.slice(1);
+    }
+    var mx = t.match(/^(\d*)x$/i);
+    if (mx) return { x: true, n: sign * (mx[1] ? parseInt(mx[1], 10) : 1) };
+    var mc = t.match(/^(\d+)(?:\/(\d+))?$/);
+    if (!mc) return null;
+    var mag = mc[2] ? Number(mc[1]) / Number(mc[2]) : Number(mc[1]);
+    return { x: false, n: sign * mag, factor: mc[2] ? mc[1] + "/" + mc[2] : mc[1] };
+  }
+
+  function formatBin(terms) {
+    var s = "";
+    var i;
+    for (i = 0; i < terms.length; i++) {
+      var n = terms[i].n;
+      var abs = Math.abs(n);
+      var body = terms[i].x ? (near(abs, 1) ? "x" : fmtN(abs) + "x") : fmtN(abs);
+      if (i === 0) s += (n < 0 ? "-" : "") + body;
+      else s += (n < 0 ? "-" : "+") + body;
+    }
+    return s;
+  }
+
+  function showCoef(n) {
+    return (n < 0 ? "−" : "") + fmtN(Math.abs(n));
+  }
+
+  function findDistribGroups(eq) {
+    var src = normRaw(eq);
+    var re = /([+-]?)(\d*)\(([^()]+)\)/g;
+    var groups = [];
+    var m;
+    while ((m = re.exec(src))) {
+      var inner = m[3];
+      if (/^\d+\+\d+\/\d+$/.test(inner)) continue;
+      if (!/[+-]/.test(inner.replace(/^-/, ""))) continue;
+      var parts = splitInnerTerms(inner);
+      var terms = [];
+      var ok = true;
+      var i;
+      for (i = 0; i < parts.length; i++) {
+        var one = parseBinTerm(parts[i]);
+        if (!one) ok = false;
+        else terms.push(one);
+      }
+      if (!ok || terms.length < 2) continue;
+      var sign = m[1] === "-" ? -1 : 1;
+      var mag = m[2] === "" ? 1 : parseInt(m[2], 10);
+      groups.push({
+        start: m.index,
+        end: m.index + m[0].length,
+        k: sign * mag,
+        terms: terms,
+      });
+    }
+    return { src: src, groups: groups };
+  }
+
+  function scaledTerms(group, mode) {
+    return group.terms.map(function (term) {
+      var n = group.k * term.n;
+      if (mode === "partialC" && !term.x) n = term.n;
+      if (mode === "partialX" && term.x) n = term.n;
+      if (mode === "signC" && !term.x) n = -(group.k * term.n);
+      return { x: term.x, n: n };
+    });
+  }
+
+  function sameParsed(a, b) {
+    return (
+      near(a.left.a, b.left.a) &&
+      near(a.left.b, b.left.b) &&
+      near(a.right.a, b.right.a) &&
+      near(a.right.b, b.right.b)
+    );
+  }
+
+  function distributionMistake(prevText, nextText) {
+    var Alg = global.DoctematicaAlgebra;
+    if (!Alg || typeof Alg.parseEquation !== "function") return null;
+    var found = findDistribGroups(prevText);
+    if (!found.groups.length) return null;
+    var student;
+    try {
+      student = Alg.parseEquation(nextText);
+    } catch (err) {
+      return null;
+    }
+    var modes = ["partialC", "partialX", "signC"];
+    var gi;
+    var mi;
+    for (gi = 0; gi < found.groups.length; gi++) {
+      for (mi = 0; mi < modes.length; mi++) {
+        var mode = modes[mi];
+        var built = found.src;
+        var i;
+        for (i = found.groups.length - 1; i >= 0; i--) {
+          var use = i === gi ? mode : "correct";
+          var body = formatBin(scaledTerms(found.groups[i], use));
+          var g = found.groups[i];
+          built = built.slice(0, g.start) + body + built.slice(g.end);
+        }
+        var parsed;
+        try {
+          parsed = Alg.parseEquation(built);
+        } catch (err2) {
+          continue;
+        }
+        if (!sameParsed(student, parsed)) continue;
+        var group = found.groups[gi];
+        var kShow = showCoef(group.k);
+        if (mode === "signC") {
+          var bits = [];
+          var t;
+          for (t = 0; t < group.terms.length; t++) {
+            if (group.terms[t].x) continue;
+            var prod = group.k * group.terms[t].n;
+            bits.push(kShow + "·" + fmtN(Math.abs(group.terms[t].n)) + "=" + showCoef(prod));
+          }
+          if (!bits.length) continue;
+          return { id: "distribute", message: bits.join(", ") + "." };
+        }
+        var word = group.terms.length === 2 ? "שני האיברים" : "כל האיברים";
+        return { id: "distribute", message: "צריך לכפול את " + word + " ב־" + kShow + "." };
+      }
+    }
+    return null;
+  }
+
   function classify(prevEq, nextEq) {
     var a = pack(prevEq);
     var b = pack(nextEq);
@@ -167,5 +328,6 @@
 
   global.DoctematicaErrors = {
     classify: classify,
+    distributionMistake: distributionMistake,
   };
 })(window);

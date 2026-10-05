@@ -221,6 +221,19 @@ body.is-pick .d-line-r { opacity: 0; }
 
 body.is-solve:not(.nav-open) .picker { gap: 0; }
 
+body.is-solve .picker {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  inset-inline-start: 0;
+  max-height: calc(100dvh - 132px);
+}
+
+body.is-solve .solve-stage {
+  width: auto;
+  margin-inline-start: 82px;
+}
+
 .nav-col {
   width: 262px;
   flex: 0 0 262px;
@@ -406,7 +419,7 @@ body.is-solve.nav-open #nav-toggle {
   z-index: 4;
   border: 0;
   padding: 0;
-  background: rgba(0, 0, 0, 0.34);
+  background: transparent;
   cursor: pointer;
 }
 
@@ -599,16 +612,6 @@ body.is-pick .solve-stage { display: none; }
   outline-offset: 2px;
 }
 
-@media (max-width: 1180px) {
-  body.is-solve.nav-open .picker {
-    position: absolute;
-    top: 0;
-    inset-inline-end: 0;
-    z-index: 6;
-    max-height: calc(100dvh - 96px);
-    padding-inline-end: 8px;
-  }
-}
 
 @media (max-width: 860px) {
   .topbar { padding: 16px 14px 4px; }
@@ -637,10 +640,14 @@ body.is-pick .solve-stage { display: none; }
     overflow: hidden;
   }
 
-  body.is-solve.nav-open .picker {
+  body.is-solve .picker {
     position: relative;
     inset: auto;
     max-height: none;
+  }
+
+  body.is-solve .solve-stage {
+    margin-inline-start: 0;
   }
 
   body.is-solve:not(.nav-open) .picker { flex-direction: row; }

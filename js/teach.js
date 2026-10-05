@@ -136,6 +136,87 @@
     return "אחדו איברים דומים " + where + ".";
   }
 
+  function pureTermValue(term) {
+    var t = String(term || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "");
+    if (/x/i.test(t)) return null;
+    var sign = 1;
+    if (t.charAt(0) === "+") t = t.slice(1);
+    else if (t.charAt(0) === "-") {
+      sign = -1;
+      t = t.slice(1);
+    }
+    if (t.charAt(0) === "(" && t.charAt(t.length - 1) === ")") t = t.slice(1, -1);
+    var fr = t.match(/^(\d+)\/(\d+)$/);
+    if (fr) return sign * (Number(fr[1]) / Number(fr[2]));
+    if (/^\d+(?:\.\d+)?$/.test(t)) return sign * Number(t);
+    return null;
+  }
+
+  function constChains(side) {
+    var terms = splitRawTerms(side);
+    var chains = [];
+    var buf = [];
+    function flush() {
+      if (buf.length >= 2) chains.push(buf.slice());
+      buf = [];
+    }
+    var i;
+    for (i = 0; i < terms.length; i++) {
+      if (pureTermValue(terms[i]) != null) buf.push(terms[i]);
+      else flush();
+    }
+    flush();
+    return chains;
+  }
+
+  function constChainCount(side) {
+    return constChains(side).length;
+  }
+
+  function showChainTerm(term, first) {
+    var t = String(term || "")
+      .replace(/-/g, "−")
+      .replace(/\s+/g, "");
+    if (first && t.charAt(0) === "+") t = t.slice(1);
+    if (!first && t.charAt(0) !== "+" && t.charAt(0) !== "−") t = "+" + t;
+    return t;
+  }
+
+  function numericSumPhrase(sides) {
+    var bits = [];
+    function add(side) {
+      var chains = constChains(side);
+      var i;
+      for (i = 0; i < chains.length; i++) {
+        var chain = chains[i];
+        var shown = "";
+        var sum = 0;
+        var j;
+        for (j = 0; j < chain.length; j++) {
+          shown += showChainTerm(chain[j], j === 0);
+          sum += pureTermValue(chain[j]);
+        }
+        bits.push(shown + "=" + fmt(sum));
+      }
+    }
+    if (!sides) return "";
+    add(sides.left);
+    add(sides.right);
+    if (!bits.length) return "";
+    return "פשטו: " + bits.join(" ו־") + ".";
+  }
+
+  function signedPiece(n, decimals, withX) {
+    var abs = withX ? formatAx(Math.abs(n), decimals) : fmt(Math.abs(n), decimals);
+    return (n > 0 ? "+" : "−") + abs;
+  }
+
+  function moveTermHint(piece, dest, flipped) {
+    return "העבירו את " + piece + " לאגף " + dest + "; הוא יהפוך ל־" + flipped + ". עדיין בלי לחשב.";
+  }
+
   function gcdInt(a, b) {
     a = Math.abs(a);
     b = Math.abs(b);
@@ -263,13 +344,23 @@
       sign = "-";
       raw = raw.slice(1);
     }
-    var wrapped = raw.match(/^\((\d+)\/(\d+)\)x$/i);
+    var wrapped = raw.match(/^\((\d+)\/(\d+)\)(x(?:\^2|²)?)$/i);
     if (wrapped) {
       return {
         sign: sign,
-        body: wrapped[1] + "x",
+        body: wrapped[1] + wrapped[3],
         denExpr: wrapped[2],
         numeric: parseInt(wrapped[2], 10),
+        hasVar: false,
+      };
+    }
+    var coefPow = raw.match(/^(\d+)\/(\d+)(x(?:\^2|²)?)$/i);
+    if (coefPow) {
+      return {
+        sign: sign,
+        body: coefPow[1] + coefPow[3],
+        denExpr: coefPow[2],
+        numeric: parseInt(coefPow[2], 10),
         hasVar: false,
       };
     }
@@ -1971,11 +2062,13 @@
   function normalizeEqDisplay(eq) {
     var s = String(eq || "")
       .replace(/[−–—]/g, "−")
-      .replace(/\s*=\s*/g, " = ")
+      .replace(/<=/g, "≤")
+      .replace(/>=/g, "≥")
       .trim();
-    var i = s.indexOf(" = ");
-    if (i < 0) return stripLeadingPlus(s);
-    return stripLeadingPlus(s.slice(0, i)) + " = " + stripLeadingPlus(s.slice(i + 3));
+    var m = s.match(/\s*(≤|≥|<|>|=)\s*/);
+    if (!m) return stripLeadingPlus(s);
+    var op = m[1];
+    return stripLeadingPlus(s.slice(0, m.index).trim()) + " " + op + " " + stripLeadingPlus(s.slice(m.index + m[0].length).trim());
   }
 
   function expandOneTerm(term, decimals) {
@@ -2007,12 +2100,60 @@
     );
   }
 
+  function mixedInnerText(inner) {
+    return /^\d+\+\d+\/\d+$/.test(String(inner || "").replace(/\s+/g, ""));
+  }
+
+  function termIsMixedNumber(term) {
+    var t = String(term || "")
+      .replace(/[−–—]/g, "-")
+      .replace(/\s+/g, "")
+      .replace(/^[+-]/, "");
+    var wrapped = t.match(/^\d*\(([^()]+)\)x?$/i);
+    return !!(wrapped && mixedInnerText(wrapped[1]));
+  }
+
+  function improperMixed(wholeStr, numStr, denStr) {
+    var whole = parseInt(wholeStr, 10);
+    var num = parseInt(numStr, 10);
+    var den = parseInt(denStr, 10);
+    if (!den) return null;
+    var sign = whole < 0 ? -1 : 1;
+    var imp = sign * (Math.abs(whole) * den + num);
+    var body = den === 1 ? String(Math.abs(imp)) : Math.abs(imp) + "/" + den;
+    var shown = (imp < 0 ? "−" : "") + body;
+    return shown.indexOf("/") >= 0 ? "(" + shown + ")" : shown;
+  }
+
+  function mixedNumberStep(eqText) {
+    var count = 0;
+    var next = String(eqText || "").replace(/(-?\d+)\s+(\d+)\s*\/\s*(\d+)/g, function (_m, w, n, d) {
+      var imp = improperMixed(w, n, d);
+      if (imp == null) return _m;
+      count += 1;
+      return imp;
+    });
+    next = next.replace(/\((-?\d+)\+(\d+)\/(\d+)\)/g, function (_m, w, n, d) {
+      var imp = improperMixed(w, n, d);
+      if (imp == null) return _m;
+      count += 1;
+      return imp;
+    });
+    if (!count || key(next) === key(eqText)) return null;
+    return {
+      eq: next.replace(/\s*=\s*/, " = ").replace(/[ \t]+/g, " ").trim(),
+      hint: "המירו את המספרים המעורבים לשברים מדומים.",
+      explain: "ממירים מספר מעורב לשבר מדומה: כופלים את השלם במכנה ומוסיפים את המונה.",
+    };
+  }
+
   function termHasDistributableParens(term) {
     var t = String(term || "")
       .replace(/[−–—]/g, "-")
       .replace(/\s+/g, "")
       .replace(/^[+-]/, "");
     if (/\/\d+$/.test(t)) return false;
+    if (termIsMixedNumber(term)) return false;
     return /^\d*\([^()]*[+-][^()]*\)$/.test(t);
   }
 
@@ -2363,8 +2504,182 @@
     };
   }
 
+  function hasIneqSign(text) {
+    return /<=|>=|[<>≤≥]/.test(String(text || ""));
+  }
+
+  function splitIneqSign(text) {
+    var s = String(text || "").trim().replace(/<=/g, "≤").replace(/>=/g, "≥");
+    var m = s.match(/≤|≥|<|>/);
+    if (!m) return null;
+    return {
+      left: s.slice(0, m.index).trim(),
+      right: s.slice(m.index + m[0].length).trim(),
+      symbol: m[0],
+    };
+  }
+
+  function flipIneqSymbol(symbol) {
+    return { "<": ">", ">": "<", "≤": "≥", "≥": "≤" }[symbol] || symbol;
+  }
+
+  function ineqAlreadySolved(text) {
+    var sp = splitIneqSign(text);
+    var A = global.DoctematicaAlgebra;
+    if (!sp || !A) return false;
+    function bare(side) {
+      return /^x$/i.test(String(side).replace(/\s+/g, ""));
+    }
+    if (bare(sp.left) && A.isolatedRhsKind("x=" + sp.right, "x") === "value") return true;
+    if (bare(sp.right) && A.isolatedRhsKind("x=" + sp.left, "x") === "value") return true;
+    return false;
+  }
+
+  function ineqHintsFor(parsed, explain) {
+    explain = explain || "";
+    if (/סוגרי/.test(explain)) {
+      return ["פתחו את הסוגריים באמצעות חוק הפילוג.", "פתיחת סוגריים לא משנה את כיוון אי־השוויון."];
+    }
+    if (/מכנה/.test(explain)) {
+      return ["אפשר לכפול את שני האגפים במכנה משותף.", "המכנים כאן חיוביים, ולכן כיוון אי־השוויון נשאר."];
+    }
+    if (/שבר/.test(explain)) {
+      return ["חשבו את השבר שנותר.", "צמצום השבר לא משנה את כיוון אי־השוויון."];
+    }
+    if (/מאחדים|מחשבים/.test(explain)) {
+      return ["אחדו איברים דומים, או חשבו את המספרים שנוצרו.", "הכינוס לא משנה את כיוון אי־השוויון."];
+    }
+    if (parsed && parsed.left.a < -EPS && near0(parsed.left.b) && near0(parsed.right.a)) {
+      return [
+        "כדי לבודד את x צריך לחלק במקדם שלו.",
+        "שים לב: המקדם של x שלילי. מה קורה לכיוון אי־השוויון כשמחלקים במספר שלילי?",
+      ];
+    }
+    if (parsed && Math.abs(parsed.left.a) > EPS && near0(parsed.left.b) && near0(parsed.right.a)) {
+      return ["כדי לבודד את x, חלק את שני האגפים במקדם שלו."];
+    }
+    return ["המטרה היא לבודד את x באחד האגפים.", "איזה איבר צריך להעביר כדי להשאיר את x לבד?"];
+  }
+
+  function remapIneq(act, symbol, prevParsed) {
+    if (!act || act.done || !act.eq) return act || { done: true, hint: "זהו הפתרון." };
+    var A = global.DoctematicaAlgebra;
+    var sym = symbol;
+    try {
+      var nextParsed = A.parseEquation(act.eq);
+      var d1 = { a: prevParsed.left.a - prevParsed.right.a, b: prevParsed.left.b - prevParsed.right.b };
+      var d2 = { a: nextParsed.left.a - nextParsed.right.a, b: nextParsed.left.b - nextParsed.right.b };
+      var k = null;
+      if (Math.abs(d1.a) > EPS && Math.abs(d2.a) > EPS) k = d2.a / d1.a;
+      else if (Math.abs(d1.b) > EPS && Math.abs(d2.b) > EPS) k = d2.b / d1.b;
+      if (k != null && k < -EPS) sym = flipIneqSymbol(symbol);
+    } catch (err) {}
+    var explain = act.explain || "";
+    if (/סוגרי/.test(explain)) {
+      explain = "פותחים סוגריים באמצעות חוק הפילוג כדי שנוכל לכנס ולסדר את האיברים.";
+    } else if (kWasNegative(act, symbol, sym) && /מחלקים|כופלים|מכפילים/.test(explain)) {
+      explain = "כופלים או מחלקים במספר שלילי, ולכן כיוון אי־השוויון מתהפך.";
+    }
+    if (sym !== "=" && /x\s*=/.test(explain)) explain = explain.replace(/x\s*=/g, "x " + sym);
+    var hints = ineqHintsFor(prevParsed, act.explain || "");
+    return {
+      eq: String(act.eq).replace("=", sym),
+      explain: explain,
+      hint: hints[0] || act.hint || "",
+      hints: hints,
+    };
+  }
+
+  function kWasNegative(act, symbol, sym) {
+    return sym !== symbol;
+  }
+
+  function nextIneqAction(eqText) {
+    var sp = splitIneqSign(eqText);
+    if (!sp) return { done: true, hint: "כתבו אי־שוויון." };
+    if (ineqAlreadySolved(eqText)) return { done: true, hint: "זהו הפתרון." };
+    var compact = String(eqText).replace(/\s+/g, "");
+    if (/^(כלx|איןפתרון)$/i.test(compact)) return { done: true, hint: "זהו הפתרון." };
+    var A = global.DoctematicaAlgebra;
+    var eqForm = sp.left + " = " + sp.right;
+    var parsed;
+    try {
+      parsed = A.parseEquation(eqForm);
+    } catch (err) {
+      return { done: true, hint: err.message };
+    }
+    var La = parsed.left.a;
+    var Lb = parsed.left.b;
+    var Ra = parsed.right.a;
+    var Rb = parsed.right.b;
+    var decimals = [];
+    rememberDecimals(eqText, decimals);
+    if (near0(La) && near0(Ra) && isPlainNumberSide(sp.left) && isPlainNumberSide(sp.right)) {
+      var holds = A.parseEquation(sp.left + " = " + sp.right);
+      var leftN = holds.left.b;
+      var rightN = holds.right.b;
+      var okNum =
+        (sp.symbol === "<" && leftN < rightN) ||
+        (sp.symbol === ">" && leftN > rightN) ||
+        (sp.symbol === "≤" && leftN <= rightN) ||
+        (sp.symbol === "≥" && leftN >= rightN);
+      return {
+        eq: okNum ? "כל x" : "אין פתרון",
+        explain: okNum
+          ? "לא נשאר x, והאי־שוויון נכון. לכן כל x מתאים."
+          : "לא נשאר x, והאי־שוויון אינו נכון. לכן אין פתרון.",
+        hint: "אין יותר x. בדקו אם האי־שוויון שנשאר נכון, או שאין פתרון.",
+        hints: ["אין יותר x. בדקו אם האי־שוויון שנשאר נכון.", "אם הוא נכון — כל x מתאים. אם לא — אין פתרון."],
+      };
+    }
+    var act = nextAction(eqForm);
+    if (!act || act.done || !act.eq) return { done: true, hint: "זהו הפתרון." };
+    if (!near0(La) && !near0(Ra) && La < Ra && /מעבירים/.test(act.explain || "")) {
+      var hintsMove = ["המטרה היא לבודד את x באחד האגפים.", "אפשר להעביר את איבר ה־x כך שהמקדם שלו יישאר חיובי. העברת אגף לא הופכת את הסימן."];
+      return {
+        eq: sumStr(Lb, -Rb, decimals) + " " + sp.symbol + " " + formatAx(Ra, decimals) + flipX(La, decimals),
+        explain: "מעבירים איברים כך שמקדם x יישאר חיובי. פלוס הופך למינוס ומינוס לפלוס. כיוון אי־השוויון נשאר.",
+        hint: hintsMove[0],
+        hints: hintsMove,
+      };
+    }
+    if (near0(La) && Ra > EPS && /מעבירים/.test(act.explain || "") && /שמאל/.test(act.explain || "")) {
+      var hintsSwap = ["x נמצא באגף ימין. אפשר להחליף בין האגפים.", "כשמחליפים אגפים, כיוון אי־השוויון מתהפך."];
+      return {
+        eq: sp.right + " " + flipIneqSymbol(sp.symbol) + " " + sp.left,
+        explain: "מחליפים בין האגפים כדי ש־x יהיה משמאל. כיוון אי־השוויון מתהפך כדי לשמור על אותה משמעות.",
+        hint: hintsSwap[0],
+        hints: hintsSwap,
+      };
+    }
+    if (/מחלקים/.test(act.explain || "") && near0(Lb) && near0(Ra) && !near0(La)) {
+      var quot = Rb / La;
+      var sym = La < 0 ? flipIneqSymbol(sp.symbol) : sp.symbol;
+      var divShown = Math.abs(quot - Math.round(quot)) < 1e-6
+        ? "x " + sym + " " + fmt(Math.round(quot), decimals)
+        : String(act.eq).replace("=", sym);
+      var divExplain = La < 0
+        ? "מחלקים את שני אגפי אי־השוויון ב־(" + fmt(La, decimals) + "). בחלוקה במספר שלילי כיוון אי־השוויון מתהפך."
+        : "מחלקים את שני האגפים ב־" + fmt(La, decimals) + ".";
+      var divHints = La < 0
+        ? ["כדי לבודד את x צריך לחלק במקדם שלו.", "שים לב: המקדם של x שלילי. מה קורה לכיוון אי־השוויון כשמחלקים במספר שלילי?"]
+        : ["כדי לבודד את x, חלק את שני האגפים במקדם שלו."];
+      return { eq: divShown, explain: divExplain, hint: divHints[0], hints: divHints };
+    }
+    return remapIneq(act, sp.symbol, parsed);
+  }
+
   function nextAction(eqText, opts) {
     opts = opts || {};
+    if (hasIneqSign(eqText)) return nextIneqAction(eqText);
+    var Alg = global.DoctematicaAlgebra;
+    if (
+      Alg &&
+      typeof Alg.nextParamAction === "function" &&
+      ((typeof Alg.hasParamLetter === "function" && Alg.hasParamLetter(eqText)) || (opts.given && opts.target))
+    ) {
+      return Alg.nextParamAction(eqText, opts);
+    }
     unknownKind = opts.unknown === "x2" ? "x2" : "x";
     var decimals = [];
     rememberDecimals(eqText, decimals);
@@ -2374,6 +2689,9 @@
 
     var mulNow = numericMulStep(eqText);
     if (mulNow) return mulNow;
+
+    var mixedNow = mixedNumberStep(eqText);
+    if (mixedNow) return mixedNow;
 
     if (eqHasVarDenom(eqText)) {
       var summedLike = combineLikeBeforeClear(eqText);
@@ -2431,6 +2749,15 @@
     var rightCombine = Rkind.xs >= 2 || (Rkind.cs >= 2 && Rkind.xs >= 1);
     var leftArith = pendingArith(sides.left);
     var rightArith = pendingArith(sides.right);
+    var numberPhrase = numericSumPhrase(sides);
+    if (numberPhrase && (leftCombine || rightCombine || leftArith || rightArith || constChainCount(sides.left) || constChainCount(sides.right))) {
+      var alsoX = Lkind.xs >= 2 || Rkind.xs >= 2;
+      return {
+        eq: prettyEq(La, Lb, Ra, Rb, decimals),
+        hint: alsoX ? "אחדו את איברי ה־" + lab() + ", ו" + numberPhrase : numberPhrase,
+        explain: "מחשבים את הסכומים: " + numberPhrase.replace(/^פשטו:\s*/, ""),
+      };
+    }
     if ((leftCombine || leftArith) && (rightCombine || rightArith)) {
       return {
         eq: prettyEq(La, Lb, Ra, Rb, decimals),
@@ -2485,52 +2812,73 @@
     }
 
     if (near0(La) && !near0(Ra)) {
+      var rightX = signedPiece(Ra, decimals, true);
       return {
         eq: flipX(Ra, decimals, true) + " = " + sumStr(Rb, -Lb, decimals),
-        hint: "העבירו את איבר ה־" + lab() + " לאגף שמאל, והחליפו סימן. עדיין בלי לחשב.",
+        hint: moveTermHint(rightX, "שמאל", signedPiece(-Ra, decimals, true)),
         explain:
           "מעבירים את " +
-          formatAx(Ra, decimals) +
-          " לאגף שמאל. פלוס הופך למינוס ומינוס לפלוס.",
+          rightX +
+          " לאגף שמאל; הוא יהפוך ל־" +
+          signedPiece(-Ra, decimals, true) +
+          ".",
       };
     }
 
     if (!near0(La) && !near0(Ra) && !near0(Lb)) {
-      var leftConst = Lb > 0 ? "+" + fmt(Lb, decimals) : "−" + fmt(-Lb, decimals);
+      var leftConst = signedPiece(Lb, decimals, false);
+      var rightVar = signedPiece(Ra, decimals, true);
       return {
         eq: formatAx(La, decimals) + flipX(Ra, decimals) + " = " + sumStr(Rb, -Lb, decimals),
-        hint: "העבירו את איבר ה־" + lab() + " לשמאל ואת המספר החופשי לימין, והחליפו סימן בכל אחד. עדיין בלי לחשב.",
-        explain:
-          "מעבירים את " +
-          formatAx(Ra, decimals) +
+        hint:
+          "העבירו את " +
+          rightVar +
           " לאגף שמאל ואת " +
           leftConst +
-          " לאגף ימין. פלוס הופך למינוס ומינוס לפלוס.",
+          " לאגף ימין; " +
+          leftConst +
+          " יהפוך ל־" +
+          signedPiece(-Lb, decimals, false) +
+          ". עדיין בלי לחשב.",
+        explain:
+          "מעבירים את " +
+          rightVar +
+          " לאגף שמאל ואת " +
+          leftConst +
+          " לאגף ימין; " +
+          leftConst +
+          " יהפוך ל־" +
+          signedPiece(-Lb, decimals, false) +
+          ".",
       };
     }
 
     if (!near0(La) && !near0(Ra)) {
+      var bothX = signedPiece(Ra, decimals, true);
       return {
         eq: formatAx(La, decimals) + flipX(Ra, decimals) + constTail(Lb, decimals) + " = " + prettySide(0, Rb, decimals),
-        hint: "העבירו את איבר ה־" + lab() + " מאגף ימין לשמאל, והחליפו סימן.",
-        explain: "מעבירים את " + formatAx(Ra, decimals) + " לאגף שמאל. פלוס הופך למינוס ומינוס לפלוס.",
+        hint: moveTermHint(bothX, "שמאל", signedPiece(-Ra, decimals, true)),
+        explain:
+          "מעבירים את " +
+          bothX +
+          " לאגף שמאל; הוא יהפוך ל־" +
+          signedPiece(-Ra, decimals, true) +
+          ".",
       };
     }
 
     if (!near0(La) && !near0(Lb) && near0(Ra)) {
       var moved = formatAx(La, decimals) + " = " + sumStr(Rb, -Lb, decimals);
-      var hintNum = fmt(Math.abs(Lb), decimals);
+      var constNow = signedPiece(Lb, decimals, false);
       return {
         eq: moved,
-        hint: "העבירו את " + hintNum + " לאגף השני, והחליפו סימן. עדיין בלי לחשב.",
+        hint: moveTermHint(constNow, "ימין", signedPiece(-Lb, decimals, false)),
         explain:
-          Lb > 0
-            ? "מעבירים את +" +
-              fmt(Lb, decimals) +
-              " לאגף ימין: פלוס הופך למינוס."
-            : "מעבירים את −" +
-              fmt(-Lb, decimals) +
-              " לאגף ימין: מינוס הופך לפלוס.",
+          "מעבירים את " +
+          constNow +
+          " לאגף ימין; הוא יהפוך ל־" +
+          signedPiece(-Lb, decimals, false) +
+          ".",
       };
     }
 
@@ -2662,7 +3010,17 @@
       cur = act.eq;
     }
     var last = out[out.length - 1];
+    if (hasIneqSign(start) || (last && /^(כל x|אין פתרון)$/.test(String(last.eq).trim()))) {
+      return { steps: out, answer: last ? last.eq : "" };
+    }
     var ans = last ? last.eq.replace(/^\s*x\s*=\s*/i, "") : "";
+    if (
+      (global.DoctematicaAlgebra.hasParamLetter && global.DoctematicaAlgebra.hasParamLetter(start)) ||
+      (opts.given && opts.target)
+    ) {
+      ans = last ? String(last.eq).replace(/^\s*[a-z]\s*=\s*/i, "") : ans;
+      return { steps: out, answer: ans };
+    }
     try {
       var parsed = global.DoctematicaAlgebra.parseEquation(
         eqHasVarDenom(start) ? toClearedEquation(start) : start,

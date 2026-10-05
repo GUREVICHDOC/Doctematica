@@ -5,7 +5,19 @@ function findExercise(engine, body) {
   var level = levels.filter(function (item) {
     return item.id === body.levelId;
   })[0];
-  if (!level || level.mode !== "fn") return null;
+  if (!level) return null;
+  var listed = level.exercises || [];
+  var picked = null;
+  if (body.exerciseId) {
+    picked = listed.filter(function (item) { return item.id === body.exerciseId; })[0];
+  }
+  if (!picked && isFinite(body.exerciseIndex)) picked = listed[Number(body.exerciseIndex)] || null;
+  if (picked && picked.signGraph) return { sign: true, ex: picked, level: level };
+  if (picked && picked.monoGraph) return { mono: true, ex: picked, level: level };
+  if (picked && picked.freeSketch) return { free: true, ex: picked, level: level };
+  if (picked && picked.levelProbe) return { probe: true, ex: picked, level: level };
+  if (picked && picked.tasks && (picked.f || picked.points)) return { compare: true, ex: picked, level: level };
+  if (level.mode !== "fn" && level.mode !== "param") return null;
   var list = level.exercises || [];
   var ex = null;
   if (body.exerciseId) {
@@ -39,13 +51,23 @@ function createFunctionsHandler(engine) {
     body = body || {};
     var found = findExercise(engine, body);
     if (!found) return { error: "unknown exercise", message: "unknown exercise" };
+    if (found.sign) return require("./sign-graph").handle(engine, found.ex, body);
+    if (found.mono) return require("./extrema").handle(engine, found.ex, body);
+    if (found.free) return require("./free-sketch").handle(engine, found.ex, body);
+    if (found.probe) return require("./level-probe").handle(engine, found.ex, body);
+    if (found.compare) return require("./compare").handle(engine, found.ex, body);
     var Fn = engine.DoctematicaFn;
     var progress = body.progress || Fn.freshProgress();
     var intent = String(body.intent || "check");
     var pack = found.pack;
 
     if (intent === "hint") {
-      return { ok: true, hint: Fn.hintFor(pack, progress), view: Fn.viewFor(pack, progress) };
+      return {
+        ok: true,
+        hint: Fn.hintFor(pack, progress),
+        hints: Fn.hintsFor ? Fn.hintsFor(pack, progress) : [Fn.hintFor(pack, progress)],
+        view: Fn.viewFor(pack, progress),
+      };
     }
 
     if (intent === "solution") {

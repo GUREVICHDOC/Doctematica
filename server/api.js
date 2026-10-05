@@ -5,12 +5,16 @@ var http = require("http");
 var path = require("path");
 var loadEngine = require("./load-engine").loadEngine;
 var createEquationsHandler = require("./equations").createEquationsHandler;
+var createIntervalsHandler = require("./intervals").createIntervalsHandler;
+var createQuadIneqHandler = require("./quad-ineq").createQuadIneqHandler;
 var createQuadraticHandler = require("./quadratic").createQuadraticHandler;
 var createHighPowerHandler = require("./high-power").createHighPowerHandler;
+var createBiquadHandler = require("./biquad").createBiquadHandler;
 var createSystemsHandler = require("./systems").createSystemsHandler;
 var createQuadSystemsHandler = require("./systems-quad").createQuadSystemsHandler;
 var createElimHandler = require("./systems-elim").createElimHandler;
 var createArrangeHandler = require("./systems-arrange").createArrangeHandler;
+var createMeetHandler = require("./meet").createMeetHandler;
 var createGeometryHandler = require("./geometry").createGeometryHandler;
 var createFunctionsHandler = require("./functions").createFunctionsHandler;
 var createStatisticsHandler = require("./statistics").createStatisticsHandler;
@@ -41,12 +45,16 @@ var MIME = {
 
 var engine = loadEngine();
 var equations = createEquationsHandler(engine);
+var intervals = createIntervalsHandler(engine);
+var quadIneq = createQuadIneqHandler(engine);
 var quadratic = createQuadraticHandler(engine);
 var highPower = createHighPowerHandler(engine);
+var biquad = createBiquadHandler(engine);
 var systems = createSystemsHandler(engine);
 var quadSystems = createQuadSystemsHandler(engine);
 var elim = createElimHandler(engine);
 var arrange = createArrangeHandler(engine);
+var meet = createMeetHandler(engine);
 var geometry = createGeometryHandler(engine);
 var functionsApi = createFunctionsHandler(engine);
 var statistics = createStatisticsHandler(engine);
@@ -335,6 +343,18 @@ function handleRequest(req, res) {
     });
     return;
   }
+  if (req.method === "POST" && pathname === "/api/intervals") {
+    handleMathPost(req, res, function (body) {
+      return intervals.handle(body);
+    });
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/quad-ineq") {
+    handleMathPost(req, res, function (body) {
+      return quadIneq.handle(body);
+    });
+    return;
+  }
   if (req.method === "POST" && (pathname === "/api/equations" || pathname === "/api/equations/basic")) {
     handleMathPost(req, res, function (body) {
       if (pathname === "/api/equations/basic" && !body.subtopic) body.subtopic = "basic";
@@ -348,11 +368,18 @@ function handleRequest(req, res) {
     });
     return;
   }
+  if (req.method === "POST" && pathname === "/api/biquad") {
+    handleMathPost(req, res, function (body) {
+      return biquad.handle(body);
+    });
+    return;
+  }
   if (req.method === "POST" && pathname === "/api/systems") {
     handleMathPost(req, res, function (body) {
       if (body && String(body.topic || "") === "systems-elim") return elim.handle(body);
       if (body && String(body.topic || "") === "systems-arrange") return arrange.handle(body);
       if (body && String(body.topic || "") === "systems-quad") return quadSystems.handle(body);
+      if (body && String(body.topic || "") === "calculus-meet") return meet.handle(body);
       return systems.handle(body);
     });
     return;
