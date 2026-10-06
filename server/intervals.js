@@ -234,7 +234,10 @@ function createIntervalsHandler(engine) {
 
   function labelNum(n, texts) {
     var frac = fractionOf(n, texts);
-    if (frac) return (frac.sign < 0 ? "−" : "") + frac.num + "/" + frac.den;
+    if (frac) {
+      var preferred = String(M.fmt(n) || "");
+      if (preferred.indexOf("/") >= 0) return (frac.sign < 0 ? "−" : "") + frac.num + "/" + frac.den;
+    }
     return showNum(n);
   }
 
@@ -282,28 +285,31 @@ function createIntervalsHandler(engine) {
     var steps = [];
     var n = sys.originals.length;
     var needsSolve = !!sys.compound || sys.originals.some(function (c) { return !M.parseInterval(c); });
-    if (sys.compound) {
-      steps.push({
-        eq: sys.originals.map(prettyMinus).join(" וגם "),
-        explain: "אי־שוויון כפול מתאר שני תנאים שצריכים להתקיים בו־זמנית, ולכן מפרקים אותו לשני אי־שוויונים המחוברים ב'וגם'.",
-      });
-    }
-    sys.originals.forEach(function (orig, i) {
-      if (needsSolve || n > 2) steps.push({ eq: "משימה: תנאי " + (i + 1), explain: "" });
+    var columns = sys.originals.map(function (orig, i) {
+      var col = [];
       var iv = M.parseInterval(orig);
-      if (iv) {
-        steps.push({ eq: prettyMinus(orig), explain: rayWords(iv, orig) });
-        return;
+      if (iv) col.push({ eq: prettyMinus(orig), explain: rayWords(iv, orig) });
+      else {
+        col.push({ eq: prettyMinus(orig), explain: "רושמים את האי־שוויון, ואחר כך מעבירים אגפים." });
+        var path = engine.DoctematicaTeach.fullPath(orig);
+        (path.steps || []).forEach(function (s) {
+          col.push({ eq: prettyMinus(s.eq), explain: s.explain || "" });
+        });
       }
-      steps.push({
-        eq: prettyMinus(orig),
-        explain: "רושמים את האי־שוויון, ואחר כך מעבירים אגפים.",
-      });
-      var path = engine.DoctematicaTeach.fullPath(orig);
-      (path.steps || []).forEach(function (s) {
-        steps.push({ eq: prettyMinus(s.eq), explain: s.explain || "" });
-      });
+      return { label: n > 1 ? "תנאי " + (i + 1) : "", steps: col };
     });
+    if (n >= 2) {
+      steps.push({
+        parallel: columns,
+        explain: sys.compound
+          ? "אי־שוויון כפול מתאר שני תנאים שצריכים להתקיים בו־זמנית. כל תנאי נפתר בנפרד."
+          : opOf(body) === "union"
+            ? "כל תנאי נפתר בנפרד, ואחר כך מאחדים."
+            : "כל תנאי נפתר בנפרד, ואחר כך לוקחים את החלק המשותף.",
+      });
+    } else if (columns[0]) {
+      columns[0].steps.forEach(function (step) { steps.push(step); });
+    }
     if (needsSolve || n > 2) steps.push({ eq: opOf(body) === "union" ? "משימה: איחוד" : "משימה: חיתוך", explain: "" });
     if (opOf(body) === "union") {
       steps.push({ eq: answerText(body), explain: unionWhy(body) });
@@ -1367,6 +1373,22 @@ function createIntervalsHandler(engine) {
     return { ok: true, step: shown, reason: why, solved: true, answer: shown };
   }
 
+  function walkableSteps(body) {
+    var out = [];
+    solutionSteps(body).forEach(function (step) {
+      if (step && step.parallel) {
+        step.parallel.forEach(function (col) {
+          (col.steps || []).forEach(function (bit) {
+            if (bit && !/^משימה:/.test(String(bit.eq || ""))) out.push(bit);
+          });
+        });
+        return;
+      }
+      if (!/^משימה:/.test(String(step && step.eq || ""))) out.push(step);
+    });
+    return out;
+  }
+
   function handle(body) {
     body = body || {};
     var intent = String(body.intent || "");
@@ -1393,12 +1415,12 @@ function createIntervalsHandler(engine) {
           return got && M.sameInterval(got, wantOf(body));
         });
         if (already) return { ok: true, done: true, hint: "הפתרון כבר רשום." };
-        var finalStep = solutionSteps(body).filter(function (s) { return !/^משימה:/.test(s.eq); });
+        var finalStep = walkableSteps(body);
         var last = finalStep[finalStep.length - 1];
         return { ok: true, step: last.eq, reason: last.explain, solved: true, answer: last.eq };
       }
       if (!allGiven(stNow)) return oneStepPhase(body);
-      var walk = solutionSteps(body).filter(function (s) { return !/^משימה:/.test(s.eq); });
+      var walk = walkableSteps(body);
       var next = walk[Math.min(history.length, walk.length - 1)];
       var solvedWalk = history.length >= walk.length - 1;
       return { ok: true, step: next.eq, reason: next.explain, solved: solvedWalk, answer: walk[walk.length - 1].eq };

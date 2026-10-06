@@ -1,0 +1,36 @@
+---
+description: Before finishing new calculus, equation, system, or inequality material, update a rule only for a reusable pedagogical decision and protect critical behavior with a test.
+alwaysApply: true
+---
+
+# Rule maintenance
+
+Before finishing new material in differential calculus, equations, systems of equations, inequalities, or the algebra engines they use, classify the request. Do not wait to be asked to update a rule.
+
+## Existing rule already covers it
+
+Reuse that rule, implement, and add or update tests when needed. Do not copy the rule into another file.
+
+A new function exercise that leads to a quadratic equation does not need a new rule when `algebra-solution-path.mdc` already defines how a quadratic is solved.
+
+## Exercise-specific detail
+
+Behavior that belongs only to one exercise, page, or UI structure stays in code, with a test when appropriate. Do not add it to a rule just to document the code.
+
+## New reusable pedagogical decision
+
+Update the matching `.cursor/rules/*.mdc` when the request defines something later exercises must follow: a site-preferred path, a student-valid alternative, a path the site must not propose, a required final-answer form, Hint or Next Step behavior, continuation behavior, a state invariant, or an error check that recurs across exercises.
+
+Rules record reusable pedagogical invariants. They do not list every exercise, question number, implementation detail, or UI detail. Extend an existing rule only when the new material adds meaning that rule does not already state.
+
+## Regression protection
+
+A rule tells a future agent what is intended. A test stops later code from silently violating it. Not every sentence needs a test. Behavior whose violation would change how the site teaches needs a regression test, not only a sentence in the rule.
+
+## Completion report
+
+End the implementation report with `RULE IMPACT` and one of:
+
+- Existing Rules sufficient. No Rule changes required.
+- Updated: the rule file. New/changed pedagogical decision: what changed. Regression protection: the test or file.
+- No Rule update. Behavior is exercise-specific: why. Test protection: the test, when there is one.

@@ -934,10 +934,17 @@ function finishMono(ex, held, rows, progress) {
     signStep: 0,
   };
   var show = "עולה: " + held.inc + ", יורדת: " + held.dec;
+  var parallel = {
+    parallel: [
+      { label: "תחומי עלייה", steps: (rows.inc || []).slice() },
+      { label: "תחומי ירידה", steps: (rows.dec || []).slice() },
+    ],
+  };
   if (ex.monoThenSign) {
     return {
       ok: true,
       show: show,
+      parallel: parallel,
       message: "אלה תחומי העלייה והירידה לפי נקודות הקיצון. עכשיו בדקו היכן הגרף מעל ציר ה־x והיכן מתחתיו.",
       progress: next,
     };
@@ -946,6 +953,7 @@ function finishMono(ex, held, rows, progress) {
     ok: true,
     solved: true,
     show: show,
+    parallel: parallel,
     message: sortedExtrema(ex).length
       ? "אלה תחומי העלייה והירידה לפי כיוון הגרף. נקודות הקיצון הן הגבול בין התחומים."
       : "הגרף עולה לכל x, ואין תחום שבו הוא יורד.",
@@ -1295,8 +1303,13 @@ function solutionOf(M, ex) {
       steps.push(whyExtremum(ex, pt));
     });
   }
-  steps.push("תחומי העלייה: " + formatSide(M, intervalsFor(ex.regions, "inc")) + ".");
-  steps.push("תחומי הירידה: " + formatSide(M, intervalsFor(ex.regions, "dec")) + ".");
+  steps.push({
+    parallel: [
+      { label: "תחומי עלייה", steps: [formatSide(M, intervalsFor(ex.regions, "inc"))] },
+      { label: "תחומי ירידה", steps: [formatSide(M, intervalsFor(ex.regions, "dec"))] },
+    ],
+    explain: "עלייה וירידה הם שני חלקים של אותה קריאה מהגרף.",
+  });
   if (ex.monoThenSign) {
     var zeros = (ex.zeros || []).slice().sort(function (a, b) { return a.x - b.x; });
     steps.push("חיוביות ושליליות: בודקים היכן הגרף מעל ציר ה־x והיכן מתחתיו.");
@@ -1309,8 +1322,13 @@ function solutionOf(M, ex) {
       var where = region.property === "pos" ? "מעל" : "מתחת";
       steps.push("בתחום " + regionWords(M, region) + " הגרף נמצא " + where + " לציר ה־x.");
     });
-    steps.push("תחומי החיוביות: " + formatSide(M, intervalsFor(ex.signRegions, "pos")) + ".");
-    steps.push("תחומי השליליות: " + formatSide(M, intervalsFor(ex.signRegions, "neg")) + ".");
+  steps.push({
+    parallel: [
+      { label: "תחומי חיוביות", steps: [formatSide(M, intervalsFor(ex.signRegions, "pos"))] },
+      { label: "תחומי שליליות", steps: [formatSide(M, intervalsFor(ex.signRegions, "neg"))] },
+    ],
+    explain: "חיוביות ושליליות הם שני חלקים של אותה קריאה מהגרף.",
+  });
   }
   return {
     steps: steps,

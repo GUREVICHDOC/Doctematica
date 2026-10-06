@@ -372,6 +372,10 @@
       return { ok: false, message: "זה לא אי־שוויון." };
     }
     var concluded = ineqConclusion(nextText);
+    if (!concluded && global.DoctematicaFnModel) {
+      if (global.DoctematicaFnModel.isEmptySet(nextText)) concluded = "none";
+      else if (global.DoctematicaFnModel.isAllReals(nextText)) concluded = "all";
+    }
     if (concluded) {
       var d0 = diff(prev);
       if (!near0(d0.a)) {

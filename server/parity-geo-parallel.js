@@ -158,6 +158,21 @@ function main() {
   var n14 = via({ capability: "points", intent: "one-step", levelId: "geo-parallel-1", n: 14, history: [], geo: {} });
   add(n14 && n14.ok && !n14.local && n14.task && (n14.task.kind === "point" || n14.task.kind === "onLine") ? { ok: true, id: "n14-point" } : fail("n14-point", JSON.stringify(n14)));
 
+  function graphCount(pack, progress) {
+    var scene = G.sceneForProgress(pack, progress || {});
+    return (scene.graphs || []).length;
+  }
+  var pack12 = packFor(engine, "geo-parallel-1", 12);
+  add(graphCount(pack12, { done: {} }) === 2 ? { ok: true, id: "n12-preview-dashed" } : fail("n12-preview-dashed", String(graphCount(pack12, { done: {} }))));
+  var pack14g = packFor(engine, "geo-parallel-1", 14);
+  add(graphCount(pack14g, { done: {} }) === 1 ? { ok: true, id: "n14-no-answer-line-yet" } : fail("n14-no-answer-line-yet", String(graphCount(pack14g, { done: {} }))));
+  var pack15 = packFor(engine, "geo-parallel-1", 15);
+  add(graphCount(pack15, { done: {} }) === 1 ? { ok: true, id: "n15-no-answer-line-yet" } : fail("n15-no-answer-line-yet", String(graphCount(pack15, { done: {} }))));
+  add(graphCount(pack15, { done: { A: true } }) === 2 ? { ok: true, id: "n15-dashed-after-A" } : fail("n15-dashed-after-A", String(graphCount(pack15, { done: { A: true } }))));
+  var pack16 = packFor(engine, "geo-parallel-1", 16);
+  add(graphCount(pack16, { done: {} }) === 2 ? { ok: true, id: "n16-no-extra-until-P" } : fail("n16-no-extra-until-P", String(graphCount(pack16, { done: {} }))));
+  add(graphCount(pack16, { done: { P: true } }) === 3 ? { ok: true, id: "n16-extra-after-P" } : fail("n16-extra-after-P", String(graphCount(pack16, { done: { P: true } }))));
+
   var n16 = via({ capability: "line-intersect", intent: "one-step", levelId: "geo-parallel-1", n: 16, history: [], geo: {} });
   add(n16 && n16.ok && !n16.local ? { ok: true, id: "n16-intersect" } : fail("n16-intersect", JSON.stringify(n16)));
 

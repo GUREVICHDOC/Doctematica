@@ -55,6 +55,7 @@ var ENGINE_SCRIPTS = [
   "data/calculus/meet.js",
   "data/calculus/sketch.js",
   "data/calculus/sign.js",
+  "data/calculus/poly.js",
   "data/calculus/extrema.js",
   "data/statistics/freq-table.js",
   "data/statistics/relative-freq.js",

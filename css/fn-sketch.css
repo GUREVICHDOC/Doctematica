@@ -335,9 +335,11 @@
 }
 
 .fn-board.is-figure .fn-svg {
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   height: auto;
   max-height: 280px;
+  aspect-ratio: 320 / 280;
 }
 
 @media (min-width: 860px) {
@@ -357,6 +359,11 @@
     align-self: start;
     position: sticky;
     top: 0.85rem;
+  }
+
+  .solve-wrap.has-fn-figure .fn-board.hidden,
+  .solve-wrap.has-geo .fn-board.hidden {
+    display: none;
   }
 
   .solve-wrap.has-fn-figure .solve-main {
@@ -606,6 +613,12 @@
   display: none;
 }
 
+.fn-domains.is-fork:not(.hidden) {
+  display: grid;
+  grid-template-columns: repeat(var(--sol-cols, 2), minmax(0, 1fr));
+  gap: 10px;
+}
+
 .fn-domain-row {
   display: flex;
   flex: 1 1 0;
@@ -632,7 +645,7 @@
 
 .fn-domain-history {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(var(--sol-cols, 2), minmax(0, 1fr));
   gap: 0.65rem;
   direction: ltr;
   flex: 1 1 16rem;

@@ -266,6 +266,11 @@ function openProblem(engine, levelId, index) {
     var monoLevel = monoLevels.filter(function (item) { return item.id === problem.levelId; })[0];
     var monoEx = monoLevel && (monoLevel.exercises || []).filter(function (item) { return item.id === problem.exerciseId; })[0];
     if (monoEx) view = require("./extrema").openingView(engine, monoEx);
+  } else if (problem.mode === "fn" && problem.poly) {
+    var polyLevels = (engine.DoctematicaCurriculum && engine.DoctematicaCurriculum.levels) || [];
+    var polyLevel = polyLevels.filter(function (item) { return item.id === problem.levelId; })[0];
+    var polyEx = polyLevel && (polyLevel.exercises || []).filter(function (item) { return item.id === problem.exerciseId; })[0];
+    if (polyEx) view = require("./poly").openingView(engine, polyEx);
   } else if (problem.mode === "fn" && problem.signGraph) {
     var signLevels = (engine.DoctematicaCurriculum && engine.DoctematicaCurriculum.levels) || [];
     var signLevel = signLevels.filter(function (item) { return item.id === problem.levelId; })[0];

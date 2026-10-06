@@ -2721,7 +2721,15 @@
     var Ra = eq.right.a;
     var Rb = eq.right.b;
     var kind = A.isolatedRhsKind(eqText, unknownKind);
+    var xBareRight = unknownKind !== "x2" && near0(La) && near0(Rb) && Math.abs(Ra - 1) < EPS;
     if (kind === "value") {
+      if (xBareRight) {
+        return {
+          eq: lab() + " = " + fmt(Lb, decimals),
+          hint: "כתבו את התשובה עם " + lab() + " באגף שמאל.",
+          explain: "כותבים את הפתרון עם " + lab() + " באגף שמאל: " + lab() + " = " + fmt(Lb, decimals) + ".",
+        };
+      }
       return unknownKind === "x2"
         ? {
             done: true,
@@ -2788,11 +2796,27 @@
       };
     }
     if (pendingArith(sides.right) || kind === "expr" || kind === "unreduced") {
-      if (kind === "unreduced") {
+      if (xBareRight && (kind === "expr" || kind === "unreduced")) {
+        var leftNum = prettySide(0, Lb, decimals);
         return {
-          eq: prettyEq(1, 0, 0, Rb, decimals),
+          eq: leftNum + " = " + lab(),
+          hint: "חשבו את הביטוי באגף שמאל.",
+          explain: "מחשבים את אגף שמאל ומתקבל " + leftNum + ".",
+        };
+      }
+      if (kind === "unreduced") {
+        var fracValue = xBareRight ? Lb : Rb;
+        if (xBareRight) {
+          return {
+            eq: lab() + " = " + fmt(fracValue, decimals),
+            hint: "חשבו / צמצמו את השבר, וכתבו את " + lab() + " באגף שמאל.",
+            explain: "מחשבים את השבר. התשובה: " + lab() + " = " + fmt(fracValue, decimals) + ".",
+          };
+        }
+        return {
+          eq: prettyEq(1, 0, 0, fracValue, decimals),
           hint: "חשבו / צמצמו את השבר באגף ימין.",
-          explain: "מחשבים את השבר ומתקבל " + lab() + " = " + fmt(Rb, decimals) + ".",
+          explain: "מחשבים את השבר ומתקבל " + lab() + " = " + fmt(fracValue, decimals) + ".",
         };
       }
       return {
@@ -2809,6 +2833,16 @@
     }
     if (denRight != null && isPlainNumberSide(sides.left)) {
       return mulDenomStep(sides.left, denRight, decimals);
+    }
+
+    if (unknownKind !== "x2" && near0(La) && near0(Rb) && !near0(Ra) && Math.abs(Ra - 1) >= EPS) {
+      var divN = coeffPhrase(Lb, decimals);
+      var divD = coeffPhrase(Ra, decimals);
+      return {
+        eq: divN + "/" + divD + " = " + lab(),
+        hint: "חלקו את שני האגפים במקדם של " + lab() + ", " + divD + ". עדיין בלי לחשב.",
+        explain: "מחלקים את שני האגפים ב־" + divD + ".",
+      };
     }
 
     if (near0(La) && !near0(Ra)) {

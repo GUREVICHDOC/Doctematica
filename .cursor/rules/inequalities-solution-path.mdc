@@ -1,0 +1,43 @@
+---
+description: Linear inequalities, AND, OR, and quadratic inequalities.
+alwaysApply: true
+---
+
+# Inequalities solution path
+
+Final wording for «אין» and «כל x» is the shared wording in tutoring-behavior.
+
+## Linear
+
+Same moves as a linear equation.
+
+The inequality sign flips only when both sides are multiplied or divided by a negative number. Moving a term does not flip the sign. Multiplying or dividing by a positive number does not flip the sign.
+
+Strict and weak inequalities stay strict or weak.
+
+## AND and OR
+
+Solve each condition if it is not already a domain.
+
+Drawing on the number line is optional. A correct final domain is accepted without a drawing. If a drawing was started, Hint and Next Step continue that drawing. They do not require it when the student goes straight to the domain.
+
+AND is the intersection. OR is the union.
+
+## Quadratic
+
+Arrange so one side is 0. Find the zeros with the quadratic path.
+
+Two student-valid ways to read the sign:
+
+- Parabola: mark the zeros and sketch the parabola, then read where it is above or below the x-axis.
+- Sign check: mark the zeros, pick a test number in each interval, substitute, and keep the intervals with the right sign.
+
+If the student has started one of these, Hint and Next Step stay on it.
+
+If neither has started, Full Solution uses the parabola.
+
+Special cases stay: two zeros, a double zero, no zeros, every x, no solution, and a single point when the inequality includes equality.
+
+A zero is inside the solution only for ≤ or ≥. It is outside the solution for < or >.
+
+No zeros does not by itself mean no solution. The sign still has to be checked.

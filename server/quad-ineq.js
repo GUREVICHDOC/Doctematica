@@ -1194,6 +1194,18 @@ function createQuadIneqHandler(engine) {
     return "בוחרים את התחומים שבהם הביטוי " + signWord(model.rel) + (include ? ", וכוללים את נקודות האפס כי הסימן כולל שוויון." : ", בלי נקודות האפס.") + " הפתרון: " + model.answer + ".";
   }
 
+  function parabolaRead(model) {
+    var up = model.fn && model.fn.a > 0;
+    var open = up ? "הפרבולה נפתחת כלפי מעלה" : "הפרבולה נפתחת כלפי מטה";
+    if (model.rootCount === 2) {
+      return open + ". בין נקודות האפס הביטוי " + (up ? "שלילי" : "חיובי") + ", ומחוץ להן " + (up ? "חיובי" : "שלילי") + ".";
+    }
+    if (model.rootCount === 1) {
+      return open + " ונוגעת בציר ה־x. בכל מקום אחר הביטוי " + (up ? "חיובי" : "שלילי") + ".";
+    }
+    return open + " ואינה חותכת את ציר ה־x, ולכן הביטוי " + (up ? "חיובי" : "שלילי") + " לכל x.";
+  }
+
   function solutionSteps(start) {
     var steps = [{ eq: pretty(start), explain: "זה אי־השוויון שפותרים." }];
     var cur = start;
@@ -1239,20 +1251,9 @@ function createQuadIneqHandler(engine) {
         explain: "אין נקודות שמחלקות את הישר. כל הישר הוא תחום אחד, וצריך לקבוע את סימן הביטוי.",
       });
     }
-    if (model.rootCount === 0) {
-      steps.push({ eq: "x = 0", explain: "בחר מספר כלשהו ובדוק את סימן הביטוי. נבחר x = 0." });
-    }
-    model.regions.forEach(function (reg) {
-      var plug = M.substText(model.fn, reg.sample);
-      var val = M.evalAt(model.fn, reg.sample);
-      var shown = pretty(String(Math.round(val * 1000) / 1000));
-      var word = reg.sign === "pos" ? "חיובית" : "שלילית";
-      var where = model.rootCount === 0
-        ? "מציבים את המספר בביטוי. התוצאה " + word + ", ומכיוון שאין נקודות אפס הסימן נשאר כך לכל x."
-        : model.rootCount === 1
-          ? "בצד " + reg.label + " התוצאה " + word + ". בשורש כפול הסימן משני הצדדים זהה."
-          : "בתחום " + reg.label + " מציבים מספר מבחן. התוצאה " + word + ", ולכן הביטוי " + (reg.sign === "pos" ? "חיובי" : "שלילי") + " בכל התחום.";
-      steps.push({ eq: pretty(plug) + " = " + shown, explain: where });
+    steps.push({
+      eq: "פרבולה",
+      explain: parabolaRead(model),
     });
     if (model.answer === "כל x") {
       steps.push({ eq: "נבדוק אם יש x שאינו מקיים", explain: "בדוק האם קיים x כלשהו שאינו מקיים את אי־השוויון." });

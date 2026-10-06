@@ -13,7 +13,9 @@ function near0(n) {
   return Math.abs(n) < 1e-8;
 }
 
-function fmtN(_engine, n) {
+function fmtN(engine, n) {
+  var A = engine && engine.DoctematicaAlgebra;
+  if (A && A.formatNumber) return String(A.formatNumber(n)).split(" או ")[0];
   if (near0(n)) return "0";
   var d;
   for (d = 1; d <= 24; d++) {

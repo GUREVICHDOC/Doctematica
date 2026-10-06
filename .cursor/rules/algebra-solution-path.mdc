@@ -1,0 +1,60 @@
+---
+description: Preferred algebra paths for linear, product-zero, quadratic, high-power, and biquadratic equations.
+alwaysApply: true
+---
+
+# Algebra solution path
+
+The source of an equation does not create a second way to solve it. A quadratic that appears from a function, a polynomial, or a system is solved by the same path as a standalone quadratic.
+
+A valid state the engine itself writes must be readable by that same engine on the next step.
+
+## Linear
+
+Site path: expand parentheses, collect like terms, move a term without calculating, divide without calculating, then calculate.
+
+A later equivalent line is accepted when the skip does not lose solutions or drop a required final form.
+
+## Product equal to zero
+
+When the current equation is already A(x)·B(x)=0, and the student has not replaced it, the site path is to split:
+
+A(x)=0 or B(x)=0.
+
+Hint, Next Step, and Full Solution from that state continue toward the split. Expanding the product is never a step the site proposes.
+
+If the student expands the product and the new equation is mathematically equivalent, accept it.
+
+Continue from that expanded equation when an existing engine can solve it. Do not return to the original product only because splitting was the site path. For example, `x(x-5)=0` expanded to `x^2-5x=0` continues with the quadratic engine.
+
+If no existing engine can continue from the expanded equation, still accept the expansion. Fall back to the original factored equation, then the zero-product split. The hint says the expansion was correct, and that the factored form is what the existing tools can continue. Do not invent a new solver for that expanded equation. A general cubic such as `x^3-9x^2+15x-2=0`, from `(x^2-7x+1)(x-2)=0`, is this case.
+
+Branches may be solved in any order. All roots are collected, without duplicates. Dividing by x, or by a power of x, is not a site step. A final line that drops a root is not accepted.
+
+After the split, the parent history ends. Each branch keeps its own solution state and history: the equation it started from, the steps taken on it, and whether it is finished. A later step belongs to the branch where it was made, including when that branch continues in the quadratic formula, factoring, a root, a linear equation, a high power, or any other existing engine. Hint and Next Step use the active branch. Leaving a branch and returning restores that state. A finished branch stays visible with its solutions.
+
+## Quadratic
+
+A quadratic equation uses the same pedagogical path as the existing standalone quadratic-equation engine, whether it originated from a function, a polynomial, a system, or a standalone exercise.
+
+Hint, Next Step, and Full Solution do not change because of that origin.
+
+This rule does not choose factoring, the quadratic formula, md53, or any other method. It keeps whatever that engine already prefers for the current equation.
+
+## High power
+
+Site path: move to one side, factor out the common power of x, split, classify each branch, solve that branch with the linear, root, or quadratic path, collect the unique x values.
+
+x=0 is kept when a factor xⁿ is present. More than two branches can appear. Any branch order is valid. After the split, each branch keeps its own solution state and history, as a product split does.
+
+## Biquadratic
+
+Read the equation and identify the repeated power. In the usual exercises that power is x², so the substitution is t=x². The exponent is part of the equation, not a fixed n.
+
+Site path from an empty solution: write t equal to that power, solve the equation in t, open one column per relevant t value, return each branch to x, collect the final x values.
+
+A student may skip the explicit substitution line and write a correct equation in t directly. That line is accepted. Hint and Next Step then continue from that t equation.
+
+t values are not a final answer while an x branch is still open. The exercise ends when every relevant x branch is solved and the x values are collected.
+
+A negative t with an even power has no real x. A negative t with an odd power has one real x. The site does not stop at «אין פתרון» before those branches are checked.

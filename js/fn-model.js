@@ -597,7 +597,7 @@
     if (!t) return false;
     if (/^\((-∞|-inf|-infinity),(∞|inf|infinity)\)$/i.test(t)) return true;
     if (/^(ℝ|R|xℝ|xR|כלx|לכלx|כלמספר|כלמספרממשי|כלממשי|כלממשיים|כלהמספריםהממשיים|כלערכיx|xℝ|xR|ℝ|כלxℝ)$/i.test(t)) return true;
-    if (/כל/.test(t) && (/x/i.test(t) || /ממשי/.test(t))) return true;
+    if (/כל/.test(t) && (/x/i.test(t) || /איקס/.test(t) || /ממשי/.test(t))) return true;
     if (t === "ℝ" || /^x∈/.test(t)) return true;
     return false;
   }
@@ -709,8 +709,7 @@
     if (v === "-inf") return "−∞";
     var n = Number(v);
     if (!isFinite(n)) return String(v);
-    if (Math.abs(n - Math.round(n)) < 1e-8) return String(Math.round(n)).replace("-", "−");
-    return String(Math.round(n * 1000) / 1000).replace("-", "−");
+    return fmt(n);
   }
 
   function formatInterval(iv) {

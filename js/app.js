@@ -313,6 +313,7 @@
   var PERCENTS_URL = API_ROOT + "/api/percents";
   var FUNCTIONS_URL = API_ROOT + "/api/functions";
   var equationsCheckBusy = false;
+  var viewEpoch = 0;
 
   function isBasicEqServerMode() {
     return (
@@ -967,6 +968,7 @@
     if (!isGeoLengthMode()) return false;
     if (equationsCheckBusy) return true;
     equationsCheckBusy = true;
+    var token = viewEpoch;
     var rawBody;
     try {
       var body = {
@@ -1017,6 +1019,7 @@
       })
       .then(function (remote) {
         equationsCheckBusy = false;
+        if (token !== viewEpoch) return;
         try {
           onResult(remote || {});
         } catch (err) {
@@ -1025,6 +1028,7 @@
       })
       .catch(function (err) {
         equationsCheckBusy = false;
+        if (token !== viewEpoch) return;
         if (err && err.status) showServerProcessingError();
         else showBasicEqServerUnavailable();
       });
@@ -1295,7 +1299,7 @@
       showEqSolution("פתרון מלא — משוואה דו־ריבועית", {
         always: true,
         steps: (remote.steps || []).map(function (s) {
-          return s.eq;
+          return keepSolutionStep(s);
         }),
         notes: (remote.steps || []).map(function (s) {
           return s.explain || "";
@@ -1354,6 +1358,8 @@
     requestBiquadAction(
       Object.assign({ intent: "absorb", typed: ans || "" }, biquadStartPayload()),
       function (res) {
+        var keptBranch = state.factor && state.factor.formulaBranch;
+        if (keptBranch != null && keptBranch !== "" && state.quad) parkFormulaSession(keptBranch);
         state.mixed = emptyMixedState();
         state.quad = null;
         updateFormulaBtn();
@@ -2740,6 +2746,7 @@
     if (!isFnMode()) return false;
     if (equationsCheckBusy) return true;
     equationsCheckBusy = true;
+    var token = viewEpoch;
     var body = {
       intent: payload.intent,
       levelId: (state.problem && state.problem.levelId) || state.levelId,
@@ -2759,6 +2766,14 @@
     }
     if (payload.point) body.point = payload.point;
     if (payload.probe) body.probe = payload.probe;
+    if (payload.branch != null && payload.branch !== "") body.branch = payload.branch;
+    if (payload.formulaBranch != null && payload.formulaBranch !== "") body.formulaBranch = payload.formulaBranch;
+    if (payload.phase) body.phase = payload.phase;
+    if (payload.letter) body.letter = payload.letter;
+    if (payload.slots) body.slots = payload.slots;
+    if (payload.root) body.root = payload.root;
+    if (payload.compute) body.compute = payload.compute;
+    if (payload.md53) body.md53 = true;
     if (!body.probe && state.fnView && state.fnView.family === "probe" && fnSketch && fnSketch.getProbe) {
       body.probe = fnSketch.getProbe();
     }
@@ -2786,6 +2801,11 @@
       })
       .then(function (remote) {
         equationsCheckBusy = false;
+        if (token !== viewEpoch) return;
+        if (!isFnMode()) {
+          hideFnBoardUi();
+          return;
+        }
         try {
           onResult(remote || {});
         } catch (err) {
@@ -2794,6 +2814,7 @@
       })
       .catch(function () {
         equationsCheckBusy = false;
+        if (token !== viewEpoch) return;
         showBasicEqServerUnavailable();
         try {
           onResult({ ok: false, unavailable: true });
@@ -2847,6 +2868,27 @@
     return "";
   }
 
+  function buildForkCard(card) {
+    var li = document.createElement("li");
+    li.className = "factor-fork";
+    var trails = (card && card.trails) || [];
+    li.style.setProperty("--sol-cols", String(trails.length || 1));
+    trails.forEach(function (trail, index) {
+      var col = document.createElement("div");
+      var done = card && card.solved && card.solved[index];
+      col.className = "factor-branch" + (done ? " is-done" : "");
+      (trail || []).forEach(function (line) {
+        var row = document.createElement("div");
+        row.className = "factor-branch-step";
+        var text = String(line || "");
+        row.innerHTML = window.DoctematicaMath ? DoctematicaMath.toHTML(text.replace(/-/g, "−")) : text;
+        col.appendChild(row);
+      });
+      li.appendChild(col);
+    });
+    return li;
+  }
+
   function renderFnSteps() {
     var followEl = document.getElementById("steps-follow");
     if (followEl) {
@@ -2872,6 +2914,8 @@
     var stepNum = 0;
     var axisCard = 0;
     var sketchCardAt = 0;
+    var forkCardAt = 0;
+    var formulaCardAt = 0;
     state.history.forEach(function (line, index) {
       var host = splitAt >= 0 && index >= splitAt && followEl ? followEl : stepsEl;
       if (line === "⌘axes") {
@@ -2884,6 +2928,28 @@
         var sketchCard = (state.fn && state.fn.sketchCards && state.fn.sketchCards[sketchCardAt]) || null;
         sketchCardAt += 1;
         host.appendChild(buildSketchCard(sketchCard));
+        return;
+      }
+      if (line === "⌘fork") {
+        var forkCard = (state.fn && state.fn.forkCards && state.fn.forkCards[forkCardAt]) || null;
+        forkCardAt += 1;
+        host.appendChild(buildForkCard(forkCard));
+        return;
+      }
+      if (line && line.parallel) {
+        var held = document.createElement("li");
+        held.className = "sol-parallel-row";
+        held.innerHTML = parallelBlockHTML(line);
+        host.appendChild(held);
+        return;
+      }
+      if (line === "⌘formula") {
+        var formulaCard = (state.fn && state.fn.formulaCards && state.fn.formulaCards[formulaCardAt]) || [];
+        formulaCardAt += 1;
+        formulaCard.forEach(function (item) {
+          stepNum += 1;
+          host.appendChild(formulaTrailRow(item, stepNum));
+        });
         return;
       }
       var li = document.createElement("li");
@@ -2955,8 +3021,62 @@
       li.appendChild(body);
       host.appendChild(li);
     });
+    if (formulaWorkActive() && state.quad && state.quad.trail && state.quad.trail.length && !formulaSplitOwned() && !formulaAxisOwned()) {
+      var liveHost = followEl && followEl.children.length ? followEl : stepsEl;
+      state.quad.trail.forEach(function (item) {
+        stepNum += 1;
+        liveHost.appendChild(formulaTrailRow(item, stepNum));
+      });
+    }
     if (!stepsEl.children.length) stepsEl.classList.add("hidden");
     if (followEl && followEl.children.length) followEl.classList.remove("hidden");
+  }
+
+  function formulaTrailRow(item, num) {
+    var li = document.createElement("li");
+    var n = document.createElement("span");
+    n.className = "n";
+    n.textContent = String(num);
+    var body = document.createElement("span");
+    body.innerHTML = (item && item.html) || "";
+    if (item && item.reason) {
+      appendSiteWhy(body, item.reason);
+      li.classList.add("has-why");
+    }
+    li.appendChild(n);
+    li.appendChild(body);
+    return li;
+  }
+
+  function formulaAxisOwned() {
+    return isFnMode() && state.fn && (state.fn.formulaAxis === "x" || state.fn.formulaAxis === "y");
+  }
+
+  function stashFnFormulaTrail() {
+    if (!state.quad || !state.quad.trail || !state.quad.trail.length) return;
+    if (formulaAxisOwned()) {
+      var axis = state.fn.formulaAxis;
+      state.fn.axisLive = state.fn.axisLive || emptyAxisLive();
+      state.quad.trail.forEach(function (item) {
+        state.fn.axisLive[axis].push({ html: item.html || "", why: item.reason || "" });
+      });
+      return;
+    }
+    if (isFnMode() && formulaSplitOwned()) {
+      var ownedBranch = formulaOwnerIndex();
+      if (ownedBranch != null) {
+        parkFormulaSession(ownedBranch);
+        return;
+      }
+    }
+    state.fn = state.fn || {};
+    state.fn.formulaCards = state.fn.formulaCards || [];
+    state.fn.formulaCards.push(
+      state.quad.trail.map(function (item) {
+        return { html: item.html, reason: item.reason || "" };
+      })
+    );
+    state.history.push("⌘formula");
   }
 
   function placeFnBoard(where) {
@@ -2973,6 +3093,11 @@
 
   function fnServerPart() {
     return (state.fnView && state.fnView.part && state.fnView.part.label) || "";
+  }
+
+  function syncFnViewPart(serverPart) {
+    if (!state.fn || !serverPart) return;
+    state.fn.viewPart = serverPart;
   }
 
   function fnSketchPartKey() {
@@ -3176,7 +3301,8 @@
       n.className = "n";
       n.textContent = String(i + 1);
       var body = document.createElement("span");
-      body.innerHTML = fnAxisHTML(step.show);
+      if (step.parallel && step.parallel.parallel) body.innerHTML = parallelBlockHTML(step.parallel);
+      else body.innerHTML = step.html || fnAxisHTML(step.show);
       if (step.why) appendSiteWhy(body, step.why);
       row.appendChild(n);
       row.appendChild(body);
@@ -3253,7 +3379,23 @@
       var col = fnAxesEl.querySelector("[data-col='" + axis + "']");
       if (!col) return;
       col.classList.toggle("is-done", !!done[axis]);
-      fillAxisTrail(col.querySelector(".fn-axis-trail"), live[axis]);
+      var trail = col.querySelector(".fn-axis-trail");
+      fillAxisTrail(trail, live[axis]);
+      if (formulaWorkActive() && state.fn && state.fn.formulaAxis === axis && state.quad && state.quad.trail) {
+        state.quad.trail.forEach(function (item, i) {
+          var row = document.createElement("div");
+          row.className = "fn-axis-step";
+          var n = document.createElement("span");
+          n.className = "n";
+          n.textContent = String((live[axis] || []).length + i + 1);
+          var body = document.createElement("span");
+          body.innerHTML = (item && item.html) || "";
+          if (item && item.reason) appendSiteWhy(body, item.reason);
+          row.appendChild(n);
+          row.appendChild(body);
+          trail.appendChild(row);
+        });
+      }
     });
     fnAxesEl.classList.remove("hidden");
   }
@@ -3292,6 +3434,14 @@
     state.fn.axisDone = { y: false, x: false };
   }
 
+  function archivePendingSketchCard() {
+    if (!state.fn || !state.fn.pendingSketchCard) return;
+    state.fn.sketchCards = state.fn.sketchCards || [];
+    state.fn.sketchCards.push(state.fn.pendingSketchCard);
+    state.history.push("⌘sketch");
+    state.fn.pendingSketchCard = null;
+  }
+
   function renderFnDomains(fields) {
     if (!fnDomainsEl) return;
     if (!fields || !fields.length) {
@@ -3299,11 +3449,19 @@
       fnDomainsEl.innerHTML = "";
       fnDomainsEl.removeAttribute("data-problem");
       fnDomainsEl.removeAttribute("data-sig");
+      fnDomainsEl.removeAttribute("data-part");
       return;
     }
     var problemKey = (state.problem && state.problem.exerciseId) || "";
     if (fnDomainsEl.getAttribute("data-problem") !== problemKey) {
       fnDomainsEl.setAttribute("data-problem", problemKey);
+      fnDomainsEl.innerHTML = "";
+      fnDomainsEl.removeAttribute("data-sig");
+      fnDomainsEl.removeAttribute("data-part");
+    }
+    var partKey = (state.fnView && state.fnView.part && state.fnView.part.label) || "";
+    if (fnDomainsEl.getAttribute("data-part") !== partKey) {
+      fnDomainsEl.setAttribute("data-part", partKey);
       fnDomainsEl.innerHTML = "";
       fnDomainsEl.removeAttribute("data-sig");
     }
@@ -3544,10 +3702,263 @@
     });
   }
 
+  function snapshotPolyFork() {
+    if (!state.polyForkFields || !state.polyForkFields.length) return;
+    state.polyForkDrafts = state.polyForkDrafts || {};
+    state.polyForkFields.forEach(function (item) {
+      if (!item || !item.field || !item.field.host || !item.field.host.isConnected) return;
+      item.field.readInputs();
+      var text = item.field.serialize();
+      if (!text) {
+        delete state.polyForkDrafts[item.index];
+        return;
+      }
+      state.polyForkDrafts[item.index] = JSON.parse(JSON.stringify(item.field.parts));
+    });
+  }
+
+  function polyForkPending() {
+    var fields = state.polyForkFields || [];
+    var fallback = null;
+    var i;
+    for (i = 0; i < fields.length; i++) {
+      if (fields[i].field && fields[i].field.readInputs) fields[i].field.readInputs();
+      var text = fields[i].field ? fields[i].field.serialize().trim() : "";
+      if (!text) continue;
+      if (fields[i].index === state.polyForkBranch) return { text: text, branch: fields[i].index };
+      if (!fallback) fallback = { text: text, branch: fields[i].index };
+    }
+    return fallback;
+  }
+
+  function assignFormulaBranch() {
+    var st = state.factor;
+    if (!st || !st.split) return;
+    if (st.formulaBranch != null && st.formulaBranch !== "") return;
+    var eqs = st.eqs || [];
+    var want = String(st.formulaEq || "").replace(/[−–—]/g, "-").replace(/\s+/g, "");
+    var i;
+    for (i = 0; i < eqs.length; i++) {
+      if (want && String(eqs[i] || "").replace(/[−–—]/g, "-").replace(/\s+/g, "") === want) {
+        st.formulaBranch = i;
+        return;
+      }
+    }
+    for (i = 0; i < eqs.length; i++) {
+      if (/\^2|²/.test(String(eqs[i] || "")) && !(st.solved && st.solved[i])) {
+        st.formulaBranch = i;
+        return;
+      }
+    }
+  }
+
+  function formulaSplitOwned() {
+    if (isFnMode() && state.fnView && state.fnView.fork && state.fnView.fork.eqs && state.fnView.fork.eqs.length) return true;
+    if (!(state.factor && state.factor.split)) return false;
+    if (mixedPath() === "formula" || (state.quad && state.quad.trail && state.quad.trail.length)) assignFormulaBranch();
+    return state.factor.formulaBranch != null && state.factor.formulaBranch !== "";
+  }
+
+  function formulaOwnerIndex() {
+    if (isFnMode() && state.fnFormulaBranch != null && state.fnFormulaBranch !== "") return Number(state.fnFormulaBranch);
+    if (state.factor && state.factor.formulaBranch != null && state.factor.formulaBranch !== "") return Number(state.factor.formulaBranch);
+    return null;
+  }
+
+  function formulaSessions() {
+    if (isFnMode()) {
+      state.fn = state.fn || {};
+      state.fn.branchSessions = state.fn.branchSessions || [];
+      return state.fn.branchSessions;
+    }
+    state.factor = state.factor || emptyFactorState();
+    state.factor.sessions = state.factor.sessions || [];
+    return state.factor.sessions;
+  }
+
+  function parkFormulaSession(index) {
+    if (index == null || !state.quad) return;
+    formulaSessions()[index] = state.quad;
+  }
+
+  function mergeParkedFormula(step) {
+    var sessions = state.fn && state.fn.branchSessions;
+    if (!sessions || !step || !step.parallel) return;
+    step.parallel.forEach(function (col, index) {
+      var session = sessions[index];
+      if (!session || !session.trail || !session.trail.length || !col) return;
+      var steps = (col.steps || []).slice();
+      var answerAt = -1;
+      var i;
+      for (i = 0; i < steps.length; i++) {
+        var compact = String(steps[i] || "").replace(/[−–—]/g, "-").replace(/\s+/g, "");
+        if (/^[abc]=/.test(compact)) {
+          steps.splice(i, 1);
+          i -= 1;
+          continue;
+        }
+        if (answerAt < 0 && typeof steps[i] === "string" && isAnsweredRootLine(steps[i])) answerAt = i;
+      }
+      var htmlSteps = session.trail.map(function (item) {
+        return { html: (item && item.html) || "" };
+      });
+      if (answerAt >= 0 && htmlSteps.length && isAnsweredRootLine(String(htmlSteps[htmlSteps.length - 1].html).replace(/<[^>]+>/g, " "))) {
+        htmlSteps = htmlSteps.slice(0, -1);
+      }
+      if (answerAt < 0) steps = steps.concat(htmlSteps);
+      else {
+        var head = steps.slice(0, answerAt);
+        var tail = steps.slice(answerAt);
+        steps = head.concat(htmlSteps, tail);
+      }
+      var seenAnswers = {};
+      col.steps = steps.filter(function (line) {
+        if (typeof line === "string" && isAnsweredRootLine(line)) {
+          var key = String(line).replace(/[−–—]/g, "-").replace(/\s+/g, "");
+          if (seenAnswers[key]) return false;
+          seenAnswers[key] = true;
+        }
+        return true;
+      });
+    });
+  }
+
+  function showFormulaSession(index) {
+    var saved = formulaSessions()[index];
+    if (!saved) return false;
+    state.quad = saved;
+    state.mixed = state.mixed || emptyMixedState();
+    state.mixed.path = "formula";
+    if (isFnMode()) {
+      state.fnFormula = true;
+      state.fnFormulaBranch = index;
+    }
+    return true;
+  }
+
+  function hideFormulaSessionKeep(index) {
+    parkFormulaSession(index);
+    state.quad = null;
+    if (state.mixed) state.mixed.path = null;
+    if (isFnMode()) state.fnFormula = false;
+    hideQuadGuide();
+  }
+
+  function selectSplitBranch(index) {
+    var prev = formulaOwnerIndex();
+    if (formulaWorkActive() && prev != null && prev !== index) hideFormulaSessionKeep(prev);
+    else if (prev === index && !formulaWorkActive()) showFormulaSession(index);
+    state.polyForkBranch = index;
+    if (isFnMode()) syncFnAsk();
+    renderSteps();
+    renderQuadGuide();
+    setModeUi();
+  }
+
+  function branchFormulaSession(index) {
+    if (formulaOwnerIndex() === index && state.quad) return state.quad;
+    var sessions = isFnMode() ? (state.fn && state.fn.branchSessions) : (state.factor && state.factor.sessions);
+    return (sessions && sessions[index]) || null;
+  }
+
+  function renderPolyFork(fork) {
+    if (!fnDomainsEl) return;
+    var parkedLens = ((state.fn && state.fn.branchSessions) || []).map(function (session) {
+      return (session && session.trail && session.trail.length) || 0;
+    }).join(",");
+    var sig = (fork.eqs || []).join("|") + "#" + (fork.solved || []).join(",") + "#" + (fork.trails || []).map(function (trail) {
+      return (trail || []).join("~");
+    }).join(",") + "#q" + formulaOwnerIndex() + ":" + parkedLens + ":" + (formulaWorkActive() ? 1 : 0);
+    if (fnDomainsEl.getAttribute("data-fork") === sig && fnDomainsEl.classList.contains("is-fork") && !fnDomainsEl.classList.contains("hidden")) return;
+    snapshotPolyFork();
+    fnDomainsEl.innerHTML = "";
+    fnDomainsEl.classList.remove("hidden");
+    fnDomainsEl.classList.add("is-fork");
+    fnDomainsEl.setAttribute("data-fork", sig);
+    state.polyForkFields = [];
+    (fork.eqs || []).forEach(function (eq, index) {
+      var col = document.createElement("div");
+      var done = !!(fork.solved && fork.solved[index]);
+      col.className = "factor-branch" + (done ? " is-done" : "");
+      col.addEventListener("mousedown", function () {
+        selectSplitBranch(index);
+      });
+      var trail = (fork.trails && fork.trails[index]) || [];
+      var title = (fork.heads && fork.heads[index]) || "";
+      if (!title && !trail.length) title = eq;
+      function sameEq(a, b) {
+        return String(a || "").replace(/\s+/g, "") === String(b || "").replace(/\s+/g, "");
+      }
+      if (title) {
+        var head = document.createElement("div");
+        head.className = "factor-branch-step";
+        head.innerHTML = window.DoctematicaMath ? DoctematicaMath.toHTML(title) : title;
+        col.appendChild(head);
+      }
+      var session = branchFormulaSession(index);
+      var formulaTrail = session && session.trail && session.trail.length ? session.trail.slice() : null;
+      var laterLines = [];
+      function appendForkLine(line) {
+        var row = document.createElement("div");
+        row.className = "factor-branch-step";
+        row.innerHTML = window.DoctematicaMath ? DoctematicaMath.toHTML(line) : line;
+        col.appendChild(row);
+      }
+      trail.forEach(function (line) {
+        if (title && sameEq(line, title)) return;
+        var compact = String(line || "").replace(/[−–—]/g, "-").replace(/\s+/g, "");
+        if (formulaTrail && /^[abc]=/.test(compact)) return;
+        if (formulaTrail && (/^\(/.test(compact) || isAnsweredRootLine(line))) {
+          if (!laterLines.some(function (have) { return String(have).replace(/[−–—]/g, "-").replace(/\s+/g, "") === compact; })) laterLines.push(line);
+          return;
+        }
+        appendForkLine(line);
+      });
+      if (formulaTrail && laterLines.some(function (line) { return isAnsweredRootLine(line); })) {
+        var lastHtml = String((formulaTrail[formulaTrail.length - 1] && formulaTrail[formulaTrail.length - 1].html) || "").replace(/<[^>]+>/g, "");
+        if (isAnsweredRootLine(lastHtml)) formulaTrail = formulaTrail.slice(0, -1);
+      }
+      if (formulaTrail) {
+        formulaTrail.forEach(function (item) {
+          var live = document.createElement("div");
+          live.className = "factor-branch-step";
+          live.innerHTML = (item && item.html) || "";
+          col.appendChild(live);
+        });
+      }
+      laterLines.forEach(appendForkLine);
+      var formulaHere = formulaWorkActive() && formulaOwnerIndex() === index;
+      if (!done && !fork.keepMain && !formulaHere) {
+        var host = document.createElement("div");
+        host.className = "math-line factor-branch-math";
+        host.setAttribute("data-branch", String(index));
+        var field = new DoctematicaMathField(host, null, { keyboard: false });
+        var draft = state.polyForkDrafts && state.polyForkDrafts[index];
+        if (draft && draft.length) field.loadParts(JSON.parse(JSON.stringify(draft)));
+        host.addEventListener("focusin", function () {
+          selectSplitBranch(index);
+          DoctematicaMathField.current = field;
+        });
+        host.addEventListener("keydown", function (event) {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          event.stopPropagation();
+          var text = field.serialize().trim();
+          if (!text) return;
+          if (!requestFunctions({ intent: "check", typed: text, branch: index }, applyFnRemote)) showBasicEqServerUnavailable();
+        });
+        state.polyForkFields.push({ index: index, field: field });
+        col.appendChild(host);
+      }
+      fnDomainsEl.appendChild(col);
+    });
+  }
+
   function syncFnAsk() {
     var ask = state.fnView && state.fnView.ask;
     var sketch = state.fnView && state.fnView.input === "sketch";
     var choice = isFnMode() && state.fnView && state.fnView.input === "choice";
+    var fork = isFnMode() && state.fnView && state.fnView.fork && state.fnView.fork.eqs && state.fnView.fork.eqs.length ? state.fnView.fork : null;
     var domainFields = isFnMode() && state.fnView && state.fnView.input === "domains" ? state.fnView.domains : null;
     var extremaCards = isFnMode() && state.fnView && state.fnView.input === "extrema" ? state.fnView.extrema : null;
     if (domainFields && domainFields.length && domainFields.every(function (field) {
@@ -3556,7 +3967,15 @@
       return !!field.locked;
     })) domainFields = null;
     var axisBoard = isFnMode() && state.fnView && state.fnView.input === "axes";
-    renderFnDomains(domainFields);
+    if (fork && fork.eqs && fork.eqs.length) renderPolyFork(fork);
+    else {
+      if (fnDomainsEl) {
+        fnDomainsEl.classList.remove("is-fork");
+        fnDomainsEl.removeAttribute("data-fork");
+      }
+      state.polyForkFields = [];
+      renderFnDomains(domainFields);
+    }
     renderFnExtrema(extremaCards);
     renderFnAxes(axisBoard);
     renderFnChoice(choice ? state.fnView.choices : null);
@@ -3569,12 +3988,15 @@
       }
     }
     var formulaOpen = formulaWorkActive();
-    if (mathWrap) mathWrap.classList.toggle("hidden", !!sketch || !!domainFields || !!extremaCards || !!choice || !!axisBoard || formulaOpen);
+    var forkOpen = !!(fork && fork.eqs && fork.eqs.length && !fork.keepMain);
+    if (mathWrap) mathWrap.classList.toggle("hidden", !!sketch || !!domainFields || !!extremaCards || !!choice || !!axisBoard || formulaOpen || forkOpen);
     if (mathKeysEl) mathKeysEl.classList.toggle("hidden", !!sketch || !!domainFields || !!extremaCards || !!choice || formulaOpen);
+    if (forkOpen && mathKeysEl) mathKeysEl.classList.remove("hidden");
+    updateSplitBtn();
     if (answerRowEl && isFnMode()) answerRowEl.classList.toggle("hidden", !!sketch || !!choice || formulaOpen);
     if (answerLabelEl && isFnMode()) {
       answerLabelEl.textContent = domainFields ? (domainFields.length === 1 ? "התחום" : "התחומים") : "הצעד הבא";
-      answerLabelEl.classList.toggle("hidden", !!domainFields || !!extremaCards || !!sketch || !!choice || !!axisBoard);
+      answerLabelEl.classList.toggle("hidden", !!domainFields || !!extremaCards || !!sketch || !!choice || !!axisBoard || forkOpen);
     }
     if (hintEl && state.fnView && state.fnView.hint) hintEl.textContent = state.fnView.hint;
     updateFormulaBtn();
@@ -3610,6 +4032,14 @@
       showFeedback(true, fnProse(remote.message || "הישר מוכן."), "tip");
       return;
     }
+    if (remote && remote.enter === "formula") {
+      state.fn = state.fn || {};
+      if (remote.progress) state.fn.progress = remote.progress;
+      if (remote.formulaEq) state.fnFormulaEq = remote.formulaEq;
+      if (remote.formulaBranch != null) state.fnFormulaBranch = remote.formulaBranch;
+      beginMixedFormulaFromServer(remote, !!remote.md53);
+      return;
+    }
     if (!remote || remote.ok === false) {
       if (remote && remote.progress && remote.view && (remote.view.input === "domains" || remote.view.input === "extrema" || remote.view.family === "probe")) {
         state.fn = state.fn || {};
@@ -3641,13 +4071,41 @@
       state.fn = state.fn || {};
       state.fn.axisLive = state.fn.axisLive || emptyAxisLive();
       var axisWhy = String(remote.message || "").replace(/^נכון\.\s*/, "").trim();
-      state.fn.axisLive[remote.axis].push({
-        show: remote.show || "",
-        why: axisWhy && axisWhy !== "נכון" ? axisWhy : "",
-      });
+      var axisPrev = state.fn.axisLive[remote.axis].slice(-1)[0];
+      var axisPrevText = axisPrev ? (axisPrev.show || String(axisPrev.html || "").replace(/<[^>]+>/g, "")) : "";
+      var axisSame = String(axisPrevText).replace(/[−–]/g, "-").replace(/\s+/g, "") === String(remote.show || "").replace(/[−–]/g, "-").replace(/\s+/g, "");
+      var axisSplit = remote.parallel && remote.parallel.parallel;
+      var axisSameSplit = axisSplit && axisPrev && axisPrev.parallel && parallelKey(axisPrev.parallel) === parallelKey(remote.parallel);
+      if (axisSplit) {
+        if (!axisSameSplit) {
+          state.fn.axisLive[remote.axis].push({
+            parallel: remote.parallel,
+            why: axisWhy && axisWhy !== "נכון" ? axisWhy : "",
+          });
+        }
+      } else if (!axisSame) {
+        state.fn.axisLive[remote.axis].push({
+          show: remote.show || "",
+          why: axisWhy && axisWhy !== "נכון" ? axisWhy : "",
+        });
+      }
       if (remote.axisDone) state.fn.axisDone = remote.axisDone;
-      if (!(remote.view && remote.view.input === "axes")) freezeAxisCard();
+      if (!(remote.view && remote.view.input === "axes")) {
+        if (partBefore && (state.history || []).indexOf("§" + partBefore) < 0) state.history.push("§" + partBefore);
+        freezeAxisCard();
+      }
       if (remote.view) state.fnView = remote.view;
+      if (partBefore && fnServerPart() && partBefore !== fnServerPart()) {
+        state.fn = state.fn || {};
+        syncFnViewPart(fnServerPart());
+        var axisNextMark = "§" + fnServerPart();
+        if ((state.history || []).indexOf(axisNextMark) < 0) state.history.push(axisNextMark);
+        if (state.fnView && state.fnView.input === "sketch") {
+          var axisArrived = state.fn.partSketches && state.fn.partSketches[fnServerPart()];
+          state.fn.sketch = axisArrived && axisArrived.model ? axisArrived.model : { points: [], strokes: [], line: null };
+          state.fn.sketchArchived = false;
+        }
+      }
       if (fnAxesEl) {
         var axisBox = fnAxesEl.querySelector("input[data-axis='" + remote.axis + "']");
         if (axisBox) axisBox.value = "";
@@ -3706,6 +4164,9 @@
         state.fn.sketch = { points: [], strokes: [], line: null };
       } else if (wasSketch && remote.solved && partBefore && remote.view && remote.view.parts && remote.view.parts.length > 1) {
         var finishedLast = fnSketch && fnSketch.snapshot ? fnSketch.snapshot() : { model: remote.board, undo: [] };
+        var snapshotInk = finishedLast && finishedLast.model && ((finishedLast.model.strokes && finishedLast.model.strokes.length) || (finishedLast.model.curve && finishedLast.model.curve.length) || finishedLast.model.line);
+        var solvedInk = remote.board && ((remote.board.strokes && remote.board.strokes.length) || (remote.board.curve && remote.board.curve.length) || remote.board.line);
+        if (!snapshotInk && solvedInk) finishedLast = { model: remote.board, undo: [] };
         state.fn.partSketches[partBefore] = finishedLast;
         state.fn.pendingSketchCard = (finishedLast && finishedLast.model) || remote.board;
         state.fn.sketchArchived = true;
@@ -3724,6 +4185,10 @@
     if (wasSketch && remote.show && sketchBoardDone) {
       state.fn = state.fn || {};
       state.fn.sketchDone = true;
+    }
+    if (state.fnView && state.fnView.input === "fork") {
+      state.polyForkDrafts = {};
+      state.polyForkFields = [];
     }
     if (remote.view) state.fnView = remote.view;
     if (!remote.board && partBefore && fnServerPart() && partBefore !== fnServerPart()) {
@@ -3752,9 +4217,57 @@
         var arrivedSketch = state.fn.partSketches[fnServerPart()];
         state.fn.sketch = arrivedSketch && arrivedSketch.model ? arrivedSketch.model : { points: [], strokes: [], line: null };
       }
-      state.fn.viewPart = fnServerPart();
+      syncFnViewPart(fnServerPart());
     }
-    if (remote.show) {
+    if (remote.historyFork && remote.historyFork.trails && remote.historyFork.trails.length && !(remote.parallel && remote.parallel.parallel)) {
+      state.fn = state.fn || {};
+      state.fn.forkCards = state.fn.forkCards || [];
+      state.fn.forkCards.push(remote.historyFork);
+      state.history.push("⌘fork");
+    }
+    var liveFork = remote.view && remote.view.fork && remote.view.fork.eqs && remote.view.fork.eqs.length;
+    if (remote.parallel && remote.parallel.parallel && !(remote.axis === "y" || remote.axis === "x") && !liveFork && !remote.split) {
+      mergeParkedFormula(remote.parallel);
+      var partForFork = partBefore;
+      if (partForFork) {
+        var forkMark = "§" + partForFork;
+        if ((state.history || []).indexOf(forkMark) < 0) state.history.push(forkMark);
+      }
+      ensureFnTaskHeader(remote.heading);
+      var forkKind = parallelFamily(remote.parallel);
+      var forkKey = parallelKey(remote.parallel);
+      var forkAt = -1;
+      if (forkKind || forkKey) {
+        var forkScan = state.history.length - 1;
+        while (forkScan >= 0) {
+          var priorFork = state.history[forkScan];
+          if (typeof priorFork === "string" && (/^§/.test(priorFork) || priorFork === "⌘sketch" || priorFork === "⌘axes" || isGeoTaskHeader(priorFork))) break;
+          if ((forkKey && parallelKey(priorFork) === forkKey) || (forkKind && parallelFamily(priorFork) === forkKind)) {
+            forkAt = forkScan;
+            break;
+          }
+          forkScan -= 1;
+        }
+      }
+      if (forkAt >= 0) state.history[forkAt] = remote.parallel;
+      else {
+        state.history.push(remote.parallel);
+        forkAt = state.history.length - 1;
+      }
+      var forkReason = String(remote.message || "").replace(/^נכון\.\s*/, "").trim();
+      if (forkReason && forkReason !== "נכון") {
+        state.fn = state.fn || {};
+        state.fn.reasons = state.fn.reasons || {};
+        state.fn.reasons[forkAt] = forkReason;
+      }
+      archivePendingSketchCard();
+      var nextForkPart = remote.view && remote.view.part && remote.view.part.label;
+      if (nextForkPart && nextForkPart !== partBefore) {
+        var nextForkMark = "§" + nextForkPart;
+        if ((state.history || []).indexOf(nextForkMark) < 0) state.history.push(nextForkMark);
+      }
+      ensureFnTaskHeader(remote.view && remote.view.pointHeading);
+    } else if (remote.show && !liveFork) {
       var partLabel = partBefore;
       if (partLabel) {
         var mark = "§" + partLabel;
@@ -3787,12 +4300,7 @@
         state.fn.reasons[domainAt] = fnReason;
       }
       var nextPart = remote.view && remote.view.part && remote.view.part.label;
-      if (state.fn && state.fn.pendingSketchCard) {
-        state.fn.sketchCards = state.fn.sketchCards || [];
-        state.fn.sketchCards.push(state.fn.pendingSketchCard);
-        state.history.push("⌘sketch");
-        state.fn.pendingSketchCard = null;
-      }
+      archivePendingSketchCard();
       if (nextPart && nextPart !== partBefore) {
         var nextMark = "§" + nextPart;
         if ((state.history || []).indexOf(nextMark) < 0) state.history.push(nextMark);
@@ -3862,6 +4370,15 @@
       if (!requestFunctions({ intent: "check", domains: readFnDomains() }, applyFnRemote)) showBasicEqServerUnavailable();
       return;
     }
+    if (view && view.input === "fork") {
+      var pendingFork = polyForkPending();
+      if (!pendingFork) {
+        showFeedback(false, "<strong>עוד לא.</strong> בחרו עמודה. אפשר להתחיל מכל אחת.");
+        return;
+      }
+      if (!requestFunctions({ intent: "check", typed: pendingFork.text, branch: pendingFork.branch }, applyFnRemote)) showBasicEqServerUnavailable();
+      return;
+    }
     if (view && view.input === "extrema") {
       if (!requestFunctions({ intent: "check", extrema: readFnExtrema() }, applyFnRemote)) showBasicEqServerUnavailable();
       return;
@@ -3877,6 +4394,7 @@
 
   function fnHint() {
     var hintBody = { intent: "hint", progress: fnProgressForView() };
+    if (state.fnView && state.fnView.fork && state.polyForkBranch != null) hintBody.branch = state.polyForkBranch;
     if (fnSketch && fnSketch.getModel) hintBody.sketch = fnSketch.getModel();
     if (!requestFunctions(hintBody, function (remote) {
       if (!remote || remote.ok === false) {
@@ -3897,6 +4415,7 @@
   function abandonFnFormula() {
     if (!isFnMode() || !fnFormulaActive()) return;
     state.fnFormula = false;
+    state.fnFormulaEq = "";
     state.mixed = state.mixed || emptyMixedState();
     state.mixed.path = null;
     state.mixed.md53 = false;
@@ -3909,12 +4428,23 @@
   }
 
   function fnOneStep() {
-    abandonFnFormula();
+    if (fnFormulaActive()) return fillQuadStep();
     if (fnReviewingSketch()) {
       showFeedback(false, "<strong>עוד לא.</strong> הצעד הבא שייך לסעיף " + fnServerPart() + ". חזרו אליו כדי להמשיך.");
       return;
     }
-    if (!requestFunctions({ intent: "one-step" }, applyFnRemote)) showBasicEqServerUnavailable();
+    if (state.fnView && state.fnView.input === "fork") {
+      var pendingFork = polyForkPending();
+      if (pendingFork && pendingFork.text) {
+        if (!requestFunctions({ intent: "check", typed: pendingFork.text, branch: pendingFork.branch }, applyFnRemote)) showBasicEqServerUnavailable();
+        return;
+      }
+      if (!requestFunctions({ intent: "one-step", branch: state.polyForkBranch }, applyFnRemote)) showBasicEqServerUnavailable();
+      return;
+    }
+    var stepBody = { intent: "one-step" };
+    if (state.fnView && state.fnView.fork && state.polyForkBranch != null) stepBody.branch = state.polyForkBranch;
+    if (!requestFunctions(stepBody, applyFnRemote)) showBasicEqServerUnavailable();
   }
 
   function ensureFnTaskHeader(heading) {
@@ -4246,6 +4776,7 @@
       }),
       pending: (st.pending || []).map(String),
       formulaBranch: st.formulaBranch,
+      work: st.work || null,
     };
   }
 
@@ -4452,7 +4983,32 @@
     return isFnMode() && mixedPath() === "formula";
   }
 
+  function fnFormulaBranchEq() {
+    if (state.fnFormulaEq) return state.fnFormulaEq;
+    var fork = state.fnView && state.fnView.fork;
+    var eqs = (fork && fork.eqs) || [];
+    var i;
+    for (i = 0; i < eqs.length; i++) {
+      if (fork.solved && fork.solved[i]) continue;
+      var eq = String(eqs[i] || "");
+      if (/x\^2/.test(eq) && !/x\^[3-9]/.test(eq)) return eq;
+    }
+    return "";
+  }
+
+  function formulaLetterToX(eq) {
+    var text = String(eq || "");
+    var found = text.replace(/\s+/g, "").match(/([a-wyz])\^2/i);
+    if (!found) return text;
+    var letter = found[1];
+    return text.replace(new RegExp(letter + "\\^", "gi"), "x^").replace(new RegExp(letter, "gi"), "x");
+  }
+
   function fnQuadChain() {
+    if (fnFormulaActive()) {
+      var branch = formulaLetterToX(fnFormulaBranchEq());
+      if (branch) return { start: branch, history: [branch] };
+    }
     var eq = fnQuadText(fnCurrentQuadLine());
     return { start: eq, history: [eq] };
   }
@@ -4461,6 +5017,8 @@
     if (!state.fnFormula || !isFnMode()) return false;
     var text = String(answer || "").trim();
     state.fnFormula = false;
+    state.fnFormulaEq = "";
+    stashFnFormulaTrail();
     state.mixed = state.mixed || emptyMixedState();
     state.mixed.path = null;
     state.mixed.md53 = false;
@@ -4559,6 +5117,7 @@
 
   function canSplitFactor() {
     if (state.locked) return false;
+    if (isFnMode() && state.fnView && state.fnView.canSplit) return true;
     if (isSystemQuadMode() && state.offerSplit && mixedPath() !== "factor") return true;
     var ready = !!(state.factor && state.factor.canSplit);
     if (
@@ -4595,6 +5154,7 @@
     }
     if (sysQuadFormulaActive()) return false;
     if (fnQuadSolveActive()) return true;
+    if (isFnMode() && state.fnView && state.fnView.offerFormula && mixedPath() !== "formula") return true;
     if (isSystemQuadMode() && state.offerFormula) return true;
     if (isQuadIneqMode() && (!state.quadIneq || state.quadIneq.phase === "equation" || state.quadIneq.phase === "zeros") && !mixedPath() && state.offerFormula) return true;
     if (!isMixedEqMode() && !geoEqSolveActive()) return false;
@@ -5702,6 +6262,10 @@
       showFeedback(false, "<strong>עוד לא.</strong> קודם הוציאו גורם משותף, למשל x(x−5)=0.");
       return;
     }
+    if (isFnMode()) {
+      if (!requestFunctions({ intent: "split" }, applyFnRemote)) showBasicEqServerUnavailable();
+      return;
+    }
     if (isSystemQuadMode()) {
       enterSysSplit();
       return;
@@ -5768,6 +6332,7 @@
     if (res.offerFormula != null) state.factor.offerFormula = !!res.offerFormula;
     if (res.formulaEq) state.factor.formulaEq = res.formulaEq;
     if (res.formulaBranch != null) state.factor.formulaBranch = res.formulaBranch;
+    if (Array.isArray(res.work)) state.factor.work = res.work;
     if (Array.isArray(res.pending)) state.factor.pending = res.pending.slice();
     if (res.sqrtProg) state.factor.sqrtProg = res.sqrtProg;
     var wasSplit = !!state.factor.split;
@@ -7936,7 +8501,7 @@
         stepsEl.appendChild(renderFactorFork(stepNum + 1));
       }
       var liveTrail =
-        formulaWorkActive() && state.quad && state.quad.trail && state.quad.trail.length
+        formulaWorkActive() && state.quad && state.quad.trail && state.quad.trail.length && !formulaSplitOwned()
           ? state.quad.trail
           : state.geo && state.geo.eqTrail && state.geo.eqTrail.length
             ? state.geo.eqTrail
@@ -8099,7 +8664,8 @@
       formulaWorkActive() &&
       state.quad &&
       state.quad.trail &&
-      state.quad.trail.length
+      state.quad.trail.length &&
+      !formulaSplitOwned()
     ) {
       state.quad.trail.forEach(function (item, index) {
         var liC = document.createElement("li");
@@ -8196,14 +8762,26 @@
       }
       var trail = st.trails[i] && st.trails[i].length ? st.trails[i] : [];
       if (!trail.length && st.eqs[i] && !isBiquadMode()) trail = [st.eqs[i]];
-      trail.forEach(function (eq, k) {
+      var branchSession = branchFormulaSession(i);
+      var formulaTrail = branchSession && branchSession.trail && branchSession.trail.length ? branchSession.trail.slice() : null;
+      var earlyLines = [];
+      var answerLines = [];
+      trail.forEach(function (eq) {
+        if (formulaTrail && isAnsweredRootLine(eq)) answerLines.push(eq);
+        else earlyLines.push(eq);
+      });
+      if (formulaTrail && answerLines.length) {
+        var lastHtml = String((formulaTrail[formulaTrail.length - 1] && formulaTrail[formulaTrail.length - 1].html) || "");
+        var lastText = lastHtml.replace(/<[^>]+>/g, "").replace(/[−–—]/g, "-").replace(/\s+/g, "");
+        var ansText = String(answerLines[answerLines.length - 1] || "").replace(/[−–—]/g, "-").replace(/\s+/g, "");
+        if (lastText && ansText && lastText === ansText) formulaTrail = formulaTrail.slice(0, -1);
+      }
+      function appendBranchLine(eq, k, answered) {
         var row = document.createElement("div");
-        var isLast = k === trail.length - 1;
-        var answered = isAnsweredRootLine(eq);
         row.className =
           "factor-branch-step" +
           (answered ? " is-final" : "") +
-          (!st.solved[i] && isLast && !answered ? " is-current" : "");
+          (!st.solved[i] && k === earlyLines.length - 1 && !answered && !formulaTrail ? " is-current" : "");
         var n = document.createElement("span");
         n.className = "n";
         n.textContent = baseNum + k + "." + (letters[i] || String(i + 1));
@@ -8221,6 +8799,33 @@
           row.appendChild(ok);
         }
         col.appendChild(row);
+      }
+      earlyLines.forEach(function (eq, k) {
+        appendBranchLine(eq, k, false);
+      });
+      if (!formulaTrail) {
+        var owned = state.factor && state.factor.work && state.factor.work[i] && state.factor.work[i].history;
+        (owned || []).forEach(function (line) {
+          var ownedRow = document.createElement("div");
+          ownedRow.className = "factor-branch-step";
+          ownedRow.innerHTML = DoctematicaMath.toHTML(String(line).replace(/-/g, "−"));
+          col.appendChild(ownedRow);
+        });
+      }
+      if (formulaTrail) {
+        formulaTrail.forEach(function (item) {
+          var liveRow = document.createElement("div");
+          liveRow.className = "factor-branch-step";
+          liveRow.innerHTML = (item && item.html) || "";
+          col.appendChild(liveRow);
+        });
+      }
+      answerLines.forEach(function (eq, k) {
+        appendBranchLine(eq, earlyLines.length + k, true);
+      });
+      col.addEventListener("mousedown", function (event) {
+        if (event.target && event.target.closest && event.target.closest(".factor-branch-math, input, textarea")) return;
+        selectSplitBranch(i);
       });
       if (isBiquadMode() && !(st.solved && st.solved[i])) {
         (function (branchIdx) {
@@ -8890,6 +9495,36 @@
         onResult
       );
     }
+    if (fnFormulaActive() && state.fnView && state.fnView.fork && state.fnView.fork.eqs && state.fnView.fork.eqs.length) {
+      return requestFunctions(
+        Object.assign(
+          {
+            intent: extra.intent || "check",
+            phase: q.phase,
+            letter: q.abcAt,
+            slots: Object.assign({}, q.abcGot || {}, collectQuadSlots()),
+            root: q.root,
+            compute: q.compute,
+            md53: !!(state.mixed && state.mixed.md53),
+            branch: state.fnFormulaBranch,
+            formulaBranch: state.fnFormulaBranch,
+          },
+          extra
+        ),
+        function (remote) {
+          remote = remote || {};
+          if (remote.progress) {
+            state.fn = state.fn || {};
+            state.fn.progress = remote.progress;
+          }
+          if (remote.view) state.fnView = remote.view;
+          var quadRes = remote.formulaView ? Object.assign({}, remote, { view: remote.formulaView }) : remote;
+          onResult(quadRes);
+          syncFnAsk();
+          renderFnSteps();
+        }
+      );
+    }
     if (isHighChainServerMode() && mixedPath() === "formula") {
       var branchEq = (state.factor && state.factor.formulaEq) || "";
       return requestHighPowerAction(
@@ -8943,10 +9578,11 @@
     if (res.answer) mergeQuadView({ answer: res.answer, kind: res.kind });
     var q = state.quad;
     if (res.fill) applyQuadFill(res.fill);
+    if (Array.isArray(res.work) && state.factor) state.factor.work = res.work;
     if (q.phase === "abc" && res.ok && res.nextPhase === "abc" && res.nextLetter) {
       var letter = q.abcAt || "a";
       if (!q.abcGot) q.abcGot = {};
-      q.abcGot[letter] = slotVal(letter);
+      q.abcGot[letter] = slotVal(letter) || (res.fill && res.fill[letter]) || "";
       state.stats.try += 1;
       saveStats();
       renderStats();
@@ -8956,6 +9592,7 @@
         siteStepMessage(res.reason, "<strong>נכון.</strong> " + (res.message || "עכשיו " + res.nextLetter + "."))
       );
       renderQuadGuide();
+      if (formulaSplitOwned()) renderSteps();
       return;
     }
     if (q.phase === "rootwork") {
@@ -9090,18 +9727,20 @@
     }
     if (q.phase === "abc") {
       q.gotAbc = true;
-      var abcItem = {
-        html:
-          '<span class="m-expr" dir="ltr">a = ' +
-          String(want.a).replace(/-/g, "−") +
-          ", b = " +
-          String(want.b).replace(/-/g, "−") +
-          ", c = " +
-          String(want.c).replace(/-/g, "−") +
-          "</span>",
-      };
-      if (result.reason && eqNotesActive()) abcItem.reason = result.reason;
-      q.trail.push(abcItem);
+      if (!formulaSplitOwned()) {
+        var abcItem = {
+          html:
+            '<span class="m-expr" dir="ltr">a = ' +
+            String(want.a).replace(/-/g, "−") +
+            ", b = " +
+            String(want.b).replace(/-/g, "−") +
+            ", c = " +
+            String(want.c).replace(/-/g, "−") +
+            "</span>",
+        };
+        if (result.reason && eqNotesActive()) abcItem.reason = result.reason;
+        q.trail.push(abcItem);
+      }
       if (state.mixed && state.mixed.md53) {
         renderQuadGuide();
         renderSteps();
@@ -9130,6 +9769,10 @@
       var compItem = { html: buildQuadFormula("computed").outerHTML };
       if (result.reason && eqNotesActive()) compItem.reason = result.reason;
       q.trail.push(compItem);
+      if (result.solved) {
+        finishQuad(result.message || "");
+        return;
+      }
       q.phase = result.nextPhase || (want.kind === "none" ? "count" : "sqrt");
       q.compute = {};
       showFeedback(true, siteStepMessage(result.reason, "<strong>נכון.</strong> " + result.message));
@@ -9288,21 +9931,26 @@
     applySqrtEqTyped(typedAnswer().trim());
   }
 
-  function clearGeoUi() {
-    clearFreqUi();
-    if (fnSketch && !isFnMode()) fnSketch.hide();
-    if (solveWrap && !isFnMode()) {
+  function hideFnBoardUi() {
+    if (fnSketch) fnSketch.hide();
+    if (solveWrap) {
       solveWrap.classList.remove("has-fn-figure");
       solveWrap.classList.remove("has-fn-sketch");
     }
-    if (fnBoardEl && !isFnMode()) {
+    if (fnBoardEl) {
       fnBoardEl.classList.remove("is-figure");
       fnBoardEl.classList.remove("is-sketch");
+      fnBoardEl.classList.add("hidden");
     }
-    if (answerRowEl && !isFnMode()) answerRowEl.classList.remove("hidden");
-    if (!isFnMode()) placeFnBoard("home");
-    if (!isFnMode()) renderFnDomains(null);
-    if (!isFnMode()) renderFnAxes(false);
+    if (answerRowEl) answerRowEl.classList.remove("hidden");
+    placeFnBoard("home");
+    renderFnDomains(null);
+    renderFnAxes(false);
+  }
+
+  function clearGeoUi() {
+    clearFreqUi();
+    hideFnBoardUi();
     if (solveWrap) solveWrap.classList.remove("has-geo");
     if (coordBoard) coordBoard.clear();
     if (geoPartEl) {
@@ -9714,7 +10362,10 @@
   }
 
   function startGeoSession() {
+    hideFnBoardUi();
+    state.fnView = null;
     state.geo = createEmptyGeoState();
+    if (state.view && state.view.draw) state.geo.draw = state.view.draw;
     var pack0 = state.problem && state.problem.geo;
     var lineMatchStart =
       pack0 &&
@@ -10660,6 +11311,8 @@
         factor: factorPayload(),
       },
       function (res) {
+        var keptBranch = state.factor && state.factor.formulaBranch;
+        if (keptBranch != null && keptBranch !== "" && state.quad) parkFormulaSession(keptBranch);
         state.mixed = emptyMixedState();
         state.quad = null;
         hideQuadGuide();
@@ -10698,6 +11351,10 @@
   }
 
   function enterMixedFormula() {
+    if (isFnMode() && state.fnView && state.fnView.offerFormula) {
+      if (!requestFunctions({ intent: "formula-enter" }, applyFnRemote)) showBasicEqServerUnavailable();
+      return;
+    }
     if (isBiquadMode()) {
       enterBiquadFormula(false);
       return;
@@ -10730,6 +11387,10 @@
   }
 
   function enterMixedMd53() {
+    if (isFnMode() && state.fnView && state.fnView.offerFormula) {
+      if (!requestFunctions({ intent: "formula-enter", md53: true }, applyFnRemote)) showBasicEqServerUnavailable();
+      return;
+    }
     if (isBiquadMode()) {
       enterBiquadFormula(true);
       return;
@@ -11019,16 +11680,82 @@
   var MATH_FIELD_HINT =
     "הקלידו רגיל. לשבר לחצו «שבר» — החצים זזים בין מונה למכנה. לשבר-בתוך-שבר עמדו במונה או במכנה ולחצו «שבר» שוב.";
 
+  function keepSolutionStep(step) {
+    if (step && step.parallel) return step;
+    if (step && step.eq != null) return step.eq;
+    return step;
+  }
+
+  function parallelFamily(step) {
+    var labels = ((step && step.parallel) || []).map(function (col) {
+      return String(col.label || "");
+    }).join(" ");
+    if (/חיובי|שלילי/.test(labels)) return "sign";
+    if (/עלייה|ירידה|עולה|יורדת/.test(labels)) return "mono";
+    return "";
+  }
+
+  function parallelKey(step) {
+    return ((step && step.parallel) || []).map(function (col) {
+      return String(col.label || "");
+    }).join("|");
+  }
+
+  function solutionStepHTML(src) {
+    if (src && src.eq != null) src = src.eq;
+    var text = String(src || "");
+    if (window.DoctematicaMath && DoctematicaMath.toHTML && !/[\u0590-\u05FF]/.test(text)) {
+      return DoctematicaMath.toHTML(text.replace(/-/g, "−"));
+    }
+    return fnProse(text);
+  }
+
+  function parallelBlockHTML(step) {
+    var cols = (step && step.parallel) || [];
+    var html = '<div class="sol-parallel" style="--sol-cols:' + cols.length + '">';
+    cols.forEach(function (col) {
+      html += '<div class="sol-parallel-col">';
+      if (col.label) html += '<div class="sol-parallel-label">' + fnProse(col.label) + "</div>";
+      (col.steps || []).forEach(function (bit) {
+        if (bit && bit.parallel) {
+          html += parallelBlockHTML(bit);
+          return;
+        }
+        if (bit && bit.html) {
+          html += '<div class="sol-parallel-step">' + bit.html + "</div>";
+          return;
+        }
+        html += '<div class="sol-parallel-step">' + solutionStepHTML(bit) + "</div>";
+      });
+      html += "</div>";
+    });
+    html += "</div>";
+    return html;
+  }
+
   function showEqSolution(title, opts) {
     opts = opts || {};
     if (!state.problem) return false;
     var steps = opts.steps || state.problem.solutionSteps || [];
     if (!opts.always && !steps.length) return false;
     var notes = opts.withNotes ? opts.notes || state.problem.solutionNotes || [] : [];
+    function solutionNoteHTML(text) {
+      var raw = String(text || "");
+      if (!raw) return "";
+      if (/<[a-z][\s\S]*>/i.test(raw)) return raw;
+      return siteReasonHTML(raw);
+    }
+    function solKey(text) {
+      return String(text || "")
+        .replace(/[−–—]/g, "-")
+        .replace(/\s+/g, "")
+        .toLowerCase();
+    }
     var mixed = state.problem.mixed;
     var lcdInfo = mixed && mixed.lcdInfo;
     var cleared = mixed && mixed.cleared;
     var lines = "";
+    var givenHtml = "";
     var domainInfo =
       opts.domain ||
       (state.domain && state.domain.info) ||
@@ -11052,14 +11779,54 @@
       lines +=
         "<li class=\"domain-row\"><span class=\"domain-body\">" +
         domHtml +
-        '</span><div class="why" dir="rtl">תחום הצבה' +
+        '</span><span class="why">תחום הצבה' +
         (domainInfo.count > 1 ? " (" + domainInfo.count + " ערכים אסורים)" : "") +
-        ".</div></li>";
+        ".</span></li>";
+    }
+    var startEq =
+      opts.start != null
+        ? String(opts.start)
+        : state.problem && state.problem.startEquation
+          ? String(state.problem.startEquation)
+          : "";
+    var firstStep = steps.length ? steps[0] : "";
+    var firstSrc = firstStep && typeof firstStep === "object" && firstStep.eq != null ? firstStep.eq : firstStep;
+    if (startEq && solKey(firstSrc) !== solKey(startEq)) {
+      var givenBody = opts.plain
+        ? String(startEq).replace(/-/g, "−")
+        : DoctematicaMath.toHTML(startEq);
+      var given = state.problem && state.problem.given;
+      var givenNote =
+        given && given.value != null && given.value !== ""
+          ? "המשוואה הנתונה. " +
+            (given.letter || "x") +
+            " = " +
+            String(given.value).replace(/-/g, "−") +
+            "."
+          : "";
+      givenHtml =
+        '<p class="sol-given"><span class="sol-k">נתון</span><span class="sol-eq">' +
+        givenBody +
+        "</span>" +
+        (givenNote ? '<span class="why">' + solutionNoteHTML(givenNote) + "</span>" : "") +
+        "</p>";
     }
     var i;
     var stepNo = 0;
     for (i = 0; i < steps.length; i++) {
       var step = steps[i];
+      if (step && step.parallel) {
+        stepNo += 1;
+        var forkWhy = notes[i] || step.explain || "";
+        lines +=
+          '<li class="sol-parallel-row" value="' +
+          stepNo +
+          '">' +
+          parallelBlockHTML(step) +
+          (forkWhy ? '<span class="why">' + solutionNoteHTML(forkWhy) + "</span>" : "") +
+          "</li>";
+        continue;
+      }
       var src = step && typeof step === "object" && step.eq != null ? step.eq : step;
       if (/^משימה:/.test(String(src || ""))) {
         var taskLabel = String(src).replace(/^משימה:/, "");
@@ -11077,9 +11844,9 @@
         ? sysHtml
         : opts.plain
           ? String(src).replace(/-/g, "−")
-          : DoctematicaMath.toHTML(src);
-      var why = notes[i] ? "<div class=\"why\" dir=\"rtl\">" + notes[i] + "</div>" : "";
-      lines += "<li>" + body + why + "</li>";
+          : solutionStepHTML(src);
+      var why = notes[i] ? '<span class="why">' + solutionNoteHTML(notes[i]) + "</span>" : "";
+      lines += '<li><span class="sol-eq">' + body + "</span>" + why + "</li>";
       if (
         !opts.plain &&
         i === 0 &&
@@ -11093,9 +11860,9 @@
         lines +=
           "<li><div class=\"sol-lcd\">" +
           hats.outerHTML +
-          '</div><div class="why" dir="rtl">מכנה משותף ' +
-          lcdInfo.lcd +
-          " — מכפילים מעל כל איבר.</div></li>";
+          '</div><span class="why">' +
+          solutionNoteHTML("מכנה משותף " + lcdInfo.lcd + " — מכפילים מעל כל איבר.") +
+          "</span></li>";
       }
     }
     var extra = opts.note
@@ -11115,7 +11882,8 @@
       title +
       "</strong>" +
       extra +
-      "<ol class=\"sol-lines\" dir=\"ltr\">" +
+      givenHtml +
+      "<ol class=\"sol-lines\" dir=\"rtl\">" +
       lines +
       "</ol><p dir=\"rtl\">" +
       footerHtml +
@@ -11611,7 +12379,7 @@
       showEqSolution("פתרון מלא — אי־שוויון ריבועי", {
         always: true,
         withNotes: true,
-        steps: (remote.steps || []).map(function (s) { return s.eq; }),
+        steps: (remote.steps || []).map(function (s) { return keepSolutionStep(s); }),
         notes: (remote.steps || []).map(function (s) { return s.explain || ""; }),
         footer: remote.answer ? "הפתרון: " + remote.answer : "",
       });
@@ -11673,7 +12441,7 @@
       var steps = remote.steps || [];
       showEqSolution(isOrMode() ? "פתרון מלא — מערכת או" : "פתרון מלא — מערכת וגם", {
         always: true,
-        steps: steps.map(function (s) { return s.eq; }),
+        steps: steps.map(function (s) { return keepSolutionStep(s); }),
         withNotes: true,
         notes: steps.map(function (s) { return siteReasonHTML(s.explain); }),
         footer: remote.answer ? "הפתרון: " + remote.answer : "",
@@ -11840,7 +12608,7 @@
                   {
                   always: true,
                   steps: lines.map(function (s) {
-                    return s.eq;
+                    return keepSolutionStep(s);
                   }),
                   notes: lines.map(function (s) {
                     return s.reason || "";
@@ -11880,7 +12648,7 @@
                 showEqSolution("פתרון מלא — נוסחת שורשים", {
                   always: true,
                   steps: (remote.steps || []).map(function (s) {
-                    return s.eq;
+                    return keepSolutionStep(s);
                   }),
                   footer: remote.answer ? "הפתרון: " + remote.answer : "",
                 });
@@ -11913,7 +12681,7 @@
                 showEqSolution("פתרון מלא — שורש רגיל", {
                   always: true,
                   steps: (remote.steps || []).map(function (s) {
-                    return s.eq;
+                    return keepSolutionStep(s);
                   }),
                   footer: remote.answer ? "הפתרון: " + remote.answer : "",
                 });
@@ -11946,7 +12714,7 @@
                 showEqSolution("פתרון מלא — שורש ממעלה גבוהה", {
                   always: true,
                   steps: (remote.steps || []).map(function (s) {
-                    return s.eq;
+                    return keepSolutionStep(s);
                   }),
                   footer: remote.answer ? "הפתרון: " + remote.answer : "",
                 });
@@ -12175,7 +12943,7 @@
                 showEqSolution("פתרון מלא — משוואה בחזקה גבוהה", {
                   always: true,
                   steps: (remote.steps || []).map(function (s) {
-                    return s.eq;
+                    return keepSolutionStep(s);
                   }),
                   notes: (remote.steps || []).map(function (s) {
                     return s.explain || "";
@@ -12213,7 +12981,7 @@
                 showEqSolution(title, {
                   always: true,
                   steps: (remote.steps || []).map(function (s) {
-                    return s.eq;
+                    return keepSolutionStep(s);
                   }),
                   notes: chain
                     ? (remote.steps || []).map(function (s) {
@@ -12256,7 +13024,7 @@
                 showEqSolution("פתרון מלא — משוואה ריבועית מגוונת", {
                   always: true,
                   steps: (remote.steps || []).map(function (s) {
-                    return s.eq;
+                    return keepSolutionStep(s);
                   }),
                   footer: remote.answer ? "הפתרון: " + remote.answer : "",
                 });
@@ -12285,7 +13053,7 @@
                 showEqSolution("פתרון מלא — משוואה ריבועית מגוונת", {
                   always: true,
                   steps: (remote.steps || []).map(function (s) {
-                    return s.eq;
+                    return keepSolutionStep(s);
                   }),
                   footer: remote.answer ? "הפתרון: " + remote.answer : "",
                 });
@@ -12313,7 +13081,7 @@
                 showEqSolution("פתרון מלא — משוואה ריבועית מגוונת", {
                   always: true,
                   steps: (remote.steps || []).map(function (s) {
-                    return s.eq;
+                    return keepSolutionStep(s);
                   }),
                   footer: remote.answer ? "הפתרון: " + remote.answer : "",
                 });
@@ -12341,7 +13109,7 @@
                 showEqSolution("פתרון מלא — משוואה ריבועית מגוונת", {
                   always: true,
                   steps: (remote.steps || []).map(function (s) {
-                    return s.eq;
+                    return keepSolutionStep(s);
                   }),
                   footer: remote.answer ? "הפתרון: " + remote.answer : "",
                 });
@@ -12383,7 +13151,7 @@
                 showEqSolution("פתרון מלא — משוואה ריבועית מגוונת", {
                   always: true,
                   steps: (remote.steps || []).map(function (s) {
-                    return s.eq;
+                    return keepSolutionStep(s);
                   }),
                   footer: remote.answer ? "הפתרון: " + remote.answer : "",
                 });
@@ -12426,17 +13194,12 @@
                 },
                 function (remote) {
                   var steps = (remote.steps || []).map(function (s) {
-                    return s.eq;
+                    return keepSolutionStep(s);
                   });
                   var notes = (remote.steps || []).map(function (s) {
                     if (isIneqMode() && s.explain) return siteReasonHTML(s.explain);
                     return s.explain;
                   });
-                  if (state.problem && state.problem.given) {
-                    var g = state.problem.given;
-                    steps.unshift(state.problem.startEquation);
-                    notes.unshift("המשוואה הנתונה. " + (g.letter || "x") + " = " + String(g.value).replace(/-/g, "−") + ".");
-                  }
                   showEqSolution("פתרון מלא לפי הדרך הנלמדת", {
                     withNotes: true,
                     note: "(אפשר גם לדלג על שלבי ביניים, כל עוד המשוואה שקולה)",
@@ -12605,7 +13368,15 @@
     renderStats();
   }
 
+  function leaveBoards() {
+    viewEpoch += 1;
+    hideFnBoardUi();
+    if (coordBoard) coordBoard.clear();
+    if (solveWrap) solveWrap.classList.remove("has-geo");
+  }
+
   function nextProblem() {
+    leaveBoards();
     state.locked = false;
     mathField.setDisabled(false);
     if (isComingSoon()) {
@@ -12672,6 +13443,7 @@
   }
 
   function requestStudentProblem(levelId, index) {
+    var token = viewEpoch;
     fetch(API_ROOT + "/api/problem", {
       method: "POST",
       credentials: "same-origin",
@@ -12683,6 +13455,7 @@
         return res.json();
       })
       .then(function (data) {
+        if (token !== viewEpoch || state.levelId !== levelId || state.exerciseIndex !== index) return;
         if (!data || !data.problem) {
           showBasicEqServerUnavailable();
           return;
@@ -12704,7 +13477,10 @@
           state.freqView = null;
           state.view = null;
           if (window.DoctematicaUI) window.DoctematicaUI.view = null;
-        } else if (data.view) applyGeoView(data.view);
+        } else if (data.view) {
+          state.fnView = null;
+          applyGeoView(data.view);
+        }
         else {
           state.view = null;
           state.freqView = null;
@@ -12766,6 +13542,8 @@
       state.freq = { step: "", done: false, found: {} };
       state.fn = { progress: emptyFnProgress(), sketch: { points: [], line: null, strokes: [] }, partSketches: {}, viewPart: "", hintBank: {}, reasons: {}, axisLive: emptyAxisLive(), axisCards: [], axisDone: { y: false, x: false } };
       state.fnFormula = false;
+      state.fnFormulaEq = "";
+      state.fn.forkCards = [];
       clearLcdAssist();
       clearGeoUi();
     } else if (isPercentMode()) {

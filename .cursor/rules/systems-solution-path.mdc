@@ -1,0 +1,32 @@
+---
+description: Substitution, equal coefficients, unsorted systems, and y=f(x) with y=g(x).
+alwaysApply: true
+---
+
+# Systems solution path
+
+## Two lines already written y=f(x) and y=g(x)
+
+Site path from an empty solution: write f(x)=g(x), solve that equation with the algebra path, then for each x find y, and finish with the ordered points the question asks for.
+
+A correct substitution that produces the same equation is accepted. The student does not have to name the step «השוואה». Once that equation is written, Hint and Next Step continue from it.
+
+Every intersection the question asks for is kept. Pair order does not matter.
+
+## Substitution and equal coefficients
+
+On a substitution page the method stays substitution. On an equal-coefficients page the method stays equal coefficients.
+
+Inside the chosen method, Hint and Next Step follow the variable and the equation the student already picked, when that choice is valid.
+
+The finish is an ordered pair, or the page’s none / infinitely many conclusion, using the shared wording in tutoring-behavior.
+
+## Unsorted system
+
+First arrange both equations.
+
+After both are ready, the student may choose substitution or equal coefficients.
+
+If the student has not chosen, Full Solution and Next Step may pick the more convenient method from the shape of the system.
+
+After the student has chosen, Hint, Next Step, and the rest of the solution stay on that method.

@@ -410,13 +410,50 @@ async function run(engine) {
       md53: true,
     });
     count += 1;
-    md53Bad(step, "md53-one-step-" + w.kind);
+    if (!step || !step.ok || step.solved || step.answer || step.nextLetter !== "b") {
+      mismatches.push({
+        id: "md53-one-step-" + w.kind,
+        local: {
+          ok: !!(step && step.ok),
+          solved: !!(step && step.solved),
+          nextLetter: step && step.nextLetter,
+          answer: step && step.answer,
+        },
+        server: "entering a must not return the solutions",
+      });
+    }
     await add("md53-one-step-http-" + w.kind, {
       intent: "one-step",
       start: row.start,
       phase: "abc",
       md53: true,
     });
+    var stepB = handleFormula(engine, {
+      intent: "one-step",
+      start: row.start,
+      phase: "abc",
+      letter: "b",
+      md53: true,
+      slots: { a: String(w.a) },
+    });
+    count += 1;
+    if (!stepB || !stepB.ok || stepB.solved || stepB.nextLetter !== "c") {
+      mismatches.push({
+        id: "md53-letter-b-" + w.kind,
+        local: { ok: !!(stepB && stepB.ok), solved: !!(stepB && stepB.solved), nextLetter: stepB && stepB.nextLetter },
+        server: "entering b must continue to c",
+      });
+    }
+    var stepC = handleFormula(engine, {
+      intent: "one-step",
+      start: row.start,
+      phase: "abc",
+      letter: "c",
+      md53: true,
+      slots: { a: String(w.a), b: String(w.b) },
+    });
+    count += 1;
+    md53Bad(stepC, "md53-letter-c-" + w.kind);
     var sol = handleFormula(engine, { intent: "solution", start: row.start, md53: true });
     count += 1;
     if (!sol.answer || String(sol.answer).indexOf("undefined") >= 0) {

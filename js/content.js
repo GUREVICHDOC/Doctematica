@@ -159,6 +159,23 @@
         explain: "קבעו מינימום או מקסימום לפי שינוי כיוון הגרף, ואז רשמו את תחומי העלייה והירידה לפי x.",
       };
     }
+    if (level.mode === "fn" && ex.poly) {
+      return {
+        mode: "fn",
+        source: "worksheet",
+        levelId: level.id,
+        n: ex.n,
+        total: level.exercises.length,
+        instruction: level.instruction || "",
+        prompt: ex.stem || "",
+        stem: ex.stem || "",
+        poly: true,
+        parts: (ex.parts || []).map(function (part) {
+          return { label: part.label || "", text: part.text || "" };
+        }),
+        explain: "השאלה קובעת מה מחפשים. כשנוצרת משוואה, פותרים אותה, ואז חוזרים לנקודה או לתחום.",
+      };
+    }
     if (level.mode === "fn" && ex.signGraph) {
       return {
         mode: "fn",

@@ -23,20 +23,12 @@
     return v && typeof v === "object" && (v.type === "mslope" || v.type === "mdist");
   }
 
-  /** A negative number is the base only inside parentheses: (−2), not −2. */
-  function wrapNegativePowBase(base) {
-    var b = String(base || "").trim();
-    var norm = b.replace(/[−–—]/g, "-");
-    if (/^-\d+(?:\.\d+)?$/.test(norm) || /^-\d+\/\d+$/.test(norm)) return "(" + b + ")";
-    return base;
-  }
-
   /** Plain "x^3" / "2^4" → pow node (for radicands that stored caret as text). */
   function tryParsePowText(s) {
     var t = String(s || "").replace(/\s+/g, "");
     var m = t.match(/^([A-Za-z]|-?\d+(?:\.\d+)?)\^(\d+)$/);
     if (!m) return null;
-    return { type: "pow", base: wrapNegativePowBase(m[1]), exp: m[2] };
+    return { type: "pow", base: m[1], exp: m[2] };
   }
 
   function grabFracNumerator(left) {
@@ -118,7 +110,8 @@
     var b = String(base || "");
     var e = String(exp || "") || "2";
     if (/^[a-z]$/i.test(b)) return b + "^" + e;
-    if (/^-?\d+(?:\.\d+)?$/.test(b)) return b + "^" + e;
+    if (/^-\d+(?:\.\d+)?$/.test(b)) return "(" + b + ")^" + e;
+    if (/^\d+(?:\.\d+)?$/.test(b)) return b + "^" + e;
     if (/^\(.*\)$/.test(b)) return b + "^" + e;
     return "(" + b + ")^" + e;
   }
@@ -217,7 +210,7 @@
     ["num", "den"].forEach(function (field) {
       var next = path.concat(field);
       var val = node[field];
-      if (isFracNode(val)) self.collectSlots(val, next, out);
+      if (val && (isFracNode(val) || isPowNode(val) || Array.isArray(val))) self.collectRadSlots(val, next, out);
       else out.push({ path: next });
     });
   };
@@ -589,8 +582,13 @@
       this.placePowInRad(part, path, remLeft, base, right);
       return true;
     }
+    var slotName = path[path.length - 1];
+    if (slotName === "num" || slotName === "den") {
+      this.placePowInFrac(part, path, remLeft, base, right);
+      return true;
+    }
     if (remLeft || right) base = remLeft + base + right;
-    this.setAt(part, path, { type: "pow", base: wrapNegativePowBase(base), exp: "2" });
+    this.setAt(part, path, { type: "pow", base: base, exp: "2" });
     this.focusPath = path.concat("exp");
     this.normalize();
     this.render();
@@ -598,9 +596,31 @@
     return true;
   };
 
+  /** Power inside a numerator or denominator stays in that slot, with the text around it. */
+  MathField.prototype.placePowInFrac = function (part, path, remLeft, base, right) {
+    var powNode = { type: "pow", base: base, exp: "2" };
+    if (remLeft || right) {
+      var pieces = [];
+      if (remLeft) pieces.push(remLeft);
+      pieces.push(powNode);
+      if (right) pieces.push(right);
+      else pieces.push("");
+      var powIndex = remLeft ? 1 : 0;
+      this.setAt(part, path, pieces);
+      this.focusPath = path.concat(String(powIndex), "exp");
+    } else {
+      this.setAt(part, path, powNode);
+      this.focusPath = path.concat("exp");
+    }
+    this.caretPos = 0;
+    this.normalize();
+    this.render();
+    this.focus();
+  };
+
   /** Power inside a root keeps the text before it, and a slot after it, under the same bar. */
   MathField.prototype.placePowInRad = function (part, path, remLeft, base, right) {
-    var powNode = { type: "pow", base: wrapNegativePowBase(base), exp: "2" };
+    var powNode = { type: "pow", base: base, exp: "2" };
     var pieces = [];
     if (remLeft) pieces.push(remLeft);
     pieces.push(powNode);
@@ -691,8 +711,11 @@
     if (this.insertPlain(ch)) return;
     if (this.disabled) return;
     this.readInputs();
+    var focused = document.activeElement;
     var el =
-      this.host.querySelector("[data-active='1']") || this.host.querySelector("input");
+      (focused && focused.tagName === "INPUT" && this.host.contains(focused) && focused) ||
+      this.host.querySelector("[data-active='1']") ||
+      this.host.querySelector("input");
     if (!el) return;
     var v = el.value || "";
     var a = el.selectionStart != null ? el.selectionStart : v.length;
@@ -739,7 +762,7 @@
     var split = this.splitCurrentText();
     var grabbed = grabPowBase(split.left);
     split.left = grabbed.left;
-    this.insertWithSplit(split, { type: "pow", base: wrapNegativePowBase(grabbed.base), exp: "2" });
+    this.insertWithSplit(split, { type: "pow", base: grabbed.base, exp: "2" });
     this.normalize();
     this.focusPath = ["exp"];
     this.render();
@@ -902,9 +925,10 @@
     var part = this.parts[this.focusPart];
     var nested = this.getAt(part, parentPath);
     if (!isFracNode(nested)) return false;
-    this.setAt(part, parentPath, String(nested.num || ""));
+    var numText = typeof nested.num === "string" || nested.num == null ? String(nested.num || "") : this.serializeSlot(nested.num);
+    this.setAt(part, parentPath, numText);
     this.focusPath = parentPath;
-    this.caretPos = String(nested.num || "").length;
+    this.caretPos = numText.length;
     this.render();
     this.focus();
     return true;
@@ -931,29 +955,26 @@
       if (this.moveSlot(1, false, atEnd)) event.preventDefault();
     } else if (event.key === "ArrowLeft") {
       if (this.moveSlot(-1, atStart, false)) event.preventDefault();
-    } else if (event.key === "ArrowDown" && last === "num") {
-      event.preventDefault();
-      this.focusPath = path.slice(0, -1).concat("den");
-      var den = this.host.querySelector(
-        'input[data-part="' + partIndex + '"][data-path="' + this.pathKey(this.focusPath) + '"]'
-      );
-      if (den) {
-        den.focus();
-        try {
-          den.setSelectionRange(0, 0);
-        } catch (e) {}
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      var side = "";
+      var sideAt = -1;
+      var si;
+      for (si = path.length - 1; si >= 0; si--) {
+        if (path[si] === "num" || path[si] === "den") {
+          side = path[si];
+          sideAt = si;
+          break;
+        }
       }
-    } else if (event.key === "ArrowUp" && last === "den") {
-      event.preventDefault();
-      this.focusPath = path.slice(0, -1).concat("num");
-      var num = this.host.querySelector(
-        'input[data-part="' + partIndex + '"][data-path="' + this.pathKey(this.focusPath) + '"]'
-      );
-      if (num) {
-        num.focus();
-        try {
-          num.setSelectionRange(num.value.length, num.value.length);
-        } catch (e) {}
+      if (event.key === "ArrowDown" && side === "num") {
+        event.preventDefault();
+        this.focusFracSide(partIndex, path.slice(0, sideAt).concat("den"));
+        return;
+      }
+      if (event.key === "ArrowUp" && side === "den") {
+        event.preventDefault();
+        this.focusFracSide(partIndex, path.slice(0, sideAt).concat("num"), true);
+        return;
       }
     } else if (event.key === "/" || event.key === "÷") {
       event.preventDefault();
@@ -1162,6 +1183,9 @@
     input.addEventListener("focus", function () {
       self.focusPart = partIndex;
       self.focusPath = path.slice();
+      var prev = self.host.querySelector("[data-active='1']");
+      if (prev && prev !== input) prev.removeAttribute("data-active");
+      input.setAttribute("data-active", "1");
     });
     input.addEventListener("keydown", function (event) {
       self.onKey(event, partIndex, path);
@@ -1177,18 +1201,55 @@
     return frac;
   };
 
+  MathField.prototype.focusFracSide = function (partIndex, path, atEnd) {
+    var key = this.pathKey(path);
+    var inputs = this.host.querySelectorAll('input[data-part="' + partIndex + '"]');
+    var exact = null;
+    var nested = null;
+    var i;
+    for (i = 0; i < inputs.length; i++) {
+      var dataPath = inputs[i].getAttribute("data-path") || "";
+      if (dataPath === key) exact = inputs[i];
+      else if (!nested && dataPath.indexOf(key + ".") === 0) nested = inputs[i];
+    }
+    var el = exact || nested;
+    if (!el) return;
+    this.focusPart = partIndex;
+    this.focusPath = (el.getAttribute("data-path") || key).split(".");
+    el.focus();
+    var pos = atEnd ? el.value.length : 0;
+    try {
+      el.setSelectionRange(pos, pos);
+    } catch (e) {}
+  };
+
+  MathField.prototype.renderSlotValue = function (val, partIndex, path) {
+    if (Array.isArray(val)) {
+      var run = document.createElement("span");
+      run.className = "ml-slot-run";
+      var self = this;
+      val.forEach(function (piece, i) {
+        run.appendChild(self.renderSlotValue(piece, partIndex, path.concat(String(i))));
+      });
+      return run;
+    }
+    if (isPowNode(val)) return this.renderPowNode(val, partIndex, path);
+    if (isFracNode(val)) return this.renderFracNode(val, partIndex, path);
+    return this.makeInput(partIndex, path, val == null ? "" : String(val), "ml-slot");
+  };
+
   MathField.prototype.renderFracSlot = function (parentNode, field, partIndex, path) {
     var val = parentNode[field];
-    if (isFracNode(val)) {
+    if (val && (isFracNode(val) || isPowNode(val) || Array.isArray(val))) {
       var wrap = document.createElement("span");
-      wrap.className = field === "num" ? "m-num" : "m-den";
-      wrap.appendChild(this.renderFracNode(val, partIndex, path));
+      wrap.className = (field === "num" ? "m-num" : "m-den") + " ml-slot-wrap";
+      wrap.appendChild(this.renderSlotValue(val, partIndex, path));
       return wrap;
     }
     var input = this.makeInput(
       partIndex,
       path,
-      val,
+      val == null ? "" : String(val),
       (field === "num" ? "m-num" : "m-den") + " ml-slot"
     );
     input.placeholder = "□";

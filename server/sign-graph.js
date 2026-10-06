@@ -370,8 +370,13 @@ function solutionOf(M, ex) {
       .join(". ") + "."
   );
   steps.push("מסמנים + מעל הציר, − מתחת לציר, ו־0 בנקודות האפס: " + signTable(ex) + ".");
-  steps.push("תחומי החיוביות: " + formatSide(M, pos) + ".");
-  steps.push("תחומי השליליות: " + formatSide(M, neg) + ".");
+  steps.push({
+    parallel: [
+      { label: "תחומי חיוביות", steps: [formatSide(M, pos)] },
+      { label: "תחומי שליליות", steps: [formatSide(M, neg)] },
+    ],
+    explain: "חיוביות ושליליות הם שני חלקים של אותה קריאה מהגרף.",
+  });
   var notes = ["נקודת אפס אינה שייכת לחיוביות ולא לשליליות, כי שם f(x)=0."];
   if (zeros.some(function (zero) { return zero.kind === "touch"; })) {
     notes.push("בנקודת המגע הגרף חוזר לאותו צד של ציר ה־x, ולכן הסימן אינו מתחלף.");
@@ -612,6 +617,12 @@ function handle(engine, ex, body) {
     return payload(ex, {
       solved: true,
       show: "חיובי: " + held.pos + ", שלילי: " + held.neg,
+      parallel: {
+        parallel: [
+          { label: "תחומי חיוביות", steps: [held.pos] },
+          { label: "תחומי שליליות", steps: [held.neg] },
+        ],
+      },
       message: "הגרף מעל ציר ה־x בתחומי החיוביות, ומתחת לציר ה־x בתחומי השליליות. נקודות האפס אינן כלולות.",
       progress: keptProgress(),
     });

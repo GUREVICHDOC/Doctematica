@@ -1,0 +1,46 @@
+---
+description: How calculus pages hand work to algebra, and what must survive between parts.
+alwaysApply: true
+---
+
+# Differential functions solution path
+
+Building an equation and solving it are different steps. After the equation exists, solve it with the algebra, systems, or inequality path. Do not keep a private solution path for the same equation.
+
+## Values and points
+
+f(a): substitute a, calculate, and write the ordered point when the question asks for a point.
+
+A positive number is substituted without parentheses: `f(7) = -7^3 + 15·7^2 - 63·7 + 49`. A negative number stays in parentheses, because the base of a power needs them: `(-2)^4`.
+
+## Axes
+
+x-intercept: y=0, then f(x)=0, then the algebra path, then each point (x, 0).
+
+y-intercept: x=0, then f(0), then (0, y).
+
+Either axis may come first. Hint and Next Step continue the axis already started. If neither has started, Full Solution may pick an order. That order is not a rule about which axis matters.
+
+x=0 is the y-intercept. It is not the start of an x-intercept.
+
+## Intersections
+
+y=f(x) and y=g(x) follow the systems path: equate, solve, then the ordered points.
+
+## Parameters, zeros, extrema
+
+A parameter value found in one part is available in the next part. The updated function is what later parts solve.
+
+Zeros found in one part are available for positivity and negativity. The later part does not solve f(x)=0 again.
+
+An extremum found in one part is available for increase and decrease.
+
+A zero is not inside a positive or a negative interval.
+
+Minimum and maximum use the shared wording in tutoring-behavior, on the parabola page and on the extrema page.
+
+## Reading a graph
+
+When the question asks how many times a horizontal line meets the graph, the student answers from the graph.
+
+Hint points at the line y=k, or f(x)=k. Next Step may add that line or ask for the count. Next Step does not reveal the count. Full Solution from an empty state may show the line and then the count, after the counting step. It does not open with the bare number.

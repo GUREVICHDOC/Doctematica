@@ -137,6 +137,14 @@
       .replace(/\s+/g, "");
   }
 
+  function slopeDivideMessage(formula, want) {
+    var shown = String(fmtSimpleFrac(want) || fmtNum(want) || "");
+    if (!slopeUnreducedAtomic(formula) && shown.indexOf("/") < 0 && shown.indexOf(".") >= 0) {
+      return "נכון. רשמו את התוצאה כמספר עשרוני: " + shown + ".";
+    }
+    return "נכון. עכשיו חלקו.";
+  }
+
   function slopeAtomicIsFinal(formula, want) {
     if (!formula || !formula.atomic || want == null || !isFinite(want)) return false;
     var n = formula.num && formula.num.value;
@@ -397,7 +405,7 @@
           if (slopeAtomicIsFinal(formula, want)) {
             return finish(lhsA + " = " + (fmtSimpleFrac(want) || fmtNum(want)));
           }
-          return partial(lhsA + " = " + slopeAtomicFracText(formula), "נכון. עכשיו חלקו.");
+          return partial(lhsA + " = " + slopeAtomicFracText(formula), slopeDivideMessage(formula, want));
         }
         if (!near0(want) && nearNum(formula.value, 1 / want)) {
           return {
@@ -447,13 +455,13 @@
       if (atomicGot && atomicGot.atomic && !slopeAtomicIsFinal(atomicGot, want)) {
         return partial(
           slopeLhsFromTyped(typed, task) + " = " + slopeAtomicFracText(atomicGot),
-          "נכון. עכשיו חלקו."
+          slopeDivideMessage(atomicGot, want)
         );
       }
       if (atomicGot && slopeUnreducedAtomic(atomicGot)) {
         return partial(
           slopeLhsFromTyped(typed, task) + " = " + slopeAtomicFracText(atomicGot),
-          "נכון. עכשיו חלקו."
+          slopeDivideMessage(atomicGot, want)
         );
       }
       return finish(slopeLhs(task) + " = " + (fmtSimpleFrac(want) || fmtNum(want)));
@@ -505,7 +513,7 @@
         var prevF = parseSlopeFormula(prevM);
         msgM =
           prevF && prevF.atomic
-            ? "נכון. עכשיו חלקו."
+            ? slopeDivideMessage(prevF, slopeWant(pack, t))
             : "חשבו את המונה ואת המכנה, ואז את השיפוע.";
       }
       return {

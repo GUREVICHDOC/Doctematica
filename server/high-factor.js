@@ -371,7 +371,9 @@ function handleHighFactorSolution(engine, body) {
   var pack = engine.DoctematicaQuadratic.analyzeHighFactorStart(String(body.start || ""));
   return {
     ok: true,
-    steps: (pack.steps || []).map(function (eq) {
+    steps: (pack.shown || pack.steps || []).map(function (eq) {
+      if (eq && eq.parallel) return eq;
+      if (eq && eq.eq != null) return eq;
       return { eq: String(eq || ""), explain: "" };
     }),
     answer: String(pack.answer || ""),

@@ -295,6 +295,9 @@
     var A = global.DoctematicaAlgebra;
     var M = model();
     if (!A || !fn.roots.length) return null;
+    if (/<=|>=|[<>≤≥]/.test(String(typed || ""))) {
+      return bad("כאן פותרים משוואה, ולכן צריך לשמור על סימן השוויון.");
+    }
     var canon = fn.expr + "=0";
     if (!last) {
       var call = M.parseFnCall(typed);
@@ -760,7 +763,10 @@
     if (!missing.length) {
       progress.done[task.id] = true;
       progress.phase[task.id] = "done";
-      return good(progress, pack, String(typed).trim(), domainDoneWhy(fn, task));
+      var doneDomains = good(progress, pack, String(typed).trim(), domainDoneWhy(fn, task));
+      var fork = domainParallel(task, fn);
+      if (fork) doneDomains.parallel = fork;
+      return doneDomains;
     }
     progress.phase[task.id] = "partial";
     var ask = task.kind === "fnSign" ? "רשמו גם את התחום השני: חיוביות או שליליות." : "רשמו גם את התחום השני: עלייה או ירידה.";
@@ -780,6 +786,20 @@
     inc: "עולה",
     dec: "יורדת",
   };
+
+  function domainParallel(task, fn) {
+    var M = model();
+    var slots = domainSlots(task, fn);
+    var keys = slotKeys(slots);
+    if (keys.length < 2) return null;
+    return {
+      parallel: keys.map(function (key) {
+        var list = asRegionList(slots[key]);
+        var text = !list.length ? "אין" : M.formatIntervalSet(list);
+        return { label: DOMAIN_NAME[key], steps: [text] };
+      }),
+    };
+  }
 
   function domainDoneWhy(fn, task) {
     var M = model();
@@ -877,6 +897,7 @@
     var slots = domainSlots(task, fn);
     var keys = slotKeys(slots);
     var shows = [];
+    var cols = [];
     var pending = false;
     var problem = "";
     var i;
@@ -899,12 +920,14 @@
       if (cover && cover.complete) {
         if (next.held) delete next.held[heldKey];
         shows.push(DOMAIN_SHOW[key] + ": " + M.formatIntervalSet(want));
+        cols.push({ label: DOMAIN_NAME[key], steps: [M.formatIntervalSet(want)] });
         continue;
       }
       if (cover && cover.partial) {
         next.held = next.held || {};
         next.held[heldKey] = cover.matched;
         shows.push(DOMAIN_SHOW[key] + ": " + M.formatIntervalSet(cover.matched));
+        cols.push({ label: DOMAIN_NAME[key], steps: [M.formatIntervalSet(cover.matched)] });
         pending = true;
         continue;
       }
@@ -914,12 +937,17 @@
         continue;
       }
       shows.push(DOMAIN_SHOW[key] + ": " + text);
+      cols.push({ label: DOMAIN_NAME[key], steps: [text] });
+    }
+    function withParallel(res) {
+      if (res && cols.length >= 2) res.parallel = { parallel: cols };
+      return res;
     }
     if (pending || problem) {
       if (!shows.length && problem) return bad(problem);
       var note = pending ? "התחום נכון. יש עוד תחום." : "";
       if (problem) note = note ? note + " " + problem : problem;
-      if (pending) return good(next, pack, shows.join(", "), note);
+      if (pending) return withParallel(good(next, pack, shows.join(", "), note));
       return bad(problem);
     }
     var bag = {};
@@ -927,7 +955,7 @@
     next.regions[task.id] = bag;
     next.done[task.id] = true;
     next.phase[task.id] = "done";
-    return good(next, pack, shows.join(", "), domainDoneWhy(fn, task));
+    return withParallel(good(next, pack, shows.join(", "), domainDoneWhy(fn, task)));
   }
 
   function regionFits(item, region) {
@@ -989,6 +1017,29 @@
 
   function quadApi() {
     return global.DoctematicaQuadratic;
+  }
+
+  function extremumKind(text) {
+    var t = String(text || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[.\s_\-'"׳״`]/g, "");
+    if (/^(min|minimum|localmin|מינ|מין|מינימום|מינימלית|מינימוםמקומי|נקודתמינימום|נקמינימום)$/.test(t)) return "min";
+    if (/^(max|maximum|localmax|מקס|מקסימום|מקסימלית|מקסימוםמקומי|נקודתמקסימום|נקמקסימום)$/.test(t)) return "max";
+    return "";
+  }
+
+  function quadraticHintForEquation(eq) {
+    var Q = quadApi();
+    if (!Q || !eq) return "";
+    try {
+      var pack = Q.analyzeMixedStart(eq);
+      var act = Q.nextMixedStep(eq, pack) || {};
+      if (act.hint) return act.hint;
+      return Q.mixedHintFor ? Q.mixedHintFor(pack, eq) || "" : "";
+    } catch (err) {
+      return "";
+    }
   }
 
   function normMath(s) {
@@ -1154,6 +1205,13 @@
         }
       }
     }
+    var formula = matchFormulaStep(formulaLevelOf(Q, level, progress.eq && progress.eq[key]), store, text);
+    if (formula) {
+      if (formula.ok === false) return formula;
+      if (formula.stage === "roots") progress.rootKnown = true;
+      progress.eq[key] = progress.eq[key] || level.eq;
+      return formula;
+    }
     var nums = readRootNumbers(text);
     if (nums.length && !/a\s*=/.test(text) && !/±/.test(text)) {
       var i;
@@ -1210,12 +1268,6 @@
         return { ok: true, stage: "eq", show: shownLevelEq(level, k) };
       }
       return bad("רשמו את המשוואה " + (Math.abs(Number(k)) > 1e-9 ? shownLevelEq(level, k) : M.pretty(level.eq)) + ".");
-    }
-    var formula = matchFormulaStep(formulaLevelOf(Q, level, progress.eq && progress.eq[key]), store, text);
-    if (formula) {
-      if (formula.ok === false) return formula;
-      if (formula.stage === "roots") progress.rootKnown = true;
-      return formula;
     }
     var pack = null;
     try {
@@ -1275,6 +1327,62 @@
     if (missing.length) return "x=" + M.fmt(missing[0]).replace(/−/g, "-");
     if (level.kind === "none") return "אין פתרון ממשי";
     return null;
+  }
+
+  function rootChainKind(step) {
+    var n = normMath(step);
+    if (/^x₁=/.test(n) || /^x1=/.test(n)) return 1;
+    if (/^x₂=/.test(n) || /^x2=/.test(n)) return 2;
+    return 0;
+  }
+
+  function takeFormulaRootSplit(pack, progress) {
+    var task = currentTask(pack, progress);
+    if (!task || !pack.fn || pack.fn.degree < 2) return null;
+    var spec = null;
+    if (task.kind === "fnIntercepts") spec = { key: task.id + ":x", k: 0, axis: "x" };
+    else if (task.kind === "fnZero" || task.kind === "fnSign" || task.kind === "fnBoth") spec = { key: task.id, k: 0, axis: "" };
+    else if (task.kind === "fnSolve") spec = { key: task.id, k: Number(task.k), axis: "" };
+    if (!spec) return null;
+    var Q = quadApi();
+    if (!Q) return null;
+    var level = levelAt(pack.fn, spec.k, progress);
+    if (!level || level.kind !== "two") return null;
+    var store = bag(progress, spec.key);
+    if (store.roots.length >= (level.roots || []).length) return null;
+    var steps = formulaStepsOf(Q, progress.eq && progress.eq[spec.key], level);
+    var pending = [];
+    var i;
+    for (i = 0; i < steps.length; i++) {
+      if (store.steps.indexOf(normMath(steps[i])) < 0) pending.push(steps[i]);
+    }
+    if (pending.length < 2 || rootChainKind(pending[0]) !== 1 || rootChainKind(pending[1]) !== 2) return null;
+    var next = cloneProgress(progress);
+    var kept = bag(next, spec.key);
+    var shown = [];
+    [pending[0], pending[1]].forEach(function (line) {
+      var hit = matchFormulaStep(formulaLevelOf(Q, level, next.eq && next.eq[spec.key]), kept, line);
+      shown.push(hit && hit.show ? hit.show : String(line).replace(/-/g, "−"));
+    });
+    if (kept.roots.length >= level.roots.length) {
+      next.rootKnown = true;
+      if (task.kind === "fnSolve" && !task.points) {
+        next.done[task.id] = true;
+        next.phase[task.id] = "done";
+      } else if (task.kind === "fnSolve" && task.points) {
+        next.phase[task.id] = "points";
+      }
+    }
+    if (!next.eq[spec.key]) next.eq[spec.key] = level.eq;
+    var result = good(next, pack, "", "כל שורש מחושב בעמודה שלו.");
+    result.parallel = {
+      parallel: [
+        { label: "x₁", steps: [shown[0]] },
+        { label: "x₂", steps: [shown[1]] },
+      ],
+    };
+    if (spec.axis) result.axis = spec.axis;
+    return result;
   }
 
   function takePoints(progress, key, level, k, pairs) {
@@ -1568,10 +1676,10 @@
     var want = task.want || "point";
     var text = String(typed || "").trim();
     var ascii = M.ascii(text);
-    if (task.classify && /מינימום|מקסימום/.test(text)) {
+    if (task.classify && extremumKind(text)) {
       if (phase !== "point" && phase !== "kind") return bad("קודם רשמו את הקודקוד כזוג סדור.");
       var wantKind = fn.a > 0 ? "min" : "max";
-      var gotKind = /מקסימום/.test(text) ? "max" : "min";
+      var gotKind = extremumKind(text);
       if (gotKind !== wantKind) {
         return bad("הנקודה נכונה, אבל זו לא נקודת " + (gotKind === "min" ? "מינימום" : "מקסימום") + ". בדקו את הסימן של a, המקדם של x².");
       }
@@ -2773,7 +2881,8 @@
     }
     if (task.kind === "fnIntercepts") {
       var axes = (progress.axes && progress.axes[task.id]) || { x: "", y: "" };
-      if (axes.y !== "done") {
+      var continueX = axes.x && !axes.y;
+      if (!continueX && axes.y !== "done") {
         if (!axes.y) return "x=0";
         if (axes.y === "set") return "f(0)=" + M.substText(fn, 0).replace(/−/g, "-").replace(/\s+/g, "");
         if (axes.y === "plug") return "f(0)=" + M.fmt(M.evalAt(fn, 0)).replace(/−/g, "-");
@@ -2951,6 +3060,11 @@
     }
     if (task.kind === "fnIntercepts") {
       var axes = (progress && progress.axes && progress.axes[task.id]) || { x: "", y: "" };
+      if (axes.x && !axes.y) {
+        if (axes.x === "set") return fn.roots.length ? "פתרו את המשוואה " + M.zeroEquation(fn) + "." : "רשמו " + M.zeroEquation(fn) + ". אם אין פתרון ממשי, אין חיתוך עם ציר ה־x.";
+        if (axes.x === "root") return fn.roots.length > 1 ? "רשמו את נקודות החיתוך עם ציר ה־x. אם יש שתיים, רשמו את שתיהן." : "רשמו את נקודת החיתוך עם ציר ה־x.";
+        return "המשיכו בחיתוך עם ציר ה־x.";
+      }
       if (!axes.y && !axes.x) return "מימין פותרים את החיתוך עם ציר ה־y, ומשמאל את נקודות החיתוך עם ציר ה־x. בכל תיבה עד לרשימת הנקודות.";
       if (!axes.y) return "בנקודה שנמצאת על ציר ה־y, מהו ערך ה־x?";
       if (axes.y === "set") return "הציבו x = 0 בפונקציה.";
@@ -2980,7 +3094,11 @@
       return "מלאו את שתי התיבות: תחומי עלייה ותחומי ירידה. אם הפונקציה עולה בכל הישר — כל x. אם אין תחום — אין.";
     }
     if (task.kind === "fnSolve") {
-      if (progress && progress.eq && progress.eq[task.id]) return "המשיכו לפתור את המשוואה הריבועית.";
+      if (progress && progress.eq && progress.eq[task.id]) {
+        var solveHint = quadraticHintForEquation(progress.eq[task.id]);
+        if (solveHint) return solveHint;
+        return "המשיכו לפתור את המשוואה הריבועית.";
+      }
       if (Math.abs(Number(task.k)) < 1e-9) return "רשמו " + M.zeroEquation(fn) + ", ואז פתרו.";
       return "רשמו את משוואת הפרבולה והשוו אותה ל־" + M.fmt(task.k) + ", ואז פתרו.";
     }
@@ -3198,6 +3316,12 @@
     };
   }
 
+  function syncViewPart(fnState, serverPart) {
+    if (!fnState || !serverPart) return fnState;
+    fnState.viewPart = serverPart;
+    return fnState;
+  }
+
   function sketchPlaced(progress, task) {
     var phase = progress && progress.phase ? progress.phase[task.id] : "";
     var n = parseInt(phase, 10);
@@ -3245,14 +3369,39 @@
     var guard = 0;
     var last = "";
     var lastHead = "";
+    var axisCols = null;
+    function flushAxes() {
+      if (!axisCols) return;
+      var cols = [];
+      if (axisCols.y.length) cols.push({ label: "חיתוך עם ציר y", steps: axisCols.y });
+      if (axisCols.x.length) cols.push({ label: "חיתוך עם ציר x", steps: axisCols.x });
+      if (cols.length >= 2) {
+        lines.push({ parallel: cols });
+        notes.push("כל ציר נפתר בעמודה שלו.");
+      } else if (cols.length === 1) {
+        cols[0].steps.forEach(function (step) {
+          lines.push(step);
+          notes.push("");
+        });
+      }
+      axisCols = null;
+    }
     while (guard < 160 && remaining(pack, progress).length) {
+      var task = currentTask(pack, progress);
+      if (!task || task.kind !== "fnIntercepts") flushAxes();
       var head = pointHeading(pack, progress);
       if (head && head !== lastHead) {
         lines.push("משימה:" + head);
         notes.push("");
         lastHead = head;
       }
-      var task = currentTask(pack, progress);
+      if (task && task.kind === "fnCount" && ((progress.phase || {})[task.id] !== "count")) {
+        progress.phase[task.id] = "count";
+        lines.push("התבוננו בישר y = " + task.k + " וספרו את נקודות המפגש.");
+        notes.push("המספר נרשם לפי השרטוט.");
+        guard += 1;
+        continue;
+      }
       if (task && task.kind === "fnSketch") {
         var advanced = sketchAdvance(pack, progress);
         if (!advanced.ok) break;
@@ -3262,16 +3411,39 @@
         guard += 1;
         continue;
       }
+      var rootSplit = takeFormulaRootSplit(pack, progress);
+      if (rootSplit) {
+        if (task && task.kind === "fnIntercepts" && rootSplit.axis) {
+          axisCols = axisCols || { y: [], x: [] };
+          (axisCols[rootSplit.axis] || axisCols.x).push(rootSplit.parallel);
+        } else {
+          lines.push(rootSplit.parallel);
+          notes.push(rootSplit.message || "");
+        }
+        progress = rootSplit.progress;
+        guard += 1;
+        continue;
+      }
       var line = nextLine(pack, progress);
       if (!line || line === last) break;
       last = line;
       var result = checkTyped(pack, progress, line);
       if (!result.ok) break;
-      lines.push(result.show || line);
-      notes.push(result.message || "");
+      if (task && task.kind === "fnIntercepts" && result.axis) {
+        axisCols = axisCols || { y: [], x: [] };
+        var bucket = axisCols[result.axis] || axisCols.x;
+        bucket.push(result.show || line);
+      } else if (result.parallel) {
+        lines.push(result.parallel);
+        notes.push(result.message || "");
+      } else {
+        lines.push(result.show || line);
+        notes.push(result.message || "");
+      }
       progress = result.progress;
       guard += 1;
     }
+    flushAxes();
     return { steps: lines, notes: notes };
   }
 
@@ -3282,12 +3454,14 @@
     hintFor: hintFor,
     hintsFor: hintsFor,
     nextLine: nextLine,
+    takeFormulaRootSplit: takeFormulaRootSplit,
     checkTyped: checkTyped,
     checkDomainFields: checkDomainFields,
     checkSketch: checkSketch,
     checkSketchPoint: checkSketchPoint,
     sketchAdvance: sketchAdvance,
     solutionLines: solutionLines,
+    syncViewPart: syncViewPart,
     currentPart: currentPart,
     currentTask: currentTask,
     pointHeading: pointHeading,

@@ -2081,7 +2081,13 @@ function eventSolution(ex) {
       }
       if (task.kind === "signDomains") {
         var signDomainNow = domainOf(ex);
-        steps.push("חיובית: " + domainText(signDomainNow) + ". שלילית: אין. לא כותבים כל x, כי הפונקציה אינה מוגדרת מחוץ לתחום, והקצוות כלולים.");
+        steps.push({
+          parallel: [
+            { label: "תחומי חיוביות", steps: [domainText(signDomainNow)] },
+            { label: "תחומי שליליות", steps: ["אין"] },
+          ],
+          explain: "לא כותבים כל x, כי הפונקציה אינה מוגדרת מחוץ לתחום, והקצוות כלולים.",
+        });
       }
       if (task.kind === "extremumType") {
         var min = task.answer !== "max";

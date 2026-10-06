@@ -66,6 +66,8 @@
     n /= g;
     d /= g;
     if (d === 1) return fmtNum(n);
+    var asDec = String(fmtNum(n / d) || "");
+    if (asDec.indexOf("/") < 0) return asDec.replace(/-/g, "−");
     if (n < 0) return "−" + fmtNum(-n) + "/" + fmtNum(d);
     return fmtNum(n) + "/" + fmtNum(d);
   }
@@ -1262,18 +1264,7 @@
 
   function fmtSimpleFrac(n) {
     if (n == null || !isFinite(n)) return "";
-    if (near0(n)) return "0";
-    var sign = n < 0 ? "−" : "";
-    var a = Math.abs(n);
-    var d;
-    for (d = 1; d <= 24; d++) {
-      var num = Math.round(a * d);
-      if (nearNum(num / d, a)) {
-        if (d === 1) return sign + String(num);
-        return sign + num + "/" + d;
-      }
-    }
-    return fmtNum(n);
+    return String(fmtNum(n) || "").replace(/-/g, "−");
   }
 
 
@@ -2621,8 +2612,43 @@
     };
   }
 
+  function packHasUnrevealedHiddenPoint(pack, progress) {
+    progress = progress || {};
+    var points = (pack && pack.points) || [];
+    var i;
+    for (i = 0; i < points.length; i++) {
+      var p = points[i];
+      if (!p || (!p.hideX && !p.hideY)) continue;
+      var lab = String(p.label || "").toUpperCase();
+      var revealed = (pack.tasks || []).some(function (t) {
+        if (!progress.done || !progress.done[t.id]) return false;
+        var plab =
+          t.kind === "lineIntersect" || t.kind === "midpoint"
+            ? t.point || t.label
+            : t.kind === "distUnknown"
+              ? t.unknownPoint || t.point || t.label
+              : t.point;
+        return String(plab || "").toUpperCase() === lab;
+      });
+      if (!revealed) return true;
+    }
+    return false;
+  }
+
+  function includeHideEqGraph(pack, progress, raw, item) {
+    if (!raw) return false;
+    if (!raw.hideEq) return true;
+    if (item && lineItemRevealed(progress, item)) return true;
+    if (progress && progress.lineEqDisplay && sameSlopeIntercept(progress.lineEqDisplay, raw)) return true;
+    if (!raw.dashed) return true;
+    return !packHasUnrevealedHiddenPoint(pack, progress);
+  }
+
   function graphLinesForIntersect(pack, progress) {
-    return intersectLines(pack).map(function (item, idx) {
+    var visible = intersectLines(pack).filter(function (item) {
+      return item && item.line && includeHideEqGraph(pack, progress, item.line, item);
+    });
+    return visible.map(function (item, idx) {
       var raw = item.line;
       var g = Object.assign(parseLineSpec(raw), { showEq: true, _raw: raw, graphKey: item.key });
       var stored = intersectStoredEq(progress, item.key);
@@ -2705,6 +2731,8 @@
       if (num === -1) return "−x";
       return (num < 0 ? "−" + fmtNum(-num) : fmtNum(num)) + "x";
     }
+    var shown = fmtFrac(num, den);
+    if (shown.indexOf("/") < 0) return shown + "x";
     if (num < 0) return "−(" + fmtNum(-num) + "/" + fmtNum(den) + ")x";
     return "(" + fmtNum(num) + "/" + fmtNum(den) + ")x";
   }
@@ -3288,6 +3316,7 @@
         : (pack && pack.extraLines) || [];
     return extras
       .map(function (raw) {
+        if (!includeHideEqGraph(pack, progress, raw, { line: raw })) return null;
         var parsed = parseLineSpec(raw);
         if (!parsed) return null;
         var hide = !!raw.hideEq;

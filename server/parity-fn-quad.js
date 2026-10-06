@@ -22,10 +22,39 @@ function walk(handler, index) {
     if (!step || step.ok === false) {
       return { ok: false, shows: shows, message: step && step.message, progress: progress };
     }
+    if (step.parallel && step.parallel.parallel) {
+      shows.push(step.parallel.parallel.map(function (col) {
+        return (col.label ? col.label + " " : "") + (col.steps || []).join(" ");
+      }).join(" | "));
+    }
     if (step.show) shows.push(step.show);
+    if (!step.show && !(step.parallel && step.parallel.parallel)) {
+      return { ok: false, shows: shows, message: "no show", progress: progress };
+    }
+    if (/ספרו את נקודות המפגש/.test(String(step.show || ""))) {
+      var guess;
+      var answered = null;
+      for (guess = 0; guess <= 4; guess++) {
+        var counted = handler.handle({
+          intent: "check",
+          levelId: "calc-quad-1",
+          exerciseIndex: index,
+          progress: progress,
+          typed: String(guess),
+        });
+        if (counted && counted.ok) {
+          answered = counted;
+          break;
+        }
+      }
+      if (!answered) return { ok: false, shows: shows, message: "count not accepted", progress: progress };
+      if (answered.show) shows.push(answered.show);
+      progress = answered.progress;
+      if (answered.solved) return { ok: true, shows: shows, progress: progress };
+      continue;
+    }
     progress = step.progress;
     if (step.solved) return { ok: true, shows: shows, progress: progress };
-    if (!step.show) return { ok: false, shows: shows, message: "no show", progress: progress };
   }
   return { ok: false, shows: shows, message: "guard", progress: progress };
 }
@@ -56,7 +85,7 @@ function main() {
 
   var ex1 = walk(handler, 0);
   var text1 = (ex1.shows || []).join(" | ");
-  add(ex1.ok && /f\(−2\)/.test(text1) && /27/.test(text1) && /x = 2/.test(text1) && /x = 6/.test(text1) && /\(4,−9\)/.test(text1)
+  add(ex1.ok && /f\(−2\)/.test(text1) && /27/.test(text1) && /x₁/.test(text1) && /x₂/.test(text1) && /12\/2=6/.test(text1) && /4\/2=2/.test(text1) && /\(4,−9\)/.test(text1)
     ? { ok: true, id: "ex1-answers" }
     : fail("ex1-answers", text1));
 

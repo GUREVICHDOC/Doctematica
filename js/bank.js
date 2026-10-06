@@ -25,6 +25,11 @@
   function fmt(n, d) {
     var s = typeof d === "number" ? simp(n, d) : simp(n.n, n.d);
     if (s.d === 1) return String(s.n);
+    var A = global.DoctematicaAlgebra;
+    if (A && A.formatNumber) {
+      var shown = String(A.formatNumber(s.n / s.d)).split(" או ")[0];
+      if (shown.indexOf("/") < 0) return shown;
+    }
     return s.n + "/" + s.d;
   }
 

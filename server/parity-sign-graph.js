@@ -143,7 +143,8 @@ function main() {
       : fail("hint:" + ex.id, hints && hints.hints && hints.hints[0]));
 
     var solution = ask(null, "solution");
-    add(solution && solution.steps && solution.steps.length === 6 && solution.steps.join(" ").indexOf("y=") < 0
+    var signFork = solution && (solution.steps || []).filter(function (step) { return step && step.parallel; })[0];
+    add(solution && solution.steps && signFork && signFork.parallel.length === 2 && solution.steps.join(" ").indexOf("y=") < 0
       ? { ok: true, id: "solution:" + ex.id }
       : fail("solution:" + ex.id, solution && solution.steps && String(solution.steps.length)));
     if (ex.id === "calc-sign-1-ex-a001") {

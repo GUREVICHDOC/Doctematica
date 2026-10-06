@@ -130,9 +130,8 @@
       }
     } else if (/^[xy]/i.test(s.charAt(p))) {
       p += 1;
-      if (s.slice(p, p + 2) === "^2" || s.charAt(p) === "²") {
-        p += s.charAt(p) === "²" ? 1 : 2;
-      }
+      var denExp = readExponent(s, p);
+      if (denExp) p += denExp.len;
     } else if (p === start || (p === start + 1 && /[+\-−]/.test(s.charAt(start)) && !isNumChar(s.charAt(start + 1)))) {
       return null;
     }
@@ -174,16 +173,14 @@
         var p2 = matchBalancedParen(s, k2);
         if (!p2) return null;
         numEnd = k2 + p2.length;
-      } else if (s.slice(k2, k2 + 2) === "^2" || s.charAt(k2) === "²") {
-        numEnd = k2 + (s.charAt(k2) === "²" ? 1 : 2);
       } else {
-        numEnd = k2;
+        var parenExp = readExponent(s, k2);
+        numEnd = parenExp ? k2 + parenExp.len : k2;
       }
     } else if (/^[a-z]/i.test(s.charAt(scan))) {
       var letterEnd = scan + 1;
-      if (s.slice(letterEnd, letterEnd + 2) === "^2" || s.charAt(letterEnd) === "²") {
-        letterEnd += s.charAt(letterEnd) === "²" ? 1 : 2;
-      }
+      var letterExp = readExponent(s, letterEnd);
+      if (letterExp) letterEnd += letterExp.len;
       numEnd = letterEnd;
     } else if (scan > j) {
       numEnd = scan;
@@ -400,6 +397,13 @@
         emitTimesAfterFracIfNeeded(out, s, i);
         continue;
       }
+      var denParenFrac = s.slice(i).match(/^(\d+)\s*\/\s*\((-?\d+)\)/);
+      if (denParenFrac) {
+        out += fracHTML(denParenFrac[1], denParenFrac[2]);
+        i += denParenFrac[0].length;
+        emitTimesAfterFracIfNeeded(out, s, i);
+        continue;
+      }
       var bareFrac = s.slice(i).match(/^(\d+)\s*\/\s*(-?\d+)/);
       if (bareFrac) {
         out += fracHTML(bareFrac[1], bareFrac[2]);
@@ -470,9 +474,19 @@
     return out;
   }
 
+  var renderingProse = false;
+
   function toHTML(text) {
     var src = String(text || "").trim().replace(/<=/g, "≤").replace(/>=/g, "≥");
     if (!src) return "";
+    if (!renderingProse && /[\u0590-\u05FF]/.test(src)) {
+      renderingProse = true;
+      try {
+        return proseHTML(src);
+      } finally {
+        renderingProse = false;
+      }
+    }
     var parts = src.split("=");
     if (parts.length === 1) return '<span class="m-expr" dir="ltr">' + sideToHTML(src) + "</span>";
     return (
@@ -523,7 +537,7 @@
     "g"
   );
   var RE_PROSE_MATH =
-    /S(?:△|Δ|□|▭)?[A-Za-z]{3,4}(?:\s*=\s*S(?:△|Δ|□|▭)?[A-Za-z]{3,4}\s*[−–—-]\s*S(?:△|Δ|□|▭)?[A-Za-z]{3,4})?|[A-Za-z]→[A-Za-z]{2}|[A-Za-z]\s*\(\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*[.,;]\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*\)|\(\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*[.,;]\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*\)|[−–—-]?\d+(?:\.\d+)?[xX](?!\w)/g;
+    /S(?:△|Δ|□|▭)?[A-Za-z]{3,4}(?:\s*=\s*S(?:△|Δ|□|▭)?[A-Za-z]{3,4}\s*[−–—-]\s*S(?:△|Δ|□|▭)?[A-Za-z]{3,4})?|[A-Za-z]→[A-Za-z]{2}|[A-Za-z]\s*\(\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*[.,;]\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*\)|\(\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*[.,;]\s*[−–—-]?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*\)|[+−–—-]?\d+(?:\.\d+)?[xX](?!\w)/g;
   var PROD_NUM =
     "(?:\\(\\s*[−–—-]?\\s*\\d+\\s*\\/\\s*\\d+\\s*\\)|\\(\\s*[−–—-]?\\s*\\d+(?:\\.\\d+)?\\s*\\)|[−–—-]?\\d+\\s*\\/\\s*\\d+|[−–—-]?\\d+(?:\\.\\d+)?|½)";
   var RE_PROD_EQ = new RegExp(

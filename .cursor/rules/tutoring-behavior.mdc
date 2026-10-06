@@ -1,0 +1,42 @@
+---
+description: Student-valid path, site-preferred path, and the path the student already started.
+alwaysApply: true
+---
+
+# Tutoring behavior
+
+Three different things:
+
+- **Student-valid path:** a correct method the student may use.
+- **Site-preferred path:** the method the site teaches when it starts the solution itself.
+- **Current student path:** the valid method the student has already begun.
+
+If the student has started a valid path, Hint and Next Step continue that path when an existing engine can continue from that state. Do not pull them back onto the site path only because it was the default.
+
+If a valid transformation reaches a mathematically correct state and the site has no supported continuation engine for it, accept the step. Then fall back to a supported representation and path. Do not invent a new solving method, and do not leave Hint or Next Step at a dead end. The hint says the student's step was correct and names why the supported form is the one that can continue.
+
+Full Solution from an empty state uses the site-preferred path. Full Solution that continues existing work keeps the path already chosen, when the mechanism can see it.
+
+Next Step is one action. It starts from the current state.
+
+A student may skip intermediate site-preferred steps and enter a later mathematically equivalent valid state, provided the skipped transformation does not lose solutions, introduce invalid solutions, discard required conditions, or bypass a required final-answer form. A line is not accepted only because it looks like a final answer.
+
+Hint, Next Step, and Full Solution share one preferred action for the current state. They do not propose three different methods.
+
+Do not invent book parts. Keep the question’s own sections.
+
+When a mathematical step creates parallel independent parts, their structural separation and history ownership must be preserved across student work, history, next-step guidance, and full solution. A branch's subsequent work belongs to that branch and must not be flattened into global sequential history.
+
+A solution step is either one line, or a parallel step: several columns, each with its own steps. The column count follows the number of parts. Full Solution renders that structure. It does not rebuild the split by reading "או", "וגם", commas, or Hebrew labels. Hint and Next Step after the split update only the active column.
+
+Leaving a part uses the same bookkeeping whether the finishing step is one line, an axis card, or a parallel step. The part the student is on stays the server's current part. A sketch that just finished stays in the history. The next part's open answer fields start empty, even when the field ids match the previous part.
+
+## Shared final wording
+
+No suitable x, when that is the mathematical situation: אין, אין פתרון, אין פתרונות, אף x, ∅.
+
+Every real x, when that is the mathematical situation: כל x, כל איקס, כל המספרים הממשיים, R, ℝ.
+
+Minimum: min, minimum, מין, מינ, מינימום. Maximum: max, maximum, מקס, מקסימום. English case does not matter.
+
+One parser serves every engine in this scope. A second list in one engine is a bug.

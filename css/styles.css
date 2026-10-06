@@ -206,7 +206,7 @@ button {
   font-weight: 400;
   font-size: 0.92rem;
   color: var(--muted);
-  margin-top: 4px;
+  margin-top: 0;
 }
 
 .model .sol-lcd {
@@ -377,8 +377,8 @@ button#new-problem {
 .steps li {
   display: flex;
   gap: 8px;
-  align-items: baseline;
-  padding: 6px 10px;
+  align-items: center;
+  padding: 8px 10px;
   border-radius: 10px;
   font-weight: 700;
   font-size: 1.02rem;
@@ -848,7 +848,7 @@ code {
 .fn-axis-board,
 .steps li.fn-axis-card {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(var(--sol-cols, 2), minmax(0, 1fr));
   gap: 10px;
   margin: 4px 0 12px;
   direction: rtl;
@@ -910,7 +910,7 @@ code {
 
 .steps li.factor-fork {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(var(--sol-cols, 2), minmax(0, 1fr));
   gap: 10px;
   align-items: stretch;
   padding: 6px 4px 8px;

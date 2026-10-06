@@ -38,6 +38,11 @@
   function fmt(p) {
     if (!p) return "";
     if (p.d === 1) return String(p.n);
+    var A = global.DoctematicaAlgebra;
+    if (A && A.formatNumber) {
+      var shown = String(A.formatNumber(p.n / p.d)).split(" או ")[0];
+      if (shown.indexOf("/") < 0) return shown;
+    }
     return p.n + "/" + p.d;
   }
 
@@ -1407,6 +1412,13 @@
     var r1 = "x = " + fmtDisp(otherF);
     steps.push(r0);
     steps.push(r1);
+    var shown = steps.slice();
+    if (prod) {
+      shown = [start, factored, chainFork([
+        { label: prod.e1, steps: factorBranchLines(prod.e1) },
+        { label: prod.e2, steps: factorBranchLines(prod.e2) },
+      ], "מכפלה שווה לאפס רק אם אחד הגורמים שווה לאפס. אפשר לפתור את הענפים בכל סדר.")];
+    }
     return {
       a: a,
       b: b,
@@ -1414,6 +1426,7 @@
       otherF: otherF,
       factored: factored,
       steps: steps,
+      shown: shown,
       answer: r0 + ", " + r1,
       start: start,
     };
@@ -1421,6 +1434,24 @@
 
   function emptyHighPoly() {
     return { a6: 0, a5: 0, a4: 0, a3: 0, a2: 0, a1: 0, a0: 0 };
+  }
+
+  function readHighNumber(s, i) {
+    if (s.charAt(i) === "(") {
+      var j = s.indexOf(")", i);
+      if (j > i) {
+        var inner = s.slice(i + 1, j);
+        var frac = s.slice(j + 1).match(/^\/(\d+(?:\.\d+)?)/);
+        if (frac && /^-?\d+(?:\.\d+)?$/.test(inner)) {
+          var num = parseFloat(inner, 10);
+          var den = parseFloat(frac[1], 10);
+          if (isFinite(num) && isFinite(den) && Math.abs(den) > EPS) {
+            return { v: num / den, i: j + 1 + frac[0].length, had: true };
+          }
+        }
+      }
+    }
+    return readPolyNum(s, i);
   }
 
   function polyHighSide(side) {
@@ -1432,7 +1463,7 @@
     while (i < t.length) {
       var sign = t.charAt(i) === "-" ? -1 : 1;
       if (t.charAt(i) === "+" || t.charAt(i) === "-") i += 1;
-      var num = readPolyNum(t, i);
+      var num = readHighNumber(t, i);
       if (!num) return null;
       i = num.i;
       var coef = sign * (num.had ? num.v : 1);
@@ -1843,6 +1874,20 @@
     } else if (sqrtPack && sqrtPack.kind === "none") {
       steps.push("אין פתרון ממשי");
     }
+    var e2rest = [];
+    steps.forEach(function (line) {
+      if (line === raw || line === standard || line === factored || line === e1 || line === e2 || line === "x = 0") return;
+      if (e2rest.indexOf(line) === -1) e2rest.push(line);
+    });
+    var e1lines = [e1];
+    if (normFactorText(e1) !== normFactorText("x = 0")) e1lines.push("x = 0");
+    var shown = [raw];
+    if (normFactorText(raw) !== normFactorText(standard)) shown.push(standard);
+    shown.push(factored);
+    shown.push(chainFork([
+      { label: e1, steps: e1lines },
+      { label: e2, steps: [e2].concat(e2rest) },
+    ], "מכפלה שווה לאפס רק אם אחד הגורמים שווה לאפס. אפשר לפתור את הענפים בכל סדר."));
     return {
       high: true,
       poly: poly,
@@ -1866,6 +1911,7 @@
       linRootF: linRootF,
       roots: roots,
       steps: steps,
+      shown: shown,
       answer: formatHighRootsAnswer(roots),
       other: plan.e2Kind === "linear" ? linRoot : roots.length > 1 ? roots[1] : 0,
       otherF:
@@ -2578,10 +2624,14 @@
 
     var steps = [raw];
     var gathered = formatHighPoly(poly) + "=0";
-    if (normFactorText(raw) !== normFactorText(gathered) && normFactorText(raw) !== normFactorText(isolated)) {
+    var divided = highRootDivideLine(raw, n);
+    if (!divided && normFactorText(raw) !== normFactorText(gathered) && normFactorText(raw) !== normFactorText(isolated)) {
       steps.push(gathered);
     }
-    if (normFactorText(raw) !== normFactorText(isolated)) steps.push(isolated);
+    if (normFactorText(raw) !== normFactorText(isolated)) {
+      if (divided) steps.push(divided);
+      steps.push(isolated);
+    }
     var both = formatNroot(n, "x^" + n) + "=" + formatNroot(n, fmtLinNum(k));
     steps.push(both);
     var answer;
@@ -2868,6 +2918,37 @@
     };
   }
 
+  function highRootDivideLine(eqText, n) {
+    var s = normHighUnknown(eqText);
+    var parts = s.split("=");
+    if (parts.length !== 2) return null;
+    var L = polyHighSide(parts[0]);
+    var R = polyHighSide(parts[1]);
+    if (!L || !R) return null;
+    var d;
+    for (d = 0; d <= 6; d++) {
+      if (d !== 0 && d !== n && (!near0(L["a" + d]) || !near0(R["a" + d]))) return null;
+    }
+    var coef = 0;
+    var rhs = 0;
+    if (!near0(L["a" + n]) && near0(R["a" + n])) {
+      coef = L["a" + n];
+      rhs = R.a0 - L.a0;
+    } else if (!near0(R["a" + n]) && near0(L["a" + n])) {
+      coef = R["a" + n];
+      rhs = L.a0 - R.a0;
+    } else return null;
+    if (near0(coef) || nearNum(Math.abs(coef), 1)) return null;
+    function piece(num) {
+      var text = fmtLinNum(num);
+      return text.charAt(0) === "-" ? "(" + text + ")" : text;
+    }
+    var line = "x^" + n + "=" + piece(rhs) + "/" + piece(coef);
+    var simplified = "x^" + n + "=" + fmtLinNum(rhs / coef);
+    if (normFactorText(line) === normFactorText(simplified)) return null;
+    return line;
+  }
+
   function nextHighRootStep(eqText, pack) {
     var cur = normHighUnknown(eqText);
     if (parseNrootBothSides(cur) || (isRootAnswerText(cur) && /√|∛|∜|sqrt/i.test(cur))) {
@@ -2889,6 +2970,13 @@
     }
     var iso = isolatedXn(cur, pack.n);
     if (iso != null && nearNum(iso, pack.k)) {
+      if (normFactorText(cur) !== normFactorText(pack.isolated)) {
+        return {
+          eq: pack.isolated,
+          hint: "חשבו את המנה.",
+          explain: "מפשטים את השבר אחרי החילוק.",
+        };
+      }
       if (pack.kind === "none") {
         return {
           eq: "אין פתרון ממשי",
@@ -2903,6 +2991,14 @@
       };
     }
     if (normFactorText(cur) !== normFactorText(pack.isolated)) {
+      var divided = highRootDivideLine(cur, pack.n);
+      if (divided && normFactorText(divided) !== normFactorText(cur)) {
+        return {
+          eq: divided,
+          hint: "חלקו את שני האגפים במקדם של x^" + pack.n + ".",
+          explain: "מחלקים במקדם כדי לבודד את החזקה.",
+        };
+      }
       return {
         eq: pack.isolated,
         hint: "העבירו כך שישאר x^" + pack.n + " באגף אחד ומספר באגף השני.",
@@ -2926,6 +3022,13 @@
 
     var isoT = isolatedXn(t, pack.n);
     if (isoT != null && nearNum(isoT, pack.k)) {
+      if (normFactorText(t) !== normFactorText(pack.isolated)) {
+        return {
+          ok: true,
+          rearrange: true,
+          message: "החילוק נכון. עכשיו חשבו את המנה.",
+        };
+      }
       return {
         ok: true,
         isolated: true,
@@ -2962,6 +3065,17 @@
     return checkHighRootFinish(t, pack, { pos: false, neg: false });
   }
 
+  function factorExpandedEquivalent(typed, pack) {
+    var parsed;
+    try {
+      parsed = parseABC(String(typed || "").trim());
+    } catch (err) {
+      return false;
+    }
+    if (!parsed || !pack) return false;
+    return near0(parsed.a - pack.a) && near0(parsed.b - pack.b) && near0(parsed.c - (pack.c || 0));
+  }
+
   function checkFactorTyped(prev, typed, pack, st) {
     if (pack && pack.high) return checkHighFactorTyped(prev, typed, pack, st);
     st = st || { split: false, eqs: [], solved: [false, false], progress: { z: false, o: false } };
@@ -2986,6 +3100,14 @@
     }
     if (prodTyped) {
       return { ok: false, message: "המכפלה לא מתאימה למשוואה המקורית. בדקו מה מוציאים מחוץ לסוגריים ומה נשאר בפנים." };
+    }
+
+    if (isProductEq(prev) && productMatches(pack, parseProductEq(prev)) && factorExpandedEquivalent(t, pack)) {
+      return {
+        ok: true,
+        rearrange: true,
+        message: "המשוואה שקולה. ממשיכים לפתור אותה.",
+      };
     }
 
     var roots = checkFactorRoots(t, pack, st.progress);
@@ -4191,7 +4313,11 @@
         });
         answer = sqrt.answer;
       } else if (nat === "factor" && factor) {
-        factor.steps.forEach(function (s) {
+        (factor.shown || factor.steps).forEach(function (s) {
+          if (s && s.parallel) {
+            steps.push(s);
+            return;
+          }
           if (steps.indexOf(s) === -1) steps.push(s);
         });
         answer = factor.answer;
@@ -5048,11 +5174,42 @@
     return steps;
   }
 
+  function factorBranchLines(eq) {
+    var lines = [eq];
+    try {
+      var sol = global.DoctematicaAlgebra.solutionOf(global.DoctematicaAlgebra.parseEquation(eq));
+      if (sol != null) {
+        var line = "x = " + fmtDisp(fracFromNumber(sol) || frac(Math.round(sol * 1000), 1000));
+        if (normFactorText(line) !== normFactorText(eq)) lines.push(line);
+      }
+    } catch (errBranch) {}
+    return lines;
+  }
+
+  function chainFork(columns, explain) {
+    return { parallel: columns, explain: explain || "" };
+  }
+
+  function chainColumn(eq, cls) {
+    var steps = [chainStep(eq, "זה ענף אחד אחרי הפיצול.")];
+    chainInnerSteps(eq, cls).forEach(function (step) {
+      if (step && step.parallel) {
+        steps.push(step);
+        return;
+      }
+      var text = step && step.eq != null ? step.eq : step;
+      if (normFactorText(String(text || "")) !== normFactorText(eq)) steps.push(step);
+    });
+    return { label: eq, steps: steps };
+  }
+
   function chainInnerSteps(eq, cls) {
     var steps = [];
     if (!cls) cls = classifyChainEq(eq);
     if (cls.kind === "power0") {
       steps.push(chainStep("x = 0", "אם חזקה חיובית של x שווה לאפס, אז x = 0. רושמים את הפתרון פעם אחת."));
+    } else if (cls.kind === "value") {
+      steps.push(chainStep(eq, "הגורם הזה כבר נותן פתרון. רושמים אותו פעם אחת."));
     } else if (cls.kind === "linear") {
       var show = cls.roots.length ? "x = " + fmtLinNum(cls.roots[0]) : eq;
       steps.push(chainStep(show, "פותרים את המשוואה ממעלה ראשונה."));
@@ -5083,10 +5240,7 @@
       try {
         var again = preferredChainFactor(cls.poly);
         steps.push(chainStep(again.factored, "גם בענף הזה יש חזקה משותפת של x. מוציאים אותה."));
-        steps.push(chainStep(again.e1, "אחרי הפיצול: הגורם הראשון שווה לאפס."));
-        steps.push(chainStep(again.e2, "או שהגורם השני שווה לאפס."));
-        steps = steps.concat(chainInnerSteps(again.e1, null));
-        steps = steps.concat(chainInnerSteps(again.e2, null));
+        steps.push(chainFork([chainColumn(again.e1, null), chainColumn(again.e2, null)], "מכפלה שווה לאפס רק אם אחד הגורמים שווה לאפס. אפשר לפתור את הענפים בכל סדר."));
       } catch (errC) {}
     } else if (cls.kind === "none") {
       steps.push(chainStep("אין פתרון ממשי", "לענף הזה אין פתרון ממשי."));
@@ -5111,9 +5265,7 @@
       steps.push(chainStep(standard, "מעבירים את כל האיברים לאגף אחד, כדי שבאגף השני יהיה 0. כל איבר שמעבירים מחליף סימן."));
     }
     steps.push(chainStep(plan.factored, "מוציאים את החזקה המשותפת של x, ואם יש גם מחלק מספרי משותף — אותו מוציאים."));
-    steps.push(chainStep(plan.e1 + "  או  " + plan.e2, "מכפלה שווה לאפס רק אם אחד הגורמים שווה לאפס. אפשר לפתור את הענפים בכל סדר."));
-    steps = steps.concat(chainInnerSteps(plan.e1, e1cls));
-    steps = steps.concat(chainInnerSteps(plan.e2, e2cls));
+    steps.push(chainFork([chainColumn(plan.e1, e1cls), chainColumn(plan.e2, e2cls)], "מכפלה שווה לאפס רק אם אחד הגורמים שווה לאפס. אפשר לפתור את הענפים בכל סדר."));
     steps.push(chainStep(formatHighRootsAnswer(roots), "אוספים את כל הפתרונות מענפי הפיצול. פתרון שמופיע פעמיים נרשם פעם אחת."));
     return {
       highChain: true,
@@ -5490,7 +5642,7 @@
     };
   }
 
-  function nextHighChainStep(eqText, pack, st) {
+  function nextHighChainStep(eqText, pack, st, prefer) {
     st = st || emptyChainSt();
     var cur = normHighUnknown(eqText || pack.start);
     if (!st.split) {
@@ -5516,8 +5668,15 @@
         explain: "מוציאים את החזקה המשותפת של x.",
       };
     }
-    var i;
-    for (i = 0; i < st.eqs.length; i++) {
+    var order = [];
+    var count = st.eqs.length;
+    var startAt = 0;
+    if (prefer != null && prefer >= 0 && prefer < count && !(st.solved && st.solved[prefer])) startAt = prefer;
+    var turn;
+    for (turn = 0; turn < count; turn++) order.push((startAt + turn) % count);
+    var oi;
+    for (oi = 0; oi < order.length; oi++) {
+      var i = order[oi];
       if (st.solved && st.solved[i]) continue;
       var eq = st.eqs[i];
       var cls = classifyChainEq(eq);

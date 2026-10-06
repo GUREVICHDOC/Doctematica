@@ -12,6 +12,7 @@ function findExercise(engine, body) {
     picked = listed.filter(function (item) { return item.id === body.exerciseId; })[0];
   }
   if (!picked && isFinite(body.exerciseIndex)) picked = listed[Number(body.exerciseIndex)] || null;
+  if (picked && picked.poly) return { poly: true, ex: picked, level: level };
   if (picked && picked.signGraph) return { sign: true, ex: picked, level: level };
   if (picked && picked.monoGraph) return { mono: true, ex: picked, level: level };
   if (picked && picked.freeSketch) return { free: true, ex: picked, level: level };
@@ -51,6 +52,7 @@ function createFunctionsHandler(engine) {
     body = body || {};
     var found = findExercise(engine, body);
     if (!found) return { error: "unknown exercise", message: "unknown exercise" };
+    if (found.poly) return require("./poly").handle(engine, found.ex, body);
     if (found.sign) return require("./sign-graph").handle(engine, found.ex, body);
     if (found.mono) return require("./extrema").handle(engine, found.ex, body);
     if (found.free) return require("./free-sketch").handle(engine, found.ex, body);
@@ -77,11 +79,36 @@ function createFunctionsHandler(engine) {
         ok: true,
         steps: lines,
         notes: solved.notes || lines.map(function () { return ""; }),
-        answer: lines.length ? lines[lines.length - 1] : "",
+        answer: (function () {
+          var last = lines.length ? lines[lines.length - 1] : "";
+          if (last && last.parallel) {
+            return last.parallel.map(function (col) {
+              var bit = (col.steps || [])[(col.steps || []).length - 1];
+              if (bit && bit.eq != null) return String(bit.eq);
+              return String(bit || "");
+            }).filter(Boolean).join(" | ");
+          }
+          if (last && last.eq != null) return String(last.eq);
+          return String(last || "");
+        })(),
       };
     }
 
     if (intent === "one-step") {
+      var rootSplit = Fn.takeFormulaRootSplit(pack, progress);
+      if (rootSplit) {
+        return Object.assign({
+          ok: true,
+          show: rootSplit.show || "",
+          parallel: rootSplit.parallel || null,
+          heading: Fn.pointHeading(pack, progress),
+          message: rootSplit.message || "",
+          progress: rootSplit.progress,
+          solved: !!rootSplit.solved,
+          view: Fn.viewFor(pack, rootSplit.progress),
+          hint: Fn.hintFor(pack, rootSplit.progress),
+        }, axisPayload(rootSplit));
+      }
       var line = Fn.nextLine(pack, progress);
       var task = Fn.currentTask(pack, progress);
       if (task && task.kind === "fnSketch") {
@@ -99,12 +126,24 @@ function createFunctionsHandler(engine) {
           board: guided.board,
         };
       }
+      if (task && task.kind === "fnCount") {
+        return {
+          ok: true,
+          show: "התבוננו בישר y = " + task.k + " וספרו את נקודות המפגש.",
+          message: "המספר נרשם לפי השרטוט.",
+          progress: progress,
+          solved: false,
+          hint: Fn.hintFor(pack, progress),
+          view: Fn.viewFor(pack, progress),
+        };
+      }
       if (!line) return { ok: false, message: "אין צעד נוסף להציג." };
       var stepped = Fn.checkTyped(pack, progress, line);
       if (!stepped.ok) return { ok: false, message: stepped.message || "אין צעד נוסף." };
       return Object.assign({
         ok: true,
         show: stepped.show || line,
+        parallel: stepped.parallel || null,
         heading: Fn.pointHeadingFor(pack, progress, line),
         message: stepped.message || "",
         progress: stepped.progress,
@@ -145,6 +184,7 @@ function createFunctionsHandler(engine) {
       return {
         ok: true,
         show: byFields.show || "",
+        parallel: byFields.parallel || null,
         heading: Fn.pointHeading(pack, progress),
         message: byFields.message || "",
         progress: byFields.progress,
@@ -159,6 +199,7 @@ function createFunctionsHandler(engine) {
     return Object.assign({
       ok: true,
       show: checked.show || "",
+      parallel: checked.parallel || null,
       heading: Fn.pointHeadingFor(pack, progress, body.typed),
       message: checked.message || "",
       progress: checked.progress,

@@ -66,8 +66,46 @@ function reconstructHighChain(engine, start, history, factorIn) {
       }
     }
     if (Array.isArray(factorIn.pending)) st.pending = factorIn.pending.map(String);
+    if (Array.isArray(factorIn.work)) {
+      st.work = factorIn.work.map(function (item) {
+        if (!item) return null;
+        return {
+          engine: String(item.engine || ""),
+          phase: String(item.phase || ""),
+          letter: String(item.letter || ""),
+          slots: item.slots && typeof item.slots === "object" ? Object.assign({}, item.slots) : {},
+          history: Array.isArray(item.history) ? item.history.map(String) : [],
+        };
+      });
+    }
   }
   return { pack: pack, st: st, prev: prev };
+}
+
+function recordFormulaWork(st, branch, res, letter, typed) {
+  if (!st.work) st.work = [];
+  var cur = st.work[branch] || { engine: "formula", phase: "abc", letter: "a", slots: {}, history: [] };
+  var slots = Object.assign({}, cur.slots || {});
+  var history = (cur.history || []).slice();
+  var value = res && res.fill && letter && res.fill[letter] != null ? res.fill[letter] : null;
+  if ((value == null || value === "") && res && res.ok && typed != null && typed !== "") value = typed;
+  if (res && res.ok && letter && value != null && value !== "") {
+    slots[letter] = String(value);
+    var line = letter + "=" + slots[letter];
+    if (history[history.length - 1] !== line) history.push(line);
+  }
+  if (res && res.ok && res.solved && res.answer) {
+    var ans = String(res.answer);
+    if (history[history.length - 1] !== ans) history.push(ans);
+  }
+  st.work[branch] = {
+    engine: "formula",
+    phase: (res && (res.nextPhase || res.phase)) || cur.phase || "abc",
+    letter: (res && res.nextLetter) || letter || cur.letter || "a",
+    slots: slots,
+    history: history,
+  };
+  return st.work;
 }
 
 function publicChain(res) {
@@ -105,6 +143,7 @@ function publicChain(res) {
   if (res.path) out.path = String(res.path);
   if (res.view) out.view = res.view;
   if (res.answer) out.answer = String(res.answer);
+  if (res.work) out.work = res.work;
   return out;
 }
 
@@ -165,6 +204,10 @@ function handleHighChain(engine, body) {
       var parsed = Q.parseABC(loc.eq);
       if (!parsed || !parsed.a) return { ok: false, message: "הענף הזה אינו משוואה ריבועית." };
       var written = Q.analyze(parsed.a, parsed.b, parsed.c, loc.eq);
+      if (!rec.st.work) rec.st.work = [];
+      if (!rec.st.work[loc.branch]) {
+        rec.st.work[loc.branch] = { engine: "formula", phase: "abc", letter: "a", slots: {}, history: [] };
+      }
       return {
         ok: true,
         path: "formula",
@@ -172,6 +215,7 @@ function handleHighChain(engine, body) {
         md53: !!body.md53,
         formulaEq: loc.eq,
         formulaBranch: loc.branch,
+        work: rec.st.work,
         view: { a: written.a, b: written.b, c: written.c, D: written.D, s: written.s, kind: written.kind },
         message: body.md53
           ? "md53: רשמו a, אחר כך b, אחר כך c. אחרי שלושתם מופיע הפתרון."
@@ -179,10 +223,13 @@ function handleHighChain(engine, body) {
       };
     }
     var delegated = delegateFormula(engine, body, rec);
-    return Object.assign({}, delegated, { path: "formula" });
+    var owned = formulaEqOf(Q, rec, body);
+    recordFormulaWork(rec.st, owned.branch, delegated, String(body.letter || (rec.st.work && rec.st.work[owned.branch] && rec.st.work[owned.branch].letter) || "a"), body.typed != null && body.typed !== "" ? body.typed : (body.slots && body.slots[body.letter]));
+    return Object.assign({}, delegated, { path: "formula", work: rec.st.work, formulaBranch: owned.branch });
   }
+  var preferBranch = body.branch != null && body.branch !== "" ? Number(body.branch) : null;
   if (intent === "hint") {
-    var act = Q.nextHighChainStep(rec.prev, rec.pack, rec.st);
+    var act = Q.nextHighChainStep(rec.prev, rec.pack, rec.st, preferBranch);
     var ui = Q.chainOffer(rec.st);
     return publicChain({
       ok: true,
@@ -200,7 +247,7 @@ function handleHighChain(engine, body) {
     });
   }
   if (intent === "one-step") {
-    var step = Q.nextHighChainStep(rec.prev, rec.pack, rec.st);
+    var step = Q.nextHighChainStep(rec.prev, rec.pack, rec.st, preferBranch);
     if (step.split) {
       var spl = Q.chainSplit(rec.pack, rec.st, step.which != null ? rec.st.eqs[step.which] : rec.prev);
       return publicChain(Object.assign({ ok: true }, spl, { hint: step.hint, reason: step.explain || spl.reason }));
@@ -238,6 +285,7 @@ function handleHighChain(engine, body) {
     return {
       ok: true,
       steps: (rec.pack.steps || []).map(function (s) {
+        if (s && s.parallel) return { parallel: s.parallel, explain: String(s.explain || "") };
         return { eq: String(s.eq || s), explain: String(s.explain || "") };
       }),
       answer: String(rec.pack.answer || ""),

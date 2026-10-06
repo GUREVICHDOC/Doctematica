@@ -252,7 +252,17 @@ async function run(engine) {
   expectStep("combine-both-sides", Q.nextMixedStep("4x^2+12x+8x+20+4-6x=8+4", screenPack), combined);
   expectStep("combine-right-only", Q.nextMixedStep("4x^2+14x+24=8+4", screenPack), combined);
   expectStep("move-after-combine", Q.nextMixedStep(combined, screenPack), "4x^2+14x+24-12=0");
-  expectStep("combine-after-move", Q.nextMixedStep("4x^2+12x+8x-6x+24-12=0", screenPack), screenPack.standard);
+  expectStep("combine-after-move", Q.nextMixedStep("4x^2+12x+8x-6x+24-12=0", screenPack), "4x^2+14x+12=0");
+  var reduced = Q.nextMixedStep("4x^2+14x+12=0", screenPack);
+  expectStep("divide-after-combine", reduced, screenPack.standard);
+  count += 1;
+  if (!reduced || !/מחלקים/.test(String(reduced.explain || "") + String(reduced.hint || ""))) {
+    mismatches.push({
+      id: "divide-after-combine-hint",
+      local: reduced,
+      server: { expect: "divide by the common factor after collecting" },
+    });
+  }
   var screenSteps = (screenPack.steps || []).map(normStep);
   var combinedAt = screenSteps.indexOf(normStep(combined));
   var movedAt = screenSteps.indexOf("4x^2+14x+24-12=0");
@@ -346,8 +356,78 @@ async function run(engine) {
       server: { expect: "one-step enters formula at a" },
     });
   }
+  var wrongAbc = [
+    { letter: "a", typed: "9", slots: {} },
+    { letter: "b", typed: "9", slots: { a: "1" } },
+    { letter: "c", typed: "9", slots: { a: "1", b: "7" } },
+  ];
+  wrongAbc.forEach(function (item) {
+    count += 1;
+    var stayed = Qh.handle({
+      topic: "quadratic",
+      subtopic: "mixed",
+      intent: "check",
+      start: "x^2+7x+6=0",
+      phase: "abc",
+      letter: item.letter,
+      typed: item.typed,
+      slots: item.slots,
+    });
+    if (!stayed || stayed.ok || stayed.phase !== "abc" || stayed.nextPhase !== "abc" || stayed.nextLetter !== item.letter) {
+      mismatches.push({
+        id: "abc-wrong-" + item.letter,
+        local: stayed,
+        server: { expect: "wrong " + item.letter + " stays in abc" },
+      });
+    }
+  });
 
   return { count: count, mismatches: mismatches };
+}
+
+function walkAbc(handle, engine, start, hist, first) {
+  var letters = ["a", "b", "c"];
+  var slots = {};
+  var current = first;
+  var i;
+  if (!(current && current.ok && current.letter === "a" && current.fill && current.fill.a != null)) {
+    current = handle(engine, { intent: "one-step", start: start, history: hist, phase: "abc", letter: "a", slots: slots });
+  }
+  for (i = 0; i < letters.length; i++) {
+    var letter = letters[i];
+    if (!current || !current.ok) {
+      return { ok: false, fail: "abc " + letter + " " + ((current && current.message) || "not ok") };
+    }
+    if (!current.fill || current.fill[letter] == null || current.fill[letter] === "") {
+      return { ok: false, fail: "abc " + letter + " not stored" };
+    }
+    slots[letter] = String(current.fill[letter]);
+    if (i < 2) {
+      if (current.nextPhase !== "abc" || current.solved) {
+        return { ok: false, fail: "abc left after " + letter + " " + current.nextPhase };
+      }
+      if (current.nextLetter !== letters[i + 1]) {
+        return { ok: false, fail: "abc next after " + letter + " is " + current.nextLetter };
+      }
+      current = handle(engine, {
+        intent: "one-step",
+        start: start,
+        history: hist,
+        phase: "abc",
+        letter: letters[i + 1],
+        slots: { a: slots.a, b: slots.b, c: slots.c },
+      });
+      continue;
+    }
+    if (current.nextPhase === "abc" && !current.solved) {
+      return { ok: false, fail: "abc did not complete" };
+    }
+    if (current.view && (String(current.view.a) !== slots.a || String(current.view.b) !== slots.b || String(current.view.c) !== slots.c)) {
+      return { ok: false, fail: "abc coefficients " + JSON.stringify(current.view) };
+    }
+    return { ok: true, nextPhase: current.nextPhase || "" };
+  }
+  return { ok: false, fail: "abc incomplete" };
 }
 
 function walkMixed(engine, start) {
@@ -374,11 +454,8 @@ function walkMixed(engine, start) {
     if (res && (res.chooseFormula || ((res.path === "formula" || res.enter === "formula") && !res.step))) {
       var ent = handle(engine, { intent: "formula-enter", start: start, history: hist });
       if (!ent.ok) return { ok: false, id: start, fail: "formula-enter: " + ent.message, last: last };
-      var abc = handle(engine, { intent: "one-step", start: start, history: hist, phase: "abc" });
-      if (!abc.ok) return { ok: false, id: start, fail: "formula-abc: " + abc.message, last: last };
-      if (abc.nextPhase !== "plug" && abc.nextPhase !== "done") {
-        return { ok: false, id: start, fail: "formula nextPhase " + abc.nextPhase, last: last };
-      }
+      var abc = walkAbc(handle, engine, start, hist, res);
+      if (!abc.ok) return { ok: false, id: start, fail: abc.fail, last: last, path: path };
       return { ok: true, via: "formula" };
     }
     if (res && res.split && !split) {

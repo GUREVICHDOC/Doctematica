@@ -29,3 +29,5 @@ A slope **product** in a Hebrew note must stay one phrase so RTL does not revers
 If a new form does not stack (unicode `m₁`, `m_AB`, mixed `½`, a list of `m₁ = …, m₂ = …`), **fix `js/math-render.js`**, do not paste raw HTML into curriculum.
 
 Never ship a visible slash-fraction in a student-facing Hebrew sentence.
+
+A computed number that is a terminating decimal with at most 4 places is written as that decimal: `−3.5`, `0.5`, `0.0625`. A value that does not terminate within 4 places stays a reduced fraction: `1/3`, `1/7`, `1/32`. An unreduced working step (`8/2`, `6/4`) stays a fraction until it is computed. A fraction the student wrote is still accepted.

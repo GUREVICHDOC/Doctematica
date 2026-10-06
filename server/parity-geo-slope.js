@@ -274,7 +274,11 @@ function main() {
       : fail("n12-2/4-not-done", JSON.stringify(snapCheck(n12mid)))
   );
   var n12fin = via({ intent: "check", levelId: "geo-slope-1", n: 12, history: ["2/4"], geo: {}, typed: "1/2" });
-  add(n12fin && n12fin.ok && n12fin.done && n12fin.done.m ? { ok: true, id: "n12-1/2-done" } : fail("n12-1/2-done", JSON.stringify(snapCheck(n12fin))));
+  add(n12fin && n12fin.ok && !(n12fin.done && n12fin.done.m) && /עשרוני/.test(String(n12fin.message || ""))
+    ? { ok: true, id: "n12-1/2-not-decimal" }
+    : fail("n12-1/2-not-decimal", JSON.stringify(snapCheck(n12fin))));
+  var n12dec = via({ intent: "check", levelId: "geo-slope-1", n: 12, history: ["2/4", "1/2"], geo: {}, typed: "0.5" });
+  add(n12dec && n12dec.ok && n12dec.done && n12dec.done.m ? { ok: true, id: "n12-0.5-done" } : fail("n12-0.5-done", JSON.stringify(snapCheck(n12dec))));
 
   parityHint("hint-n1-start", 1, [], {});
   parityOne("onestep-n1-start", 1, [], {});

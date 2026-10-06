@@ -103,7 +103,36 @@ function main() {
       return p;
     })(),
   });
-  add(!early.ok ? { ok: true, id: "sign-needs-root" } : fail("sign-needs-root", early.message));
+  add(!early.ok && /סימן השוויון/.test(early.message || "") ? { ok: true, id: "sign-needs-root" } : fail("sign-needs-root", early.message));
+
+  function equationProgress(eq) {
+    var p = engine.DoctematicaFn.freshProgress();
+    p.done = { f3: true, pt: true };
+    p.phase = { zero: "eq" };
+    p.eq = { zero: eq };
+    p.rootKnown = false;
+    return p;
+  }
+  ["x>-7", "x>=-7", "x<=-7", "x≥-7", "x≤-7"].forEach(function (typed) {
+    var rejected = handler.handle({
+      intent: "check",
+      levelId: "calc-linear-1",
+      exerciseIndex: 0,
+      typed: typed,
+      progress: equationProgress("x+7=0"),
+    });
+    add(!rejected.ok && /סימן השוויון/.test(rejected.message || "")
+      ? { ok: true, id: "equation-keeps-equal-" + typed }
+      : fail("equation-keeps-equal-" + typed, rejected.message || ""));
+  });
+  var solvedEq = handler.handle({
+    intent: "check",
+    levelId: "calc-linear-1",
+    exerciseIndex: 0,
+    typed: "x=-7",
+    progress: equationProgress("x+7=0"),
+  });
+  add(solvedEq.ok ? { ok: true, id: "equation-accepts-root" } : fail("equation-accepts-root", solvedEq.message || ""));
 
   var domainView = handler.handle({ intent: "hint", levelId: "calc-linear-1", exerciseIndex: 1 });
   add(domainView.view && domainView.view.input === "domains"
@@ -339,10 +368,43 @@ function main() {
     : fail("sketch-constant", JSON.stringify({ point: flatPoint && flatPoint.show, line: flatLine && flatLine.show, message: (flatLine && flatLine.message) || (flatPoint && flatPoint.message) })));
 
   var sol2 = handler.handle({ intent: "solution", levelId: "calc-linear-1", exerciseIndex: 1 });
-  var sol2text = (sol2.steps || []).join(" | ");
+  function stepBlob(step) {
+    if (step && step.parallel) return step.parallel.map(function (col) { return (col.steps || []).map(stepBlob).join(" "); }).join(" ");
+    if (step && step.eq != null) return String(step.eq);
+    return String(step || "");
+  }
+  var sol2text = (sol2.steps || []).map(stepBlob).join(" | ");
   add(sol2.ok && sol2text.indexOf("(0,−2)") >= 0 && sol2text.indexOf("(−2,0)") >= 0 && sol2text.indexOf("שרטוט הגרף") >= 0
     ? { ok: true, id: "sol2-sketch" }
     : fail("sol2-sketch", sol2text));
+
+  var rootProg = null;
+  var rootSplit = null;
+  var rootGuard;
+  for (rootGuard = 0; rootGuard < 40; rootGuard++) {
+    var rootStep = handler.handle({
+      intent: "one-step",
+      levelId: "calc-quad-1",
+      exerciseId: "calc-quad-1-ex-a007",
+      progress: rootProg,
+    });
+    if (!rootStep.ok) break;
+    rootProg = rootStep.progress;
+    var rootCols = rootStep.parallel && rootStep.parallel.parallel;
+    if (rootStep.axis === "x" && rootCols && rootCols.length === 2) {
+      rootSplit = rootStep;
+      break;
+    }
+  }
+  var rootBlob = rootSplit ? stepBlob(rootSplit.parallel) : "";
+  add(rootSplit && rootSplit.axis === "x" && /x₁/.test(rootBlob) && /x₂/.test(rootBlob) && /\(2\s*\+\s*4\)\/2/.test(rootBlob) && /\(2\s*[−-]\s*4\)\/2/.test(rootBlob) && rootSplit.show !== "x = 3"
+    ? { ok: true, id: "formula-root-split" }
+    : fail("formula-root-split", rootBlob || (rootSplit && rootSplit.message) || "missing"));
+  var rootSol = handler.handle({ intent: "solution", levelId: "calc-quad-1", exerciseId: "calc-quad-1-ex-a007" });
+  var rootSolText = (rootSol.steps || []).map(stepBlob).join(" | ");
+  add(/x₁/.test(rootSolText) && /x₂/.test(rootSolText) && /\(2\s*\+\s*4\)\/2/.test(rootSolText)
+    ? { ok: true, id: "formula-root-solution" }
+    : fail("formula-root-solution", rootSolText.slice(0, 500)));
 
   var failed = checks.filter(function (item) { return !item.ok; });
   console.log("parity-fn: passed " + (checks.length - failed.length) + ", failed " + failed.length);

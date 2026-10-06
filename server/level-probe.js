@@ -424,10 +424,11 @@ function handle(engine, ex, body) {
           message: "עוברים משמאל לימין. נגיעה בקיצון נספרת פעם אחת.",
         });
       }
-      var stepped = probeCount(ex.profile, task.k);
-      advance(progress);
-      var finished = locate(ex, progress).done;
-      return payload(ex, progress, { show: String(stepped), message: countMessage(task, stepped), solved: finished });
+      return payload(ex, progress, {
+        show: "רשמו כמה נקודות מפגש יש עם הגרף.",
+        message: "המספר נקבע לפי הספירה לאורך הישר.",
+        solved: false,
+      });
     }
     if (coach < 1) {
       progress.coach = 1;

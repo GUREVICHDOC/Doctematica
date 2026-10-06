@@ -12,6 +12,14 @@ function nextAfterCompute(want) {
   return want.kind === "none" ? "count" : "sqrt";
 }
 
+function radicalAnswer(want) {
+  var num = -want.b;
+  var den = 2 * want.a;
+  var numShow = num < 0 ? "(" + num + ")" : String(num);
+  var denShow = den < 0 ? "(" + den + ")" : String(den);
+  return "x=(" + numShow + "±√" + want.D + ")/" + denShow;
+}
+
 // The browser stub only displays these; it does not recompute −b ± √Δ or 2a.
 function rootWorkView(Q, want) {
   var view = {
@@ -157,16 +165,17 @@ function handleFormulaCheck(engine, body, wantOverride) {
     }
     var abcView = { a: want.a, b: want.b, c: want.c };
     if (md53) {
+      var mdAnswer = want.s == null && want.kind !== "none" ? radicalAnswer(want) : String(want.answer || "");
       return snapshotFormula(
-        { ok: true, message: "לפי md53: " + want.answer },
+        { ok: true, message: "לפי md53: " + mdAnswer },
         {
           phase: "abc",
           letter: "c",
           nextPhase: "done",
           solved: true,
           kind: want.kind,
-          answer: String(want.answer || ""),
-          view: { a: want.a, b: want.b, c: want.c, kind: want.kind, answer: String(want.answer || "") },
+          answer: mdAnswer,
+          view: { a: want.a, b: want.b, c: want.c, kind: want.kind, answer: mdAnswer },
         }
       );
     }
@@ -201,6 +210,20 @@ function handleFormulaCheck(engine, body, wantOverride) {
     var next = "compute";
     var view = { a: want.a, b: want.b, c: want.c };
     if (comp.ok && !comp.more) {
+      if (want.kind !== "none" && want.s == null) {
+        var radical = radicalAnswer(want);
+        return snapshotFormula(
+          Object.assign({}, comp, { message: "השורש אינו מספר שלם, ולכן משאירים אותו בתוך הפתרון." }),
+          {
+            phase: "compute",
+            nextPhase: "done",
+            solved: true,
+            kind: want.kind,
+            answer: radical,
+            view: { a: want.a, b: want.b, c: want.c, D: want.D, kind: want.kind, answer: radical },
+          }
+        );
+      }
       next = nextAfterCompute(want);
       view.D = want.D;
     }

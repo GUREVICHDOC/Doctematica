@@ -157,6 +157,7 @@ function handleMixed(engine, body) {
     return {
       ok: true,
       steps: (pack.steps || []).map(function (eqText) {
+        if (eqText && eqText.parallel) return eqText;
         return { eq: String(eqText || ""), explain: "" };
       }),
       answer: String(pack.answer || ""),

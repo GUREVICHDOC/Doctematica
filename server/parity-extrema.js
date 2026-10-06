@@ -375,7 +375,16 @@ function main() {
     ? { ok: true, id: "hint-sign" }
     : fail("hint-sign", hintSign && hintSign.hints && hintSign.hints.join(" | ")));
   var solution11 = post("calc-extrema-1-ex-a011", { intent: "solution" });
-  var text11 = solution11 && solution11.steps ? solution11.steps.join(" ") : "";
+  function blob(step) {
+    if (step && step.parallel) {
+      return step.parallel.map(function (col) {
+        return col.label + " " + (col.steps || []).map(blob).join(" ");
+      }).join(" ");
+    }
+    if (step && step.eq != null) return String(step.eq);
+    return String(step || "");
+  }
+  var text11 = solution11 && solution11.steps ? solution11.steps.map(blob).join(" ") : "";
   add(text11.indexOf("עלייה") >= 0 && text11.indexOf("חיוביות") >= 0 && text11.indexOf("מגע") >= 0
     ? { ok: true, id: "solution-11" }
     : fail("solution-11", text11));

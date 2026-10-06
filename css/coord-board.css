@@ -415,6 +415,10 @@
     overflow: auto;
   }
 
+  .solve-wrap.has-geo .geo-board.hidden {
+    display: none;
+  }
+
   .solve-wrap.has-geo .sys-known:not(.hidden) {
     grid-column: 2;
     flex: none;
@@ -424,9 +428,11 @@
 
   .solve-wrap.has-geo .coord-svg {
     flex: 0 0 auto;
-    width: 100%;
+    width: auto;
+    max-width: 100%;
     height: auto;
     max-height: min(520px, calc(100vh - 9rem));
+    aspect-ratio: 420 / 620;
   }
 
   .solve-wrap.has-geo .solve-main {

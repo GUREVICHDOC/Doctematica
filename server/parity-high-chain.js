@@ -1,5 +1,7 @@
 "use strict";
 
+var fs = require("fs");
+var path = require("path");
 var loadEngine = require("./load-engine").loadEngine;
 var handleHighChain = require("./high-chain").handleHighChain;
 
@@ -55,6 +57,52 @@ function main() {
   (level.exercises || []).forEach(function (ex) {
     add(walk(engine, ex.start));
   });
+
+  ["x^3=(-1)/125", "x^3=-1/125", "x^3=(-8)/27", "x^3=-8/27"].forEach(function (line) {
+    var readable = null;
+    try {
+      readable = engine.DoctematicaQuadratic.analyzeHighRootStart(line);
+    } catch (err) {
+      readable = null;
+    }
+    add(readable && readable.n === 3
+      ? { ok: true, id: "root-reads-" + line }
+      : fail("root-reads-" + line, readable ? JSON.stringify(readable) : "unreadable"));
+  });
+
+  function generatedDivideLine(start) {
+    var hist = [start];
+    var factor = { split: false, trails: [], pending: [] };
+    var guard = 0;
+    while (guard < 8) {
+      guard += 1;
+      var res = handleHighChain(engine, { intent: "one-step", start: start, history: hist, factor: factor });
+      if (!res || !res.ok) return "";
+      var blob = JSON.stringify(res);
+      var found = blob.match(/x\^3=\(-?\d+\)\/\d+/);
+      if (found) return found[0];
+      if (res.solvedAll || res.solved) return "";
+      if (res.split) {
+        factor = { split: true, trails: res.trails || [], pending: res.pending || [] };
+        continue;
+      }
+      if (res.step) {
+        if (!factor.split) hist.push(res.step);
+        else factor = { split: true, trails: res.trails || [], pending: res.pending || [] };
+      }
+    }
+    return "";
+  }
+  var generated = generatedDivideLine("125x^4+x=0");
+  var reread = null;
+  try {
+    reread = generated ? engine.DoctematicaQuadratic.analyzeHighRootStart(generated) : null;
+  } catch (err2) {
+    reread = null;
+  }
+  add(generated && reread
+    ? { ok: true, id: "engine-line-rereadable" }
+    : fail("engine-line-rereadable", generated || "no generated line"));
 
   var lost = handleHighChain(engine, {
     intent: "check",
@@ -217,6 +265,17 @@ function main() {
 
   var dup = engine.DoctematicaQuadratic.analyzeHighChainStart("x^4+8x^3+15x^2=0");
   add(dup.roots.length === 3 ? { ok: true, id: "unique-zero" } : fail("unique-zero", dup.roots.join(",")));
+
+  var appSrc = fs.readFileSync(path.join(__dirname, "../js/app.js"), "utf8");
+  var finishAt = appSrc.indexOf("function finishChainFormula");
+  var finishBody = finishAt >= 0 ? appSrc.slice(finishAt, finishAt + 800) : "";
+  var parkAt = finishBody.indexOf("parkFormulaSession");
+  var clearAt = finishBody.indexOf("state.quad = null");
+  add(
+    parkAt >= 0 && clearAt > parkAt
+      ? { ok: true, id: "formula-stays-in-chain-column" }
+      : fail("formula-stays-in-chain-column", "the quadratic-formula trail must stay on the branch that was solved")
+  );
 
   var failed = checks.filter(function (item) { return !item.ok; });
   console.log("parity-high-chain: passed " + (checks.length - failed.length) + ", failed " + failed.length);

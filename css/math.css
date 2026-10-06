@@ -31,6 +31,18 @@
   line-height: 1.15;
 }
 
+.m-frac .m-pow {
+  display: inline-flex;
+  align-items: flex-start;
+}
+
+.m-frac .m-sup {
+  line-height: 1;
+  vertical-align: baseline;
+  position: static;
+  top: auto;
+}
+
 .m-den {
   padding-top: 0.1em;
   line-height: 1.15;
@@ -265,6 +277,20 @@
 
 .ml-frac {
   align-items: stretch;
+}
+
+.ml-slot-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 1.4em;
+  min-height: 1.15em;
+}
+
+.ml-slot-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
 }
 
 .m-num.ml-slot {
@@ -675,16 +701,40 @@
 }
 
 .model ol.sol-lines {
-  direction: ltr;
-  text-align: left;
-  padding-left: 1.6rem;
-  padding-right: 0;
+  direction: rtl;
+  text-align: right;
+  padding-right: 1.6rem;
+  padding-left: 0;
   margin-top: 10px;
 }
 
 .model ol.sol-lines > li {
+  display: flex;
+  direction: rtl;
+  align-items: baseline;
+  gap: 0.75rem 1.1rem;
   margin: 0.85rem 0;
-  line-height: 1.15;
+  line-height: 1.35;
+}
+
+.model .sol-given {
+  display: flex;
+  direction: rtl;
+  align-items: baseline;
+  gap: 0.75rem 1.1rem;
+  margin: 0.85rem 0 0.2rem;
+}
+
+.model .sol-k {
+  flex: 0 0 auto;
+  font-weight: 800;
+  color: var(--accent-dark, #24553a);
+  direction: rtl;
+}
+
+.model ol.sol-lines .sol-eq,
+.model .sol-given .sol-eq {
+  flex: 0 1 auto;
 }
 
 .model ol.sol-lines > li.sol-task-row {
@@ -693,7 +743,8 @@
   text-align: right;
   font-weight: 800;
   color: var(--accent-dark, #24553a);
-  margin-left: -1.2rem;
+  margin-right: -1.2rem;
+  margin-left: 0;
 }
 
 .model ol.sol-lines .m-expr {
@@ -701,9 +752,13 @@
   vertical-align: middle;
 }
 
-.model ol.sol-lines .why {
+.model ol.sol-lines .why,
+.model .sol-given .why {
   direction: rtl;
   text-align: right;
+  flex: 1 1 10rem;
+  min-width: 0;
+  margin-top: 0;
 }
 
 .solve-wrap.is-system {
@@ -1006,9 +1061,70 @@
 
 .domain-fork {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(var(--sol-cols, 2), minmax(0, 1fr));
   gap: 10px;
   align-items: stretch;
+}
+
+.sol-parallel {
+  display: grid;
+  grid-template-columns: repeat(var(--sol-cols, 2), minmax(0, 1fr));
+  gap: 10px;
+  direction: ltr;
+  width: 100%;
+}
+
+.model ol.sol-lines > li.sol-parallel-row,
+.steps li.sol-parallel-row {
+  display: block;
+}
+
+.sol-parallel-col,
+.factor-branch,
+.fn-domain-col,
+.fn-axis-col {
+  min-width: 0;
+}
+
+.sol-parallel-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid rgba(20, 36, 26, 0.16);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.sol-parallel-label {
+  font-weight: 800;
+  direction: rtl;
+  text-align: right;
+}
+
+.sol-parallel-step {
+  font-weight: 700;
+  margin: 2px 0;
+}
+
+@media (max-width: 640px) {
+  .sol-parallel,
+  .steps li.factor-fork,
+  .fn-domains.is-fork,
+  .fn-domain-history,
+  .domain-fork,
+  .fn-axis-board,
+  .steps li.fn-axis-card {
+    grid-template-columns: 1fr;
+  }
+
+  .sol-parallel-col,
+  .factor-branch,
+  .fn-domain-col,
+  .fn-axis-col,
+  .domain-fork > * {
+    border-inline-start: 4px solid rgba(47, 107, 69, 0.55);
+  }
 }
 
 .domain-fork-empty {
